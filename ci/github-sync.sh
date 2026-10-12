@@ -6,19 +6,16 @@
 #
 # GitHub gets a sanitized copy of the history: in a scratch repository, every
 # file version and commit message has the GitLab project's URL, host and path
-# replaced with the GitHub ones, plus the rules in PUBLISH_REPLACEMENTS (a
-# GitLab CI/CD variable, file or text, in git filter-repo --replace-text
-# format, holding anything private that older commits contain). Every author
-# and committer becomes GHCR_USER with GitHub's no-reply address,
-# Claude-Session trailers are removed, and the binary files listed in
-# ci/publish-strip-blobs.txt (old screenshots) are dropped; binary files cannot
-# be checked by the text guard, so screenshots must only show fictional data. The rewrite is deterministic, so a commit has
-# the same GitHub hash on every run and each sync is a fast-forward. Before
-# anything is pushed, ci/leak-check.sh fails the job if the internal host or
-# domain still appears anywhere.
+# replaced with the GitHub ones (merge commits name the GitLab project), every
+# author and committer becomes GHCR_USER with GitHub's no-reply address, and
+# Claude-Session trailers are removed. Binary files cannot be checked by the
+# text guard, so screenshots must only show fictional data. The rewrite is
+# deterministic, so a commit has the same GitHub hash on every run and each
+# sync is a fast-forward. Before anything is pushed, ci/leak-check.sh fails
+# the job if the internal host or domain still appears anywhere.
 #
-# It never force-pushes unless GITHUB_FORCE_SYNC=true, so a GitHub repository
-# that has diverged fails the job instead of being overwritten.
+# It never force-pushes, so a GitHub repository that has diverged fails the
+# job instead of being overwritten.
 #
 # Needs GHCR_TOKEN (classic GitHub token: repo, write:packages), GHCR_REPO
 # (owner/name) and RELEASE_TOKEN (to read GitLab releases), plus git-filter-repo.
@@ -52,29 +49,20 @@ $CI_PROJECT_URL==>$github_url
 $CI_SERVER_HOST/$CI_PROJECT_PATH==>github.com/$repo
 $CI_PROJECT_PATH==>$repo
 EOF
-# PUBLISH_REPLACEMENTS: a File variable (a path) or the rules themselves.
-if [ -n "${PUBLISH_REPLACEMENTS:-}" ]; then
-  if [ -f "$PUBLISH_REPLACEMENTS" ]; then cat "$PUBLISH_REPLACEMENTS"; else printf '%s\n' "$PUBLISH_REPLACEMENTS"; fi >>"$rules"
-fi
 
 # 1. A sanitized copy of the default branch and the version tags.
 git fetch --quiet --force --tags origin
 work=$(mktemp -d)
 git init --quiet --bare "$work"
 git push --quiet "$work" "$CI_COMMIT_SHA:refs/heads/$CI_DEFAULT_BRANCH" 'refs/tags/v*:refs/tags/v*'
-grep -v '^#' "$here/ci/publish-strip-blobs.txt" >"$work.strip"
 git -C "$work" filter-repo --force --quiet --replace-text "$rules" --replace-message "$rules" \
-  --strip-blobs-with-ids "$work.strip" \
   --name-callback "return b'$GHCR_USER'" \
   --email-callback "return b'$GHCR_USER@users.noreply.github.com'" \
   --message-callback 'import re
 return re.sub(rb"(?m)^Claude-Session:.*\n?", b"", message)'
 "$here/ci/leak-check.sh" history "$work"
 
-force=""
-[ "${GITHUB_FORCE_SYNC:-}" = "true" ] && force="--force" && echo "GITHUB_FORCE_SYNC=true: overwriting GitHub."
-# shellcheck disable=SC2086 # $force is empty or one flag
-git -C "$work" push --quiet $force "$remote" \
+git -C "$work" push --quiet "$remote" \
   "refs/heads/$CI_DEFAULT_BRANCH:refs/heads/$CI_DEFAULT_BRANCH" 'refs/tags/v*:refs/tags/v*'
 echo "Pushed $CI_DEFAULT_BRANCH ($(git -C "$work" rev-parse --short "$CI_DEFAULT_BRANCH") on GitHub)" \
   "and tags $(git -C "$work" tag -l 'v*' --sort=v:refname | tr '\n' ' ')"

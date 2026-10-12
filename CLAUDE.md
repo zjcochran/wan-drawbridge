@@ -55,8 +55,7 @@ records the decisions behind it and how to work in the repo.
   real-looking self-hosted app names. Use documentation values (192.0.2.0/24,
   198.51.100.0/24, 203.0.113.0/24, ASNs 64496-64511, example.com, alice/bob).
   Screenshots are binary and not checked by the guard: take them only from the
-  fictional demo data, check each one, and when replacing screenshots add the
-  old blob IDs to ci/publish-strip-blobs.txt.
+  fictional demo data and check each one.
 - Only the user merges. Open the MR, watch its pipeline, fix failures, then tell
   the user it is ready. First push a new branch with `git push -o ci.skip`, then
   `glab mr create`: otherwise a branch pipeline and the MR pipeline run side by

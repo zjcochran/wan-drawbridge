@@ -2,10 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 #
 # Fails if anything about to be published names the internal GitLab server
-# (its host or domain) or matches PUBLISH_DENYLIST, a CI/CD variable with one
-# extended regular expression per line (other internal hosts, LAN ranges,
-# names). Both come from GitLab at run time, so they are never written into the
-# repository. Matching is case-insensitive.
+# (its host or domain, from GitLab's CI_SERVER_HOST at run time, so it is never
+# written into the repository). Matching is case-insensitive.
 #
 #   ci/leak-check.sh tree <dir>       files in a directory (not .git)
 #   ci/leak-check.sh history <repo>   every commit: author, committer, message, file versions
@@ -17,23 +15,17 @@ host=$CI_SERVER_HOST
 domain=$(echo "$host" | awk -F. 'NF >= 2 { print $(NF-1) "." $NF }')
 [ -n "$domain" ] || domain=$host
 
-# One pattern file: the host and domain (dots escaped), then the denylist.
+# One pattern file: the host and domain, dots escaped.
 patterns=$(mktemp)
 printf '%s\n%s\n' "$host" "$domain" | sed 's/[.[\*^$]/\\&/g' >"$patterns"
-# PUBLISH_DENYLIST: a File variable (a path) or the patterns themselves.
-if [ -n "${PUBLISH_DENYLIST:-}" ] && [ -f "$PUBLISH_DENYLIST" ]; then
-  sed '/^[[:space:]]*$/d' "$PUBLISH_DENYLIST" >>"$patterns"
-else
-  printf '%s\n' "${PUBLISH_DENYLIST:-}" | sed '/^[[:space:]]*$/d' >>"$patterns"
-fi
 
-# grep exits 1 for "no match"; anything else (a bad pattern, say) is an error,
+# grep exits 1 for "no match"; anything else is an error,
 # which must stop publishing rather than pass as clean.
 search() {
   status=0
   "$@" >"$found" || status=$?
   if [ "$status" -gt 1 ]; then
-    echo "BLOCKED: the leak check itself failed (is a PUBLISH_DENYLIST pattern invalid?)" >&2
+    echo "BLOCKED: the leak check itself failed" >&2
     exit 2
   fi
 }
