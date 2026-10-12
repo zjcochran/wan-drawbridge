@@ -204,7 +204,7 @@ be disabled in its settings).
 | Job | What it does |
 | --- | --- |
 | `github-sync` | `ci/github-sync.sh`: publishes a **sanitized copy** of the default branch and every `vX.Y.Z` tag (see below), then creates each GitLab release that GitHub lacks (oldest first, same name, sanitized notes). Never force-pushes: if someone changed the GitHub repository, the push is rejected and the job fails. |
-| `github-image` | Builds `linux/amd64` and `linux/arm64` with buildx (QEMU via `tonistiigi/binfmt`) and pushes `ghcr.io/<repo>:X.Y.Z`, `:X.Y` and `:latest`, with a registry build cache (`:buildcache`). Built with `VERSION=vX.Y.Z` and `SOURCE_URL=https://github.com/<repo>`; the source label links the package to the repository, so it shares the repository's (private) visibility. Skipped when the pipeline released nothing. |
+| `github-image` | Builds `linux/amd64` and `linux/arm64` with buildx (QEMU via `tonistiigi/binfmt`) and pushes `ghcr.io/<repo>:X.Y.Z`, `:X.Y` and `:latest`. Built with `VERSION=vX.Y.Z` and `SOURCE_URL=https://github.com/<repo>`; the source label links the package to the repository, so it shares the repository's (private) visibility. Skipped when the pipeline released nothing. |
 
 #### Nothing internal is published
 

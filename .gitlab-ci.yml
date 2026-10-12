@@ -250,7 +250,5 @@ github-image:
         --platform linux/amd64,linux/arm64 \
         --build-arg VERSION="$RELEASE_TAG" \
         --build-arg SOURCE_URL="https://github.com/$repo" \
-        --cache-from type=registry,ref="$image:buildcache" \
-        --cache-to type=registry,ref="$image:buildcache",mode=max \
         -t "$image:$version" -t "$image:${version%.*}" -t "$image:latest" .
       echo "Published $image:$version"

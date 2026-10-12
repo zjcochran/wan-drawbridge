@@ -147,8 +147,8 @@ level=INFO msg="asn database loaded" ranges=458942
 level=INFO msg="monitor started" state=learning interval=1m0s paused=true
 ```
 
-`paused=true` is expected: until you finish the setup wizard, Drawbridge only
-watches and never stops anything.
+`paused=true` is expected: until the setup wizard is finished, Drawbridge
+checks your connection but does not stop or start any containers.
 
 Open `http://<host>:8080`. Every page redirects to the
 [setup wizard](setup-wizard.md) until the first admin account exists.

@@ -32,9 +32,10 @@ cd wan-drawbridge
 docker compose up -d --build
 ```
 
-Open `http://<host>:8080` and follow the setup wizard. Until you finish it,
-Drawbridge only watches. See [Installation](docs/user/installation.md) for the
-image-based setup.
+Open `http://<host>:8080` and follow the setup wizard. Until the wizard is
+finished, Drawbridge checks your connection but does not stop or start any
+containers. See [Installation](docs/user/installation.md) for the image-based
+setup.
 
 ## Documentation
 
