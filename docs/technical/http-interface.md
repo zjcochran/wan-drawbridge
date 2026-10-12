@@ -42,6 +42,7 @@ Non-admins get 403 "admins only" on admin routes.
 | --- | --- | --- | --- |
 | GET | `/setup` | none for step 1; admin afterwards | Query `step` (1–7). |
 | POST | `/setup/admin` | none; 403 once any user exists | Form `username`, `password`, `confirm`. |
+| POST | `/setup/restore` | none; 403 once any user exists | Multipart: `file`, `passphrase`; body at most 128 MB. Restores a backup file and redirects to `/login`; on failure, 422 with step 1 and the reason. |
 | POST | `/setup/detection` | admin | Detection form fields (below). Redirects to step 5. |
 | POST | `/setup/check` | admin | Runs a check; returns the result fragment. |
 | POST | `/setup/primary` | admin | Form `choice` = `pin` (with `isp`) or `learn`. Redirects to step 6. |
@@ -88,6 +89,7 @@ token.
 | `/settings/sso` | admin | SSO fields | Save single sign-on settings |
 | `/settings/sso/test` | admin | `issuer` | Try discovery |
 | `/settings/sso/unlink` | auth | | Unlink own SSO identities (refused without a password) |
+| `/settings/restore` | admin | Multipart: `file`, `passphrase`; body at most 128 MB | Restore a backup file; ends every session; `HX-Redirect: /login` |
 | `/users` | admin | `username`, `password`, `role` | Create user |
 | `/users/{id}/disable` | admin | | Not yourself; not the last admin |
 | `/users/{id}/enable` | admin | | |
@@ -95,6 +97,13 @@ token.
 
 Validation errors return **422** with a plain-text message; unexpected errors
 return **500** "something went wrong: …" and are logged.
+
+`POST /settings/backup` (admin) is a plain form post, not HTMX, so the browser
+saves the response. Form: `_csrf`, `history` (`none`, `30`, `60`, `90`,
+`all`), `passphrase`, `confirm`. It answers with the backup file
+(`Content-Type: application/json`, `Content-Disposition: attachment`,
+`Cache-Control: no-store`), or, if the form is invalid, 303 to
+`/settings?flash=<reason>`.
 
 ### Detection form fields
 

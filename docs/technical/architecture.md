@@ -63,6 +63,7 @@ flowchart LR
 | `internal/docker` | Minimal Docker Engine API client (list, inspect, stop, start, events, version). |
 | `internal/store` | All persistence: SQLite, migrations, users, sessions, ISPs, policies, runs, events. |
 | `internal/secrets` | AES-GCM sealing of stored secrets. |
+| `internal/backup` | Backup file format: argon2id key, AES-256-GCM, gzipped JSON of a `store.Snapshot`. |
 | `internal/web` | HTTP handlers, templates, middleware (auth, CSRF, cross-origin, headers), OIDC, metrics, SSE hub. |
 | `internal/e2e` | End-to-end test of the whole process against fakes. |
 

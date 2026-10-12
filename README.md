@@ -17,6 +17,8 @@ them again.
 - Web UI with a setup wizard, live updates, phone and dark mode support; local
   accounts and single sign-on (Pocket ID or any OIDC provider); Prometheus
   metrics; a CLI for scripting and recovery.
+- Encrypted backup files of the configuration, with optional history, that
+  restore from Settings or straight from the setup wizard on a new host.
 - One container, one SQLite database folder, the Docker socket. No Node.js, no
   external database.
 

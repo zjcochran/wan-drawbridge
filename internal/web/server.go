@@ -43,6 +43,7 @@ type Monitor interface {
 	CheckNow(ctx context.Context) error
 	Relearn(ctx context.Context, actor string) error
 	PoliciesChanged()
+	LoadBackup(ctx context.Context, replace func(context.Context) error) error
 }
 
 // Docker is what the UI needs from Docker: live container state.
@@ -130,6 +131,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /setup", s.setupPage)
 	mux.HandleFunc("POST /setup/admin", s.setupAdmin)
+	mux.Handle("POST /setup/restore", limitBody(maxBackupUpload, http.HandlerFunc(s.setupRestore)))
 	mux.Handle("POST /setup/detection", s.admin(s.setupDetection))
 	mux.Handle("POST /setup/check", s.admin(s.setupCheck))
 	mux.Handle("POST /setup/primary", s.admin(s.setupPrimary))
@@ -164,6 +166,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/sso", s.admin(s.saveSSO))
 	mux.Handle("POST /settings/sso/test", s.admin(s.testSSO))
 	mux.Handle("POST /settings/sso/unlink", s.auth(s.unlinkSSO))
+	mux.Handle("POST /settings/backup", s.admin(s.downloadBackup))
+	mux.Handle("POST /settings/restore", limitBody(maxBackupUpload, s.admin(s.restoreBackup)))
 
 	mux.Handle("GET /users", s.admin(s.usersPage))
 	mux.Handle("POST /users", s.admin(s.createUser))

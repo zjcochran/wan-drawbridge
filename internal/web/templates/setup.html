@@ -22,6 +22,15 @@
       <label>Confirm password <input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
       <button type="submit">Create account</button>
     </form>
+    <h2 id="restore" class="divided">Or restore a backup</h2>
+    <p>Moving Drawbridge or starting again? Restore a backup made in Settings. It brings back the
+      settings and the accounts, so setup is done; sign in with an account from the backup afterwards.</p>
+    {{with $d.RestoreError}}<div class="banner bad">{{.}}</div>{{end}}
+    <form method="post" action="/setup/restore#restore" enctype="multipart/form-data" class="stack">
+      <label>Backup file <input name="file" type="file" accept=".json,application/json" required></label>
+      <label>Passphrase <input name="passphrase" type="password" autocomplete="off" required></label>
+      <button type="submit" class="secondary">Restore backup</button>
+    </form>
 
   {{else if eq $d.Step 2}}
     <h2>Single sign-on (optional)</h2>

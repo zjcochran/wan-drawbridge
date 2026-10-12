@@ -28,8 +28,9 @@ reachable by anyone you do not trust.
 ## Setup window
 
 Until the first user exists, every request is redirected to `/setup`, and
-`POST /setup/admin` creates an admin **without authentication**. After that it
-returns 403. Complete setup immediately after the first start.
+`POST /setup/admin` creates an admin and `POST /setup/restore` restores a
+backup file, both **without authentication**. After that both return 403.
+Complete setup immediately after the first start.
 
 ## Passwords
 
@@ -167,6 +168,32 @@ The OIDC client secret is sealed with AES-256-GCM:
 The key file is in the database folder so that backups include it. If you
 store backups somewhere less trusted than the host, set `DRAWBRIDGE_SECRET_KEY`
 instead and keep it out of the backup.
+
+## Backup files
+
+Backup files (Settings → Backup and restore) hold password hashes and the
+single sign-on client secret, so the data is encrypted with the passphrase
+given at download:
+
+- Key: argon2id(passphrase, 16-byte random salt, time 3, memory 64 MiB,
+  2 threads) → 32 bytes. The parameters are stored in the file.
+- Data: the gzipped JSON payload, sealed with AES-256-GCM (12-byte random
+  nonce, the format name as additional data). A wrong passphrase and a
+  modified file fail the same way.
+- The client secret is unsealed from this instance's key before encryption,
+  and sealed with the restoring instance's key on restore, so `secret.key` is
+  not needed to move a backup.
+- Readable without the passphrase: the format name and version, the
+  Drawbridge version, the creation time, the schema version and the history
+  range. The encrypted copy of these is the one used.
+- Passphrases must be at least 12 characters.
+
+Restoring is limited so a crafted file cannot exhaust the host: the upload is
+at most 128 MB, the decompressed payload at most 1 GiB, and files asking for
+more than 256 MiB of memory, 10 passes or 8 threads of argon2id are rejected
+before any key is derived. Restored rows may only name existing tables and
+columns, and are written in one transaction that is rolled back if any row is
+rejected or no enabled admin remains.
 
 ## Metrics endpoint
 

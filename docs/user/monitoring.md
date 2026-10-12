@@ -132,6 +132,8 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `password_changed` | A user changed their own password | `user` |
 | `sso_settings` | Single sign-on settings saved | `enabled`, `sso_only`, `by` |
 | `sso_linked`, `sso_unlinked` | An account was linked to or unlinked from single sign-on | `user`; `sso_user` when linked |
+| `backup_created` | A backup file was downloaded | `history` (`none`, `30d`, `60d`, `90d`, `all`), `by` |
+| `backup_restored` | A backup file was restored (in Settings, or in the setup wizard with `by` = `setup`) | `created`, `app_version`, `history`, `by` |
 
 Changes made with the command line are not recorded as events.
 
