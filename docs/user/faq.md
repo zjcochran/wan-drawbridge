@@ -81,6 +81,13 @@ separate service and backs up as one folder.
 In the `/data/db` folder: one SQLite database plus `secret.key`. See
 [Backup and restore](backup-and-restore.md).
 
+**How do I move Drawbridge to another host?**
+Download a backup file in **Settings → Backup and restore**, install
+Drawbridge on the new host, and choose **Or restore a backup** in the first
+step of the setup wizard. Users, settings, ISPs and container choices come
+along; container choices apply to stacks with the same Compose project names.
+See [Backup and restore → Moving to another host](backup-and-restore.md#moving-to-another-host).
+
 **What is the licence?**
 GNU Affero General Public License v3.0 or later. If you run a modified version
 for others over a network, you must offer them its source; set

@@ -131,6 +131,17 @@ it resumes the run.
   [Single sign-on](single-sign-on.md#if-pocket-id-is-unreachable)).
 - **Disabled the only admin by editing the database:** use `reset-password`,
   which re-enables the account.
+- **After restoring a backup:** everyone is signed out, and only the accounts
+  in the backup exist. Sign in with one of them; if you do not know a
+  password, use `reset-password` as above.
+
+## Restoring a backup is refused
+
+The message says why, and nothing was changed. The reasons and what to do are
+listed in [Backup and restore → Restoring one](backup-and-restore.md#restoring-one).
+The common ones: a wrong passphrase (it cannot be recovered), a backup from a
+newer Drawbridge (upgrade first), or containers stopped for a failover
+(restore after failback).
 
 ## Single sign-on errors
 
