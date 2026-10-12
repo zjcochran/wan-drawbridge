@@ -48,6 +48,8 @@ func fill(t *testing.T, s *Store) {
 func count(t *testing.T, s *Store, table string) int {
 	t.Helper()
 	var n int
+	// Tests pass fixed table names.
+	// nosemgrep
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM ` + table).Scan(&n); err != nil {
 		t.Fatal(err)
 	}

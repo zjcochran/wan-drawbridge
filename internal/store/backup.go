@@ -137,6 +137,8 @@ func (s *Store) Import(ctx context.Context, snap Snapshot) error {
 		}
 	}
 	for _, t := range tables {
+		// Table names come from the fixed lists above, never from the backup.
+		// nosemgrep
 		if _, err := tx.ExecContext(ctx, `DELETE FROM `+t); err != nil { //nolint:gosec // G202: fixed table names
 			return fmt.Errorf("clear %s: %w", t, err)
 		}
@@ -179,7 +181,10 @@ func loadRows(ctx context.Context, tx *sql.Tx, table string, rows []Row) error {
 			cols = append(cols, c)
 			args = append(args, sqlValue(v))
 		}
+		// The table is from ConfigTables or historyTables, every column was
+		// checked against the schema above, and values are bound arguments.
 		q := `INSERT INTO ` + table + ` (` + strings.Join(cols, ", ") + `) VALUES (?` + strings.Repeat(", ?", len(cols)-1) + `)` //nolint:gosec // G202: names checked against the schema
+		// nosemgrep
 		if _, err := tx.ExecContext(ctx, q, args...); err != nil {
 			return fmt.Errorf("%s row %d: %w", table, i+1, err)
 		}
