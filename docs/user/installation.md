@@ -29,7 +29,7 @@ on.
 
 Every release is published as a multi-arch image (`amd64`, `arm64`) to the
 private GitHub Container Registry package `ghcr.io/zjcochran/wan-drawbridge`,
-tagged with the version (`0.2.0`), the minor version (`0.2`) and `latest`.
+tagged with the version (`0.1.0`), the minor version (`0.1`) and `latest`.
 Release notes are on GitHub (**Releases**) and GitLab (**Deploy → Releases**).
 
 The package is private, so log in once on the Docker host with a GitHub
@@ -39,12 +39,13 @@ personal access token (classic) that has the `read:packages` scope:
 echo '<token>' | docker login ghcr.io -u <github-user> --password-stdin
 ```
 
-Then use the image in the Compose file below instead of `build: .`:
+The [Compose file](#the-compose-file) below uses `latest`. To control when
+you upgrade, use the minor version instead:
 
 ```yaml
 services:
   drawbridge:
-    image: ghcr.io/zjcochran/wan-drawbridge:0.2   # follows 0.2.x fixes; pin 0.2.0 to stay put
+    image: ghcr.io/zjcochran/wan-drawbridge:0.1   # follows 0.1.x fixes; pin 0.1.0 to stay put
 ```
 
 ### From source
@@ -52,10 +53,18 @@ services:
 ```sh
 git clone https://github.com/zjcochran/wan-drawbridge.git
 cd wan-drawbridge
-git checkout v0.2.0   # or the latest release
+git checkout v0.1.0   # or the latest release
 ```
 
-The Compose file builds the image with `build: .`.
+Then build the image instead of pulling it: in the Compose file, replace the
+`image:` line with
+
+```yaml
+    build: .
+    image: wan-drawbridge:local
+```
+
+and start it with `docker compose up -d --build`.
 
 ## The Compose file
 
@@ -64,8 +73,7 @@ The repository's `compose.yaml`:
 ```yaml
 services:
   drawbridge:
-    build: .
-    image: wan-drawbridge:dev
+    image: ghcr.io/zjcochran/wan-drawbridge:latest # or pin a release, e.g. 0.1.0
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -132,7 +140,7 @@ Mount your socket at `/var/run/docker.sock` inside the container, or set
 ## First start
 
 ```sh
-docker compose up -d --build
+docker compose up -d   # add --build when building from source
 docker compose logs -f drawbridge
 ```
 
@@ -172,8 +180,8 @@ Open `http://<host>:8080`. Every page redirects to the
 1. Back up the `db` folder (see [Backup and restore](backup-and-restore.md)).
 2. Fetch the new version and rebuild:
 
-   With the published image, change the tag in the Compose file (or keep
-   `0.2` to follow fixes) and run:
+   With the published image, change the tag in the Compose file (`latest`
+   and `0.1` move on their own) and run:
 
    ```sh
    docker compose pull && docker compose up -d
@@ -183,7 +191,7 @@ Open `http://<host>:8080`. Every page redirects to the
 
    ```sh
    git fetch --tags
-   git checkout v0.2.1   # the release you want; read its release notes first
+   git checkout v0.1.1   # the release you want; read its release notes first
    docker compose up -d --build
    ```
 

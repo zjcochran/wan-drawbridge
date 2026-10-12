@@ -23,19 +23,18 @@ them again.
 ## Quick start
 
 Images for `amd64` and `arm64` are published with every release as
-`ghcr.io/zjcochran/wan-drawbridge` (private: `docker login ghcr.io` first).
-To build from source instead:
+`ghcr.io/zjcochran/wan-drawbridge`. The package is private, so log in to
+`ghcr.io` first, then start it with the repository's `compose.yaml`:
 
 ```sh
-git clone https://github.com/zjcochran/wan-drawbridge.git
-cd wan-drawbridge
-docker compose up -d --build
+echo '<token>' | docker login ghcr.io -u <github-user> --password-stdin
+docker compose up -d
 ```
 
 Open `http://<host>:8080` and follow the setup wizard. Until the wizard is
 finished, Drawbridge checks your connection but does not stop or start any
-containers. See [Installation](docs/user/installation.md) for the image-based
-setup.
+containers. See [Installation](docs/user/installation.md) for the token,
+pinning a version and building from source.
 
 ## Documentation
 

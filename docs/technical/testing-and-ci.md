@@ -292,8 +292,9 @@ The default-branch pipeline runs every test and scan; if they pass, the
    recent merged MRs whose merge, squash or head commit is this commit). No
    merge request (a direct push) means no release.
 3. Read its release label; none or several fails the job.
-4. Take the highest `vX.Y.Z` tag (`v0.0.0` if none) and bump the labelled part,
-   resetting the parts after it.
+4. Take the highest `vX.Y.Z` tag and bump the labelled part, resetting the
+   parts after it. With no tag yet, the first release is `v0.1.0` whatever
+   the label.
 5. Create the GitLab release with the API; GitLab creates the tag on the merge
    commit. The release notes contain the MR's title and description, the
    commits since the previous release, and a compare link.
