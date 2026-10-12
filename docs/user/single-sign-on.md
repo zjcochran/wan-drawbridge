@@ -5,12 +5,12 @@ any other OpenID Connect (OIDC) provider, alongside or instead of passwords.
 
 ## How it works in brief
 
-- The sign-in page shows a **Sign in with Pocket ID** button (the label is
-  configurable).
+- The sign-in page shows a **Sign in with SSO** button. The label is
+  configurable, for example "Sign in with Pocket ID".
 - Drawbridge uses the authorization code flow with PKCE, and checks the ID
   token's signature, audience, issuer and nonce.
 - Accounts are matched on the provider's **issuer and subject** (the stable
-  user ID), never on username or email. A Pocket ID user called `alice` is not
+  user ID), never on username or email. An SSO user called `alice` is not
   the same account as a local user `alice` until you link them.
 - Drawbridge requests the scopes `openid profile email groups`.
 
@@ -47,11 +47,11 @@ from the ID token, or from the userinfo endpoint if the token has none.
 | Field | Meaning |
 | --- | --- |
 | Turn on single sign-on | Shows the button on the sign-in page and enables the sign-in routes. |
-| Issuer URL | Your Pocket ID address, for example `https://id.example.com`. Drawbridge loads `/.well-known/openid-configuration` from it. A trailing slash is removed. |
-| Client ID | From Pocket ID. |
-| Client secret | From Pocket ID. Stored encrypted. Leave blank to keep the saved one; tick "Remove the saved client secret" to delete it. |
-| Button label | Text on the sign-in button; default "Pocket ID". |
-| Allowed group | If set, only members of this group may sign in. Others see "Your Pocket ID account is not in the "…" group." |
+| Issuer URL | Your OIDC provider's address, for example `https://id.example.com`. Drawbridge loads `/.well-known/openid-configuration` from it. A trailing slash is removed. |
+| Client ID | From your provider. |
+| Client secret | From your provider. Stored encrypted. Leave blank to keep the saved one; tick "Remove the saved client secret" to delete it. |
+| Button label | Provider name on the sign-in button and in messages, for example "Pocket ID"; default "SSO". |
+| Allowed group | If set, only members of this group may sign in. Others see "Your SSO account is not in the "…" group." (with the button label in place of SSO) |
 | Admin group | If set, members get the admin role; see below. |
 | Create an account the first time someone signs in | On by default. Off means only people whose accounts are already linked can sign in. |
 | Turn off password sign-in | Makes single sign-on the only way in. See [SSO only](#sso-only). |
@@ -65,14 +65,14 @@ Save. The sign-in page now offers the button:
 
 ## What happens when someone signs in
 
-1. If an account is already linked to their Pocket ID identity, they are signed
+1. If an account is already linked to their SSO identity, they are signed
    in. If that account is disabled, they are refused.
 2. Otherwise, if account creation is on, Drawbridge creates an account:
    - **Username:** `preferred_username`, else the email address, else the
      subject. If the name is taken, a number is added: `alice-2`, `alice-3`, ….
    - **Role:** admin if they are in the admin group, otherwise viewer.
    - The account has no password; it signs in only through single sign-on.
-3. Otherwise they see "No Drawbridge account is linked to your Pocket ID
+3. Otherwise they see "No Drawbridge account is linked to your SSO
    account. Ask an admin to add you."
 
 ### Admin group, precisely
@@ -92,14 +92,14 @@ To use single sign-on for an account that already has a password (your own
 admin account, typically):
 
 1. Sign in with your password.
-2. **Settings → Your sign-in → Link my Pocket ID account.**
-3. Sign in at Pocket ID. You return to Settings with "Pocket ID account
+2. **Settings → Your sign-in → Link my SSO account.**
+3. Sign in at your provider. You return to Settings with "SSO account
    linked."
 
 The account can now sign in either way. **Unlink** removes the link (only
 offered when the account also has a password, so you cannot lock yourself out).
 
-One Pocket ID identity can be linked to only one Drawbridge account.
+One SSO identity can be linked to only one Drawbridge account.
 
 ## SSO only
 
@@ -107,7 +107,7 @@ One Pocket ID identity can be linked to only one Drawbridge account.
 password sign-ins. To protect you from locking yourself out, Drawbridge only
 accepts this setting when **your own account is linked**.
 
-### If Pocket ID is unreachable
+### If your provider is unreachable
 
 Your WAN might be on a backup ISP exactly when you need Drawbridge, and Pocket
 ID might be behind that same connection. If you cannot sign in:
@@ -122,7 +122,7 @@ ID might be behind that same connection. If you cannot sign in:
    echo 'a new long password' | docker compose exec -T drawbridge /drawbridge reset-password alice
    ```
 
-3. Remove `DRAWBRIDGE_LOCAL_LOGIN` again when Pocket ID is back.
+3. Remove `DRAWBRIDGE_LOCAL_LOGIN` again when your provider is back.
 
 ## Security notes
 
@@ -132,7 +132,7 @@ ID might be behind that same connection. If you cannot sign in:
   saved secret cannot be decrypted and must be entered again.
 - A sign-in must be completed within 10 minutes and can be used once.
   Sign-ins in progress are lost if Drawbridge restarts.
-- Signing out of Drawbridge does not sign you out of Pocket ID.
+- Signing out of Drawbridge does not sign you out of your provider.
 - Details: [Security](../technical/security.md#single-sign-on).
 
 ## Other providers

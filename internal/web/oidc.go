@@ -41,7 +41,7 @@ func (o OIDCSettings) Name() string {
 	if o.DisplayName != "" {
 		return o.DisplayName
 	}
-	return "Pocket ID"
+	return "SSO"
 }
 
 func (s *Server) oidcSettings(ctx context.Context) (OIDCSettings, error) {
