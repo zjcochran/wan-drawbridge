@@ -81,7 +81,8 @@ wait_for 120 "Drawbridge is up" curl -fsS "$URL/healthz"
 curl -fsS -c "$JAR" -o /dev/null -X POST "$URL/setup/admin" \
   --data-urlencode username=smoke --data-urlencode 'password=smoke test password' \
   --data-urlencode 'confirm=smoke test password' || fail "create admin"
-CSRF=$(curl -fsS -b "$JAR" "$URL/settings" | sed -n 's/.*name="_csrf" value="\([^"]*\)".*/\1/p' | head -1)
+# sed quits after the first token but its input is read whole, so nothing in the pipe gets SIGPIPE.
+CSRF=$(curl -fsS -b "$JAR" "$URL/settings" | sed -n '/name="_csrf"/{s/.*name="_csrf" value="\([^"]*\)".*/\1/p;q;}')
 [ -n "$CSRF" ] || fail "no CSRF token"
 pass "admin created"
 

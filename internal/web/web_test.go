@@ -35,6 +35,7 @@ type fakeMon struct {
 	setup    bool
 	calls    []string
 	policies int
+	loadErr  error // returned by LoadBackup when set
 }
 
 func (f *fakeMon) record(c string) { f.mu.Lock(); f.calls = append(f.calls, c); f.mu.Unlock() }
@@ -63,6 +64,12 @@ func (f *fakeMon) RestoreNow(context.Context, string) error            { f.recor
 func (f *fakeMon) CheckNow(context.Context) error                      { f.record("check"); return f.failErr }
 func (f *fakeMon) Relearn(context.Context, string) error               { f.record("relearn"); return f.failErr }
 func (f *fakeMon) PoliciesChanged()                                    { f.policies++ }
+func (f *fakeMon) LoadBackup(ctx context.Context, replace func(context.Context) error) error {
+	if f.loadErr != nil {
+		return f.loadErr
+	}
+	return replace(ctx)
+}
 
 type fakeDocker struct{ cs []docker.Container }
 

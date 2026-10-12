@@ -72,7 +72,9 @@ records the decisions behind it and how to work in the repo.
 - `internal/executor`: stop/start runs in dependency layers. Runs are persisted so it can
   recover after a crash.
 - `internal/store`: SQLite, with goose migrations in `migrations/`. Add new migrations;
-  never edit old ones.
+  never edit old ones. Backup files carry tables by column name (`backup.go`): a
+  migration that renames or drops a backed-up column must also translate older backups.
+- `internal/backup`: the encrypted backup file format (argon2id + AES-256-GCM).
 - `internal/web`: handlers, templates, static files, and SSE via `hub.go`. The CSP is
   strict, so no inline JS: put it in `static/app.js`.
 - `internal/e2e`: an in-process end-to-end test against fake Docker and a fake WAN.

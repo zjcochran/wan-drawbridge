@@ -19,6 +19,19 @@ After this step:
 - Step 1 cannot be repeated: once any user exists, `POST /setup/admin` is
   refused, so nobody else can create an admin through the wizard.
 
+### Or restore a backup
+
+Instead of creating an admin, you can restore a
+[backup file](backup-and-restore.md#backup-files) made in Settings: choose the
+file, enter its passphrase and click **Restore backup**. This brings back the
+settings, ISPs, stack and container choices, users and single sign-on (and the
+history, if the backup has any), and **finishes setup**: you go to the sign-in
+page and sign in with an account from the backup. If the restore fails, the
+reason is shown above the form and nothing changes.
+
+Like creating the admin, this works without signing in, and only while no
+user exists.
+
 ## 2. Single sign-on (optional)
 
 ![Step 2: single sign-on](../images/setup-2-sso.jpg)

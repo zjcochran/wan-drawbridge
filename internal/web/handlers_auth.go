@@ -105,17 +105,18 @@ func safeNext(next string) string {
 // ---- setup wizard ----
 
 type setupData struct {
-	SSO       ssoForm
-	Step      int
-	Steps     []string
-	Error     string
-	Docker    string // engine version, or the error
-	DockerOK  bool
-	Count     int // containers seen
-	Detection detectionForm
-	ISPName   string // current ISP
-	ISP       int
-	Stacks    []stackRow
+	SSO          ssoForm
+	RestoreError string // step 1: why the backup was not restored
+	Step         int
+	Steps        []string
+	Error        string
+	Docker       string // engine version, or the error
+	DockerOK     bool
+	Count        int // containers seen
+	Detection    detectionForm
+	ISPName      string // current ISP
+	ISP          int
+	Stacks       []stackRow
 }
 
 var setupSteps = []string{"Admin account", "Single sign-on", "Docker", "WAN detection", "Primary ISP", "What to stop", "Review"}

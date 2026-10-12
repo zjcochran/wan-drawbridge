@@ -31,6 +31,13 @@ every start-up (`goose.Up`). Applied versions are tracked in
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
 
+Backup files (`internal/backup`) carry tables row by row with their column
+names, and record the schema version they were made at. A restore accepts
+backups from the same or an older schema: columns added since then take their
+defaults. A migration that renames or drops a column of a backed-up table
+(`store.ConfigTables`, `checks`, `events`, `asn_daily`) must also teach
+`store.Import` to translate older backups.
+
 ## Tables
 
 ### settings

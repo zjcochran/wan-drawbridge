@@ -32,6 +32,37 @@
   <h2>Single sign-on</h2>
   {{template "sso-fields" $d.SSO}}
 </section>
+<section class="card" id="backup">
+  <h2>Backup and restore</h2>
+  <p>A backup holds the settings, ISPs, stack and container choices, users and single sign-on,
+    encrypted with a passphrase. Keep the passphrase: without it the backup cannot be restored.</p>
+  <form method="post" action="/settings/backup" class="stack narrow-form">
+    <input type="hidden" name="_csrf" value="{{$.Session.CSRF}}">
+    <label>History
+      <select name="history">
+        <option value="none">None, configuration only</option>
+        <option value="30">Last 30 days</option>
+        <option value="60">Last 60 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="all">All time</option>
+      </select>
+      <small>Checks, events and daily ISP totals. Checks are kept for {{$d.Detection.Retention}}; events are kept indefinitely.</small></label>
+    <label>Passphrase <input name="passphrase" type="password" minlength="12" autocomplete="new-password" required>
+      <small>At least 12 characters.</small></label>
+    <label>Confirm passphrase <input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
+    <button>Download backup</button>
+  </form>
+  <h3>Restore</h3>
+  <p>Restoring replaces the settings, ISPs, stack and container choices, users and single sign-on
+    with the backup's, and the history too if the backup has any. Everyone is signed out.
+    It is not possible while containers are stopped for a failover.</p>
+  <form hx-post="/settings/restore" hx-encoding="multipart/form-data"
+        hx-confirm="Replace the current configuration with the backup? Everyone will be signed out." class="stack narrow-form">
+    <label>Backup file <input name="file" type="file" accept=".json,application/json" required></label>
+    <label>Passphrase <input name="passphrase" type="password" autocomplete="off" required></label>
+    <button class="danger">Restore backup</button>
+  </form>
+</section>
 {{end}}
 <section class="card">
   <h2>System</h2>

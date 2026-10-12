@@ -7,6 +7,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -287,6 +288,35 @@ func (m *Monitor) Relearn(ctx context.Context, actor string) error {
 		m.report(m.store.SaveState(ctx, m.state))
 		m.event(ctx, "relearn", map[string]any{"by": actor})
 		m.publish(func(s *Status) { s.PrimaryISP = 0 })
+		return nil
+	})
+}
+
+// ErrStopped refuses a restore while Drawbridge has containers stopped: the
+// open run is what lets it start them again.
+var ErrStopped = errors.New("a backup cannot be restored while containers are stopped for a failover; restore after failback")
+
+// LoadBackup runs replace, which overwrites the stored configuration, between
+// checks, then reloads the settings and checks right away. It refuses while
+// a failover has containers stopped.
+func (m *Monitor) LoadBackup(ctx context.Context, replace func(context.Context) error) error {
+	return m.do(ctx, func(ctx context.Context) error {
+		run, err := m.store.OpenRun(ctx)
+		if err != nil {
+			return err
+		}
+		if run != nil || m.state.Machine.State == wan.Failover || m.state.Machine.State == wan.FailbackPending {
+			return ErrStopped
+		}
+		if err := replace(ctx); err != nil {
+			return err
+		}
+		m.announcedUndecided, m.announcedSuggest = false, 0
+		if err := m.load(ctx); err != nil {
+			return err
+		}
+		m.log.Info("backup restored", "paused", m.paused)
+		m.post(m.Check)
 		return nil
 	})
 }

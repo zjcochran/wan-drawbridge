@@ -205,6 +205,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 /* Wizard and sign-in */
 .auth-card h1 { display: flex; align-items: center; gap: 0.5rem; font-size: 1.25rem; }
 .wizard { max-width: 860px; margin: 0 auto; }
+.wizard .divided { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
 .steps { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; gap: 0.4rem; flex-wrap: wrap; counter-reset: step; }
 .steps li { counter-increment: step; color: var(--muted); font-size: 0.88rem; padding: 0.3rem 0.65rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
 .steps li::before { content: counter(step) ". "; }

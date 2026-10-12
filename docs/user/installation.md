@@ -177,7 +177,8 @@ Open `http://<host>:8080`. Every page redirects to the
 
 ## Upgrading
 
-1. Back up the `db` folder (see [Backup and restore](backup-and-restore.md)).
+1. Back up the `db` folder, or download a backup file in Settings (see
+   [Backup and restore](backup-and-restore.md)).
 2. Fetch the new version and rebuild:
 
    With the published image, change the tag in the Compose file (`latest`
@@ -207,7 +208,9 @@ of containers it stopped before acting, and picks up where it left off (see
 [Container control → crash recovery](../technical/container-control.md#crash-recovery)).
 
 Downgrading is not supported once a newer version has migrated the database.
-Restore the backup taken before the upgrade instead.
+Restore the `db` folder backup taken before the upgrade instead. A backup file
+made by the newer version cannot be restored into an older one; one made
+before the upgrade can.
 
 ## Uninstalling
 

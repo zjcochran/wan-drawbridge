@@ -4,6 +4,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -388,5 +389,49 @@ func TestFlappingIsReportedAndBacksOff(t *testing.T) {
 	events, _ := m.store.Events(ctx, store.EventFilter{Type: "flapping"})
 	if len(events) != 1 {
 		t.Fatalf("flapping events = %d", len(events))
+	}
+}
+
+func TestLoadBackupReloadsAndRefusesDuringFailover(t *testing.T) {
+	ctx := context.Background()
+	actor := &countingActor{}
+	m := newMonitor(t, newFakeWAN(t), actor)
+	m.cfg.PrimaryASN = 64500
+	stop := runMonitor(m)
+	defer stop()
+	waitFor(t, "primary", func() bool { return m.Status().State == wan.Primary })
+
+	pause := func(ctx context.Context) error { return m.store.SetSetting(ctx, store.SettingPaused, true) }
+	if err := m.LoadBackup(ctx, pause); err != nil {
+		t.Fatal(err)
+	}
+	if !m.Status().Paused {
+		t.Fatal("settings from the backup were not reloaded")
+	}
+	broken := errors.New("broken backup")
+	if err := m.LoadBackup(ctx, func(context.Context) error { return broken }); !errors.Is(err, broken) {
+		t.Fatalf("replace error: %v", err)
+	}
+
+	if err := m.FailoverNow(ctx, "test"); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	err := m.LoadBackup(ctx, func(context.Context) error { called = true; return nil })
+	if !errors.Is(err, ErrStopped) || called {
+		t.Fatalf("during failover: err=%v called=%v", err, called)
+	}
+}
+
+func TestLoadBackupRefusesWithOpenRun(t *testing.T) {
+	ctx := context.Background()
+	m := newMonitor(t, newFakeWAN(t), &countingActor{})
+	if _, err := m.store.CreateRun(ctx, "auto", 64510, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	stop := runMonitor(m)
+	defer stop()
+	if err := m.LoadBackup(ctx, func(context.Context) error { return nil }); !errors.Is(err, ErrStopped) {
+		t.Fatalf("open run: %v", err)
 	}
 }

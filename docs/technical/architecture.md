@@ -63,6 +63,7 @@ flowchart LR
 | `internal/docker` | Minimal Docker Engine API client (list, inspect, stop, start, events, version). |
 | `internal/store` | All persistence: SQLite, migrations, users, sessions, ISPs, policies, runs, events. |
 | `internal/secrets` | AES-GCM sealing of stored secrets. |
+| `internal/backup` | Backup file format: argon2id key, AES-256-GCM, gzipped JSON of a `store.Snapshot`. |
 | `internal/web` | HTTP handlers, templates, middleware (auth, CSRF, cross-origin, headers), OIDC, metrics, SSE hub. |
 | `internal/e2e` | End-to-end test of the whole process against fakes. |
 
@@ -88,8 +89,10 @@ flag and the prober. Everything else talks to it through a command channel
 (capacity 16):
 
 - `do(fn)` sends a function to run on the loop and waits for its result. Used
-  for quick commands: pause, resume, check now, apply settings, relearn, and
-  the state change of manual failover/restore.
+  for quick commands: pause, resume, check now, apply settings, relearn, the
+  state change of manual failover/restore, and restoring a backup file
+  (`LoadBackup`: refused while containers are stopped; the store is replaced
+  between checks, then the settings are reloaded and a check is posted).
 - `post(fn)` sends a function without waiting. Used for container runs started
   by commands, so that an HTTP request returns at once while containers stop.
 
