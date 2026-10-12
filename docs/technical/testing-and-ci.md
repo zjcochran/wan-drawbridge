@@ -215,16 +215,13 @@ mechanisms ensure it:
 1. **Sanitizing.** `github-sync` copies the branch and tags into a scratch
    repository and rewrites it with `git filter-repo`:
    - in every file version and commit message, the GitLab project URL,
-     `host/project-path` and the project path become the GitHub repository's,
-     and the rules in `PUBLISH_REPLACEMENTS` are applied (private values that
-     older commits contain, mapped to the fictional values used today);
+     `host/project-path` and the project path become the GitHub repository's
+     (GitLab's merge commits name the project);
    - every author and committer becomes `GHCR_USER` with GitHub's no-reply
      address;
-   - `Claude-Session:` trailers are removed from messages;
-   - the image versions listed in `ci/publish-strip-blobs.txt` (old
-     screenshots) are dropped.
+   - `Claude-Session:` trailers are removed from messages.
 
-   The built-in rules are built at run time from GitLab's predefined
+   The rules are built at run time from GitLab's predefined
    variables (`CI_PROJECT_URL`, `CI_SERVER_HOST`,
    `CI_PROJECT_PATH`), so the internal names are never stored in the
    repository. Release notes get the same replacements (GitLab compare links
@@ -232,12 +229,14 @@ mechanisms ensure it:
    the same GitHub hash on every run, so syncs are fast-forwards. GitHub hashes
    differ from GitLab's; commit order, dates and tags are preserved.
 2. **A guard.** `ci/leak-check.sh` fails the job, before anything is pushed,
-   if the internal host or its domain, or any pattern in `PUBLISH_DENYLIST`,
-   appears (case-insensitive) anywhere in the sanitized history (every commit's
+   if the internal host or its domain appears (case-insensitive) anywhere in the sanitized history (every commit's
    author, committer, message and file versions), in a release note, or in the
    files the image is built from. A leak the rules do not cover therefore stops
-   publishing instead of going out. If the check itself fails (for example an
-   invalid denylist pattern), publishing stops too.
+   publishing instead of going out. If the check itself fails, publishing
+   stops too.
+
+Screenshots are binary, so the guard cannot read them: take them only from
+the fictional demo data (see [Development](development.md#ui-screenshots)).
 
 The source itself contains no internal names: the Go module is
 `github.com/zjcochran/wan-drawbridge`, and docs and `CLAUDE.md` refer to "the
@@ -254,9 +253,6 @@ CI/CD variables (Settings → CI/CD → Variables):
 | `GHCR_REPO` | `zjcochran/wan-drawbridge` (also accepted: `ghcr.io/…` or `https://github.com/…`) | |
 | `GHCR_USER` | the GitHub user name that owns the token | |
 | `GHCR_TOKEN` | GitHub **classic** personal access token with scopes `repo` and `write:packages` | Masked, Protected |
-| `PUBLISH_REPLACEMENTS` | Optional. `git filter-repo --replace-text` rules, one per line (`literal==>replacement` or `regex:pattern==>replacement`), for private values in older commits. Kept only in GitLab. | Type **File** recommended |
-| `PUBLISH_DENYLIST` | Optional. One extended regular expression per line for anything private: host names, LAN ranges, names, email addresses. Kept only in GitLab, never in the repository. | Type **File** recommended |
-| `GITHUB_FORCE_SYNC` | `true` only to overwrite GitHub once, for example if the GitHub repository was created with a README; remove it afterwards | |
 
 A classic token is needed because ghcr.io does not accept fine-grained tokens.
 When it expires, both jobs fail with 401; create a new one and update
@@ -304,7 +300,10 @@ ghcr.io (see [Publishing to GitHub](#publishing-to-github)).
 
 The job uses `resource_group: release`, so merges in quick succession are
 released one at a time, in order. API errors fail the job instead of skipping
-the release; retrying is safe.
+the release; retrying is safe. The publish jobs take the version from the
+`release` job's `release.env`, so after changing a release tag by hand, retry
+`release` first (it reports "already released as …") and then the publish
+jobs.
 
 ### RELEASE_TOKEN
 
