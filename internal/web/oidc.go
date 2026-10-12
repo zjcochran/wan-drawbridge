@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
+	"github.com/go-jose/go-jose/v4"
 	"golang.org/x/oauth2"
 
 	"github.com/zjcochran/wan-drawbridge/internal/store"
@@ -78,7 +79,71 @@ type oidcFlows struct {
 	mu       sync.Mutex
 	issuer   string
 	provider *oidc.Provider
+	meta     providerMeta
+	keys     oidc.KeySet // the provider's published keys (JWKS)
 	pending  map[string]pendingLogin
+}
+
+// providerMeta is the part of the discovery document Drawbridge adapts to.
+type providerMeta struct {
+	JWKSURI string   `json:"jwks_uri"`
+	Scopes  []string `json:"scopes_supported"`
+	Algs    []string `json:"id_token_signing_alg_values_supported"`
+}
+
+// scopes are the scopes to request. "groups" is not a standard scope:
+// providers that list their scopes without it (Entra ID, Google) refuse a
+// sign-in that asks for it, so it is requested only if listed, or if the
+// provider does not list its scopes at all.
+func (m providerMeta) scopes() []string {
+	sc := []string{oidc.ScopeOpenID, "profile", "email"}
+	if len(m.Scopes) == 0 || slices.Contains(m.Scopes, "groups") {
+		sc = append(sc, "groups")
+	}
+	return sc
+}
+
+// hmacKeySet verifies ID tokens signed with HS256, whose key is the client
+// secret (OIDC Core 10.1). Other algorithms go to the provider's published
+// keys. The published keys are never used as an HMAC key: that confusion
+// would let anyone forge tokens.
+type hmacKeySet struct {
+	secret []byte
+	keys   oidc.KeySet
+}
+
+func (k hmacKeySet) VerifySignature(ctx context.Context, raw string) ([]byte, error) {
+	jws, err := jose.ParseSigned(raw, []jose.SignatureAlgorithm{jose.HS256})
+	if err != nil {
+		return k.keys.VerifySignature(ctx, raw) // not HS256
+	}
+	return jws.Verify(k.secret)
+}
+
+// verifier checks ID tokens. HS256 is accepted only when the provider
+// lists it and a client secret is saved; otherwise the library's defaults
+// apply (asymmetric algorithms only).
+func (s *Server) verifier(p *oidc.Provider, clientID, secret string) *oidc.IDTokenVerifier {
+	s.oidc.mu.Lock()
+	issuer, meta, keys := s.oidc.issuer, s.oidc.meta, s.oidc.keys
+	s.oidc.mu.Unlock()
+	if secret == "" || !slices.Contains(meta.Algs, string(jose.HS256)) {
+		return p.Verifier(&oidc.Config{ClientID: clientID})
+	}
+	var algs []string
+	for _, a := range meta.Algs {
+		if signingAlgs[a] {
+			algs = append(algs, a)
+		}
+	}
+	return oidc.NewVerifier(issuer, hmacKeySet{secret: []byte(secret), keys: keys},
+		&oidc.Config{ClientID: clientID, SupportedSigningAlgs: algs})
+}
+
+// signingAlgs are the ID token algorithms Drawbridge accepts.
+var signingAlgs = map[string]bool{
+	oidc.RS256: true, oidc.RS384: true, oidc.RS512: true, oidc.ES256: true, oidc.ES384: true, oidc.ES512: true,
+	oidc.PS256: true, oidc.PS384: true, oidc.PS512: true, oidc.EdDSA: true, string(jose.HS256): true,
 }
 
 type pendingLogin struct {
@@ -99,8 +164,19 @@ func (s *Server) provider(ctx context.Context, issuer string) (*oidc.Provider, e
 	if err != nil {
 		return nil, fmt.Errorf("cannot reach %s: %w", issuer, err)
 	}
-	s.oidc.issuer, s.oidc.provider = issuer, p
+	var meta providerMeta
+	if err := p.Claims(&meta); err != nil {
+		return nil, fmt.Errorf("cannot read the discovery document of %s: %w", issuer, err)
+	}
+	s.oidc.issuer, s.oidc.provider, s.oidc.meta = issuer, p, meta
+	s.oidc.keys = oidc.NewRemoteKeySet(ctx, meta.JWKSURI)
 	return p, nil
+}
+
+func (s *Server) scopes() []string {
+	s.oidc.mu.Lock()
+	defer s.oidc.mu.Unlock()
+	return s.oidc.meta.scopes()
 }
 
 func (s *Server) forgetProvider() {
@@ -121,7 +197,7 @@ func (s *Server) oauthConfig(ctx context.Context, r *http.Request, o OIDCSetting
 	return p, oauth2.Config{
 		ClientID: o.ClientID, ClientSecret: secret, Endpoint: p.Endpoint(),
 		RedirectURL: s.callbackURL(r),
-		Scopes:      []string{oidc.ScopeOpenID, "profile", "email", "groups"},
+		Scopes:      s.scopes(),
 	}, nil
 }
 
@@ -265,7 +341,7 @@ func (s *Server) verifyCallback(r *http.Request, o OIDCSettings) (ssoLogin, stri
 		return ssoLogin{}, "Could not complete the sign-in with " + o.Name() + ". Check the client ID and secret."
 	}
 	raw, _ := tok.Extra("id_token").(string)
-	idt, err := provider.Verifier(&oidc.Config{ClientID: o.ClientID}).Verify(ctx, raw)
+	idt, err := s.verifier(provider, o.ClientID, cfg.ClientSecret).Verify(ctx, raw)
 	if err != nil {
 		s.Log.Warn("oidc id token rejected", "err", err)
 		return ssoLogin{}, "The sign-in token from " + o.Name() + " was not valid."

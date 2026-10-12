@@ -21,7 +21,7 @@
 | Layer | Where | What it covers |
 | --- | --- | --- |
 | Pure logic | `internal/wan`, `internal/learner`, `internal/probe` (`Agree`, `ParseBody`), `store.GroupKey` | Exhaustive cases with simulated time. The state machine tests drive 15-second check sequences: delays, short drops, inconclusive checks, stale evidence, failback strictness, flapping back-off over 8 cycles, hold doubling and reset, zero delays. |
-| Components | each package's `_test.go` | Real SQLite in `t.TempDir()`; fake Docker; fake WAN servers; fake OIDC provider (signs ID tokens with `go-jose`, supports PKCE, groups, userinfo); fake clock. |
+| Components | each package's `_test.go` | Real SQLite in `t.TempDir()`; fake Docker; fake WAN servers; fake OIDC provider (signs ID tokens with `go-jose`, RS256 or HS256; supports PKCE, groups, userinfo and a configurable `scopes_supported`); fake clock. |
 | Web | `internal/web` | Full HTTP round trips with a cookie-jar client: setup, sign-in and rate limit, CSRF, cross-origin, roles, every page, every action, SSE, metrics, proxy headers, SSO flows (including state and nonce tampering), database failures (tables dropped under a live server). |
 | CLI | `cmd/drawbridge` | Every subcommand run in-process through `cli(args, stdin, stdout, stderr)` against a fake Docker API and fake WAN; `serve` started and stopped on a free port; the health check. |
 | End to end | `internal/e2e` | The real store, monitor, executor, Docker client and web server together, against a fake Docker Engine and fake IP services, with short timings (100 ms checks): setup and stack selection through the web UI, a reconnect onto another ASN of the same ISP (no failover), failover, a restart in the middle of a failover, failback. |

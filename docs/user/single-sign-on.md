@@ -12,7 +12,8 @@ any other OpenID Connect (OIDC) provider, alongside or instead of passwords.
 - Accounts are matched on the provider's **issuer and subject** (the stable
   user ID), never on username or email. An SSO user called `alice` is not
   the same account as a local user `alice` until you link them.
-- Drawbridge requests the scopes `openid profile email groups`.
+- Drawbridge requests the scopes `openid profile email`, plus `groups` unless
+  the provider lists its scopes without it (see [Other providers](#other-providers)).
 
 ## 1. Register Drawbridge with Pocket ID
 
@@ -137,12 +138,36 @@ ID might be behind that same connection. If you cannot sign in:
 
 ## Other providers
 
-Any OIDC provider that supports discovery and the authorization code flow
-works the same way (Authelia, Authentik, Keycloak, Kanidm, Zitadel, …):
+Drawbridge uses standard OpenID Connect only, so any provider with a discovery
+document and the authorization code flow should work. Register the callback
+URL as in [step 1](#1-register-drawbridge-with-pocket-id) and fill in the same
+fields. The issuer URL must match the token's `iss` claim exactly.
 
-- Register the callback URL.
-- Make sure the provider can include a `groups` claim if you use the group
-  options. Some call the scope differently; Drawbridge always requests
-  `groups`, and a provider that does not know that scope may ignore it or
-  reject the request.
-- The issuer URL must match the `iss` claim exactly.
+What Drawbridge adapts to, from the discovery document:
+
+- **Scopes.** `groups` is not a standard scope, and some providers refuse a
+  sign-in that asks for a scope they do not know. Drawbridge requests `groups`
+  only if the provider lists it in `scopes_supported`, or lists no scopes at
+  all.
+- **Token signatures.** RS256/384/512, ES256/384/512, PS256/384/512 and EdDSA
+  are checked against the provider's published keys. HS256 (a signature made
+  with the client secret) is accepted only if the provider lists it, a client
+  secret is saved, and the secret is at least 32 bytes long.
+
+The group options read a claim named `groups` that holds a list of group
+names. Providers that send groups differently can still be used for sign-in,
+but leave the allowed and admin group empty.
+
+Notes per provider. These come from each provider's documentation and have not
+been tested against Drawbridge:
+
+| Provider | Notes |
+| --- | --- |
+| Authelia | Works as is; it has a `groups` scope and claim. |
+| Authentik | Select a **Signing Key** on the provider for RS256. Without one, Authentik signs with HS256 using the client secret, which also works (its generated secrets are long enough). Groups arrive in `groups` with the `profile` scope. |
+| Keycloak | Groups need a **Group Membership** mapper on the client (or a client scope) with the token claim name `groups`. Its **Full group path** option is on by default, so groups arrive as `/drawbridge-admins`: either turn it off or enter the group with the leading `/`. |
+| Kanidm | Groups arrive as `name@domain` (for example `drawbridge-admins@idm.example.com`), so enter them that way. |
+| Okta | Add a **groups claim** to the app (or authorization server) for the groups you need. |
+| Microsoft Entra ID | Sign-in works. Its `groups` claim holds group object IDs, not names, so enter the ID in the group fields. |
+| Google | Sign-in works. Google has no groups claim, so leave the group options empty. |
+| Zitadel, Auth0 | Sign-in works. Neither sends a `groups` claim by default (Zitadel sends roles in its own claim; Auth0 needs a custom Action), so leave the group options empty. |

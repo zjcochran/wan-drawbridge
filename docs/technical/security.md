@@ -142,6 +142,15 @@ entry is the one the trusted proxy saw.
 - The ID token is verified by go-oidc: signature against the provider's JWKS,
   `iss` equal to the configured issuer, `aud` containing the client ID, expiry.
   Drawbridge then checks the `nonce`.
+- Signature algorithms: those go-oidc supports (RS, ES and PS 256/384/512 and
+  EdDSA) that the discovery document lists. HS256 is added only when the
+  provider lists it and a client secret is saved; its key is the client
+  secret (OIDC Core 10.1) and must be at least 32 bytes (RFC 7518). An HS256
+  token is never checked against the JWKS and an asymmetric token never
+  against the secret, so the public keys cannot be used as an HMAC key
+  (algorithm confusion). Public clients cannot use HS256.
+- Scopes: `openid profile email`, plus `groups` when `scopes_supported` lists
+  it or is absent.
 - Accounts are matched by `(issuer, subject)`. Username and email are never
   used to match, so an attacker who controls an account named like a local
   user at the provider gets a separate, provisioned account at most.
