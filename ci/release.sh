@@ -3,7 +3,7 @@
 #
 # Creates the next release after a merge to the default branch. The merged
 # merge request's label (major, minor or patch) picks which part of the latest
-# vX.Y.Z tag to bump; with no tag yet the base is v0.0.0. The GitLab release
+# vX.Y.Z tag to bump; with no tag yet the first release is v0.1.0. The GitLab release
 # and its tag point at the merge commit.
 #
 # Runs in CI (see .gitlab-ci.yml). Needs RELEASE_TOKEN, a project access token
@@ -57,6 +57,9 @@ IFS=. read -r major minor patch <<EOF
 ${prev#v}
 EOF
 major=${major:-0} minor=${minor:-0} patch=${patch:-0}
+if [ -z "$prev" ]; then
+  bump=first major=0 minor=1 patch=0
+fi
 case $bump in
   major) major=$((major + 1)) minor=0 patch=0 ;;
   minor) minor=$((minor + 1)) patch=0 ;;

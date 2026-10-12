@@ -24,7 +24,7 @@ in [Container control](container-control.md#docker-client)), and point
 Build the image with version information:
 
 ```sh
-docker build --build-arg VERSION=v1.2.3 --build-arg SOURCE_URL=https://gitlab.example/you/drawbridge -t drawbridge .
+docker build --build-arg VERSION=v1.2.3 --build-arg SOURCE_URL=https://github.com/zjcochran/wan-drawbridge -t drawbridge .
 ```
 
 The image is `gcr.io/distroless/static-debian12` with the single static binary

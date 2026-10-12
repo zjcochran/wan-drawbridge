@@ -28,7 +28,7 @@ records the decisions behind it and how to work in the repo.
 - Reverse proxy support: `DRAWBRIDGE_TRUSTED_PROXIES` and `DRAWBRIDGE_BASE_URL`.
 - License is AGPL-3.0-or-later. Every Go file starts with an SPDX header, and the
   footer links to the source (AGPL §13).
-- CI is GitLab CI (`.gitlab-ci.yml`), not GitHub. Images go to `$CI_REGISTRY_IMAGE`.
+- CI is GitLab CI (`.gitlab-ci.yml`), not GitHub. Images go to ghcr.io (see below), not the GitLab registry.
 - Deferred, not rejected: notifications and multiple Docker hosts.
 
 ## Working with the user

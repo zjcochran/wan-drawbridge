@@ -4,10 +4,10 @@
 # real-Docker smoke test (JUnit report). Every one of these must pass. Merge requests need exactly one of the
 # labels major, minor or patch; each merge to the default branch creates the
 # next semantic-version release (ci/release.sh), then copies the code, tags and
-# releases to GitHub and publishes the image to ghcr.io (no GitHub Actions); multi-arch images pushed to this project's container registry from the
-# default branch (:edge) and from version tags vX.Y.Z (:X.Y.Z, :X.Y, :latest).
+# releases to GitHub and publishes the multi-arch image to ghcr.io as :X.Y.Z,
+# :X.Y and :latest (no GitHub Actions).
 #
-# The smoke and release jobs use Docker-in-Docker, so they need a runner that
+# The build-image, smoke and github-image jobs use Docker-in-Docker, so they need a runner that
 # allows privileged containers (GitLab.com's shared Linux runners do). The
 # daemon is reached over plain TCP: it is only reachable from inside the job,
 # and it needs no runner configuration for TLS certificates.
