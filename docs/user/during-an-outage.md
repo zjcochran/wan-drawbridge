@@ -61,7 +61,10 @@ dependents first, then what they depend on, up to 4 at a time.
 ![Failover](../images/dashboard-failover.jpg)
 
 "Stopped by Drawbridge" lists each container. Containers that were already
-stopped are recorded as "left alone" and will not be started later.
+stopped are recorded as "left alone" and will not be started later. The
+Containers page shows the same result per container:
+
+![Containers during a failover](../images/containers-failover.jpg)
 
 While in Failover, checks return to every minute.
 

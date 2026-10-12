@@ -202,6 +202,7 @@ Usernames are case-insensitive: `Alice` and `alice` are the same account.
 | Phone | Dark mode |
 | --- | --- |
 | ![Dashboard on a phone](../images/phone-dashboard.jpg) | ![Dashboard in dark mode](../images/dark-dashboard.jpg) |
+| ![Containers on a phone](../images/phone-containers.jpg) | ![Stacks in dark mode](../images/dark-stacks.jpg) |
 
 ## Notes
 

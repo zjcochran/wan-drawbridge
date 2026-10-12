@@ -300,7 +300,10 @@ ghcr.io (see [Publishing to GitHub](#publishing-to-github)).
 
 The job uses `resource_group: release`, so merges in quick succession are
 released one at a time, in order. API errors fail the job instead of skipping
-the release; retrying is safe.
+the release; retrying is safe. The publish jobs take the version from the
+`release` job's `release.env`, so after changing a release tag by hand, retry
+`release` first (it reports "already released as …") and then the publish
+jobs.
 
 ### RELEASE_TOKEN
 

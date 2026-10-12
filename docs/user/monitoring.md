@@ -131,7 +131,7 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `user_role` | Single sign-on changed a role through the admin group | `user`, `role`, `by` |
 | `password_changed` | A user changed their own password | `user` |
 | `sso_settings` | Single sign-on settings saved | `enabled`, `sso_only`, `by` |
-| `sso_linked`, `sso_unlinked` | An account was linked to or unlinked from single sign-on | `user`, `sso_user` |
+| `sso_linked`, `sso_unlinked` | An account was linked to or unlinked from single sign-on | `user`; `sso_user` when linked |
 
 Changes made with the command line are not recorded as events.
 
