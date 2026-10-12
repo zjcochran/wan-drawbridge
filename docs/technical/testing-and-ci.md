@@ -219,7 +219,12 @@ mechanisms ensure it:
      (GitLab's merge commits name the project);
    - every author and committer becomes `GHCR_USER` with GitHub's no-reply
      address;
-   - `Claude-Session:` trailers are removed from messages.
+   - `Claude-Session:` trailers are removed from messages;
+   - `.gitlab-ci.yml` and the `ci/` folder are left out of every commit made
+     after they stopped being published (`ci_cutoff` in the script). Older
+     commits still contain them, so their GitHub hashes did not change; GitHub
+     shows them deleted once, and a commit that changed only those files does
+     not appear on GitHub at all.
 
    The rules are built at run time from GitLab's predefined
    variables (`CI_PROJECT_URL`, `CI_SERVER_HOST`,
