@@ -128,7 +128,7 @@ it resumes the run.
   per visitor (see [Behind a reverse proxy](reverse-proxy.md)).
 - **Single sign-on only, and the provider is down:** set
   `DRAWBRIDGE_LOCAL_LOGIN=force` and recreate the container (see
-  [Single sign-on](single-sign-on.md#if-pocket-id-is-unreachable)).
+  [Single sign-on](single-sign-on.md#if-your-provider-is-unreachable)).
 - **Disabled the only admin by editing the database:** use `reset-password`,
   which re-enables the account.
 - **After restoring a backup:** everyone is signed out, and only the accounts

@@ -4,9 +4,11 @@ package web
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -35,6 +37,12 @@ type fakeIdP struct {
 	user   map[string]any // claims for the next sign-in
 	codes  map[string]authReq
 	secret string
+	scope  string // requested by the last sign-in
+
+	// Discovery and signing, set before the first sign-in.
+	scopes []string // scopes_supported; nil leaves it out
+	algs   []string // id_token_signing_alg_values_supported
+	hsKey  []byte   // sign ID tokens with HS256 and this key instead of RS256
 }
 
 type authReq struct{ nonce, challenge, redirect string }
@@ -45,15 +53,19 @@ func newIdP(t *testing.T) *fakeIdP {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &fakeIdP{t: t, signer: signer, key: key, codes: map[string]authReq{}, secret: "s3cret",
+	p := &fakeIdP{t: t, signer: signer, key: key, codes: map[string]authReq{}, secret: "s3cret", algs: []string{"RS256"},
 		user: map[string]any{"sub": "user-1", "preferred_username": "alice", "email": "alice@example.com"}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]any{
+		doc := map[string]any{
 			"issuer": p.srv.URL, "authorization_endpoint": p.srv.URL + "/authorize",
 			"token_endpoint": p.srv.URL + "/token", "jwks_uri": p.srv.URL + "/jwks",
-			"userinfo_endpoint": p.srv.URL + "/userinfo", "id_token_signing_alg_values_supported": []string{"RS256"},
-		})
+			"userinfo_endpoint": p.srv.URL + "/userinfo", "id_token_signing_alg_values_supported": p.algs,
+		}
+		if p.scopes != nil {
+			doc["scopes_supported"] = p.scopes
+		}
+		json.NewEncoder(w).Encode(doc)
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"}}})
@@ -67,6 +79,7 @@ func newIdP(t *testing.T) *fakeIdP {
 		code := fmt.Sprint(time.Now().UnixNano())
 		p.mu.Lock()
 		p.codes[code] = authReq{nonce: q.Get("nonce"), challenge: q.Get("code_challenge"), redirect: q.Get("redirect_uri")}
+		p.scope = q.Get("scope")
 		p.mu.Unlock()
 		http.Redirect(w, r, q.Get("redirect_uri")+"?code="+code+"&state="+url.QueryEscape(q.Get("state")), http.StatusFound)
 	})
@@ -83,6 +96,12 @@ func newIdP(t *testing.T) *fakeIdP {
 		for k, v := range p.user {
 			claims[k] = v
 		}
+		var signer interface {
+			Sign([]byte) (*jose.JSONWebSignature, error)
+		} = p.signer
+		if p.hsKey != nil {
+			signer = hmacSigner{p.hsKey}
+		}
 		p.mu.Unlock()
 		sum := sha256.Sum256([]byte(r.PostForm.Get("code_verifier")))
 		if !ok || id != "drawbridge" || secret != p.secret ||
@@ -93,7 +112,7 @@ func newIdP(t *testing.T) *fakeIdP {
 		claims["iss"], claims["aud"], claims["nonce"] = p.srv.URL, "drawbridge", req.nonce
 		claims["iat"], claims["exp"] = time.Now().Unix(), time.Now().Add(time.Hour).Unix()
 		payload, _ := json.Marshal(claims)
-		jws, _ := p.signer.Sign(payload)
+		jws, _ := signer.Sign(payload)
 		tok, _ := jws.CompactSerialize()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{"access_token": "at", "token_type": "Bearer", "expires_in": 3600, "id_token": tok})
@@ -292,4 +311,79 @@ func TestSSONonceIsChecked(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(body, "was not valid") {
 		t.Fatalf("token with the wrong nonce accepted: %d", resp.StatusCode)
 	}
+}
+
+func TestSSOScopes(t *testing.T) {
+	cases := []struct {
+		scopes []string
+		groups bool
+	}{
+		{nil, true}, // not listed: ask, as before
+		{[]string{"openid", "profile", "email", "groups"}, true},
+		{[]string{"openid", "profile", "email"}, false}, // Entra ID, Google
+	}
+	for _, c := range cases {
+		e := newEnv(t)
+		idp := newIdP(t)
+		idp.scopes = c.scopes
+		configureSSO(t, e.admin(), idp, nil)
+		if resp, _ := e.client().ssoLogin("/auth/oidc/login"); resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("%v: sign-in %d", c.scopes, resp.StatusCode)
+		}
+		if got := strings.Contains(idp.scope, "groups"); got != c.groups || !strings.HasPrefix(idp.scope, "openid profile email") {
+			t.Errorf("scopes_supported %v: requested %q", c.scopes, idp.scope)
+		}
+	}
+}
+
+func TestSSOHS256(t *testing.T) {
+	const secret = "a-client-secret-of-at-least-32-bytes"
+	cases := []struct {
+		name   string
+		algs   []string
+		key    func(*fakeIdP) []byte
+		secret string // the client secret, at the provider and in Drawbridge
+		ok     bool
+	}{
+		{"signed with the client secret", []string{"RS256", "HS256"}, func(*fakeIdP) []byte { return []byte(secret) }, secret, true},
+		{"signed with another key", []string{"HS256"}, func(*fakeIdP) []byte { return []byte("another-secret-of-at-least-32-bytes") }, secret, false},
+		{"signed with the public key", []string{"HS256"}, func(p *fakeIdP) []byte {
+			b, _ := x509.MarshalPKIXPublicKey(&p.key.PublicKey)
+			return b
+		}, secret, false},
+		{"provider does not list HS256", []string{"RS256"}, func(*fakeIdP) []byte { return []byte(secret) }, secret, false},
+		{"public client", []string{"HS256"}, func(*fakeIdP) []byte { return []byte(secret) }, "", false},
+		{"secret too short for HS256", []string{"HS256"}, func(*fakeIdP) []byte { return []byte("s3cret") }, "s3cret", false},
+	}
+	for _, c := range cases {
+		e := newEnv(t)
+		idp := newIdP(t)
+		idp.algs, idp.secret, idp.hsKey = c.algs, c.secret, c.key(idp)
+		configureSSO(t, e.admin(), idp, url.Values{"client_secret": {c.secret}})
+		resp, body := e.client().ssoLogin("/auth/oidc/login")
+		if ok := resp.StatusCode == http.StatusSeeOther; ok != c.ok || !ok && !strings.Contains(body, "was not valid") {
+			t.Errorf("%s: %d %s", c.name, resp.StatusCode, body)
+		}
+	}
+}
+
+func TestSSOHS256StillAcceptsRS256(t *testing.T) {
+	e := newEnv(t)
+	idp := newIdP(t)
+	idp.algs = []string{"HS256", "RS256"}
+	configureSSO(t, e.admin(), idp, nil)
+	if resp, body := e.client().ssoLogin("/auth/oidc/login"); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("RS256 token refused: %d %s", resp.StatusCode, body)
+	}
+}
+
+// hmacSigner signs HS256 with any key, even one too short for go-jose.
+type hmacSigner struct{ key []byte }
+
+func (h hmacSigner) Sign(payload []byte) (*jose.JSONWebSignature, error) {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"HS256"}`))
+	body := header + "." + base64.RawURLEncoding.EncodeToString(payload)
+	mac := hmac.New(sha256.New, h.key)
+	mac.Write([]byte(body))
+	return jose.ParseSigned(body+"."+base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), []jose.SignatureAlgorithm{jose.HS256})
 }

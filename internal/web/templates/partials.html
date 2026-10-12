@@ -111,7 +111,7 @@
   <div class="form-grid">
     <label>Issuer URL
       <input name="issuer" value="{{.Issuer}}" placeholder="https://id.example.com" autocomplete="off">
-      <small>Your Pocket ID address.</small></label>
+      <small>Your OIDC provider's address.</small></label>
     <label>Client ID
       <input name="client_id" value="{{.ClientID}}" autocomplete="off"></label>
     <label>Client secret
@@ -119,7 +119,7 @@
              placeholder="{{if .HasSecret}}Saved. Leave blank to keep it.{{else}}None (public client){{end}}">
       <small>Stored encrypted.</small></label>
     <label>Button label
-      <input name="display_name" value="{{.DisplayName}}" placeholder="Pocket ID"></label>
+      <input name="display_name" value="{{.DisplayName}}" placeholder="SSO"></label>
     <label>Allowed group
       <input name="allowed_group" value="{{.AllowedGroup}}">
       <small>Only members may sign in. Leave blank to allow everyone.</small></label>
