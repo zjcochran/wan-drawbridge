@@ -1,0 +1,57 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Settings</h1>
+<section class="card">
+  <h2>WAN detection</h2>
+  {{template "detection-form" $d}}
+</section>
+<section class="card">
+  <h2>Your sign-in</h2>
+  {{if $d.SSO.Enabled}}
+    {{if $d.Linked}}
+      <p>Linked to {{$d.SSO.Name}}{{range $d.Linked}} as <strong>{{or .Email .Subject}}</strong>{{end}}.</p>
+      {{if $d.HasLocal}}<form hx-post="/settings/sso/unlink" hx-confirm="Unlink your {{$d.SSO.Name}} account?"><button class="secondary">Unlink</button></form>{{end}}
+    {{else}}
+      <p><a class="button secondary" href="/auth/oidc/login?link=1">Link my {{$d.SSO.Name}} account</a></p>
+    {{end}}
+  {{end}}
+  {{if $d.HasLocal}}
+  <h3>Change password</h3>
+  <form hx-post="/settings/password" class="stack narrow-form">
+    <label>Current password <input name="current" type="password" autocomplete="current-password" required></label>
+    <label>New password <input name="new" type="password" minlength="12" autocomplete="new-password" required></label>
+    <label>Confirm new password <input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
+    <button>Change password</button>
+  </form>
+  {{else}}
+  <p class="muted">You sign in with {{$d.SSO.Name}} only.</p>
+  {{end}}
+</section>
+{{if $d.IsAdmin}}
+<section class="card">
+  <h2>Single sign-on</h2>
+  {{template "sso-fields" $d.SSO}}
+</section>
+{{end}}
+<section class="card">
+  <h2>System</h2>
+  <dl class="facts">
+    <dt>Drawbridge</dt><dd>{{or $d.Version "dev"}}</dd>
+    <dt>Docker</dt><dd>{{if $d.DockerOK}}<span class="dot running"></span>connected, version {{$d.Docker}}{{else}}<span class="dot stopped"></span>{{$d.Docker}}{{end}}</dd>
+    <dt>Database</dt><dd>{{$d.DBPath}} <span class="sub">{{$d.DBSize}} with its WAL files; back up this folder</span></dd>
+  </dl>
+</section>
+{{end}}
+
+{{define "detection-form"}}
+<form id="detection-form" hx-post="/settings/detection" hx-target="#detection-form" hx-swap="outerHTML" class="stack">
+  <fieldset {{if not .IsAdmin}}disabled{{end}}>
+    {{template "detection-fields" .Detection}}
+  </fieldset>
+  {{if .IsAdmin}}<button>Save detection settings</button>{{end}}
+</form>
+{{end}}
+
+{{define "sso-form"}}{{template "sso-fields" .}}{{end}}
+
+{{define "sso-test"}}<div id="sso-test" class="hint">{{.}}</div>{{end}}

@@ -1,0 +1,28 @@
+# Drawbridge plus a fake public-IP service. smoke.sh flips the "public IP"
+# between 8.8.8.8 (AS15169, the pinned primary) and 1.1.1.1 (AS13335, a
+# "backup ISP") and checks that real containers stop and start.
+name: dbsmoke
+services:
+  drawbridge:
+    build:
+      context: ../..
+      args:
+        VERSION: smoke
+    labels:
+      drawbridge.self: "true"
+    ports:
+      - "${SMOKE_BIND:-127.0.0.1}:18080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      DRAWBRIDGE_IP_PROVIDERS: http://fakeip/ip
+      DRAWBRIDGE_QUORUM: "1"
+      DRAWBRIDGE_CHECK_INTERVAL: 15s
+      DRAWBRIDGE_FAILOVER_AFTER: 0s
+      DRAWBRIDGE_FAILBACK_AFTER: 0s
+      DRAWBRIDGE_PRIMARY_ASN: "15169"
+      DRAWBRIDGE_METRICS_TOKEN: smoke
+      LOG_LEVEL: debug
+  fakeip:
+    image: busybox:1.37
+    command: ["sh", "-c", "mkdir -p /www && echo 8.8.8.8 > /www/ip && exec httpd -f -p 80 -h /www"]

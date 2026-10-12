@@ -1,0 +1,46 @@
+{{define "content"}}
+<h1>Users</h1>
+<section class="card">{{template "users-table" .Data}}</section>
+<section class="card">
+  <h2>Add a user</h2>
+  <form hx-post="/users" hx-target="#users-table" hx-swap="outerHTML" class="form-grid" data-reset-on-success>
+    <label>Username <input name="username" autocomplete="off" required></label>
+    <label>Password <input name="password" type="password" minlength="12" autocomplete="new-password" required>
+      <small>At least 12 characters.</small></label>
+    <label>Role
+      <select name="role"><option value="viewer">Viewer (read-only)</option><option value="admin">Admin</option></select>
+    </label>
+    <div class="form-actions"><button>Add user</button></div>
+  </form>
+</section>
+{{end}}
+
+{{define "users-table"}}
+<div id="users-table" class="table-wrap">
+<table>
+  <thead><tr><th>User</th><th>Role</th><th>Signs in with</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {{range .Users}}
+  <tr>
+    <td><strong>{{.Username}}</strong>{{if eq .ID $.Me}} <span class="sub">(you)</span>{{end}}</td>
+    <td>{{.Role}}</td>
+    <td>{{if .HasLocal}}password{{end}}{{if and .HasLocal .HasSSO}} and {{end}}{{if .HasSSO}}single sign-on{{end}}</td>
+    <td>{{if .LastLogin.IsZero}}never{{else}}<time title="{{datetime .LastLogin}}">{{ago .LastLogin}}</time>{{end}}</td>
+    <td>{{if .Disabled}}<span class="badge muted">Disabled</span>{{else}}<span class="badge ok">Active</span>{{end}}</td>
+    <td class="right">
+      {{if ne .ID $.Me}}
+        {{if .Disabled}}<button class="link" hx-post="/users/{{.ID}}/enable" hx-target="#users-table" hx-swap="outerHTML">Enable</button>
+        {{else}}<button class="link" hx-post="/users/{{.ID}}/disable" hx-target="#users-table" hx-swap="outerHTML"
+          hx-confirm="Disable {{.Username}}? They are signed out everywhere.">Disable</button>{{end}}
+        <form class="inline" hx-post="/users/{{.ID}}/password" hx-target="#users-table" hx-swap="outerHTML">
+          <input name="password" type="password" minlength="12" placeholder="New password" aria-label="New password for {{.Username}}" autocomplete="new-password" required>
+          <button class="link">Reset password</button>
+        </form>
+      {{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}

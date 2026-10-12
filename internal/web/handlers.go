@@ -1,0 +1,808 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package web
+
+import (
+	"context"
+	"encoding/csv"
+	"fmt"
+	"net/http"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/zjcochran/wan-drawbridge/internal/monitor"
+	"github.com/zjcochran/wan-drawbridge/internal/store"
+)
+
+type timeDuration = time.Duration
+
+func withSession(ctx context.Context, s *store.Session) context.Context {
+	return context.WithValue(ctx, ctxKey{}, s)
+}
+
+func atoi(s string, def int) int {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+// ---- live container state ----
+
+// liveState maps container keys to "running" / "stopped", from Docker. If
+// Docker cannot be reached the map is nil and the UI shows "unknown".
+func (s *Server) liveState(ctx context.Context) map[string]string {
+	cs, err := s.Docker.List(ctx)
+	if err != nil {
+		s.Log.Warn("cannot list containers", "err", err)
+		return nil
+	}
+	out := map[string]string{}
+	for _, c := range cs {
+		st := "stopped"
+		if c.Running {
+			st = "running"
+		}
+		// Scaled services share a key; any running replica counts as running.
+		if out[c.Key()] != "running" {
+			out[c.Key()] = st
+		}
+	}
+	return out
+}
+
+type containerRow struct {
+	store.ContainerRow
+	State string // running, stopped, gone or unknown
+}
+
+// Source explains where the effective policy comes from.
+func (c containerRow) Source() string {
+	switch {
+	case c.NeedsReview:
+		return "new, not configured"
+	case c.Policy != store.Inherit:
+		return "own setting"
+	case c.Project == "":
+		return "default"
+	}
+	return "from stack"
+}
+
+func (s *Server) containerRows(ctx context.Context) ([]containerRow, error) {
+	rows, err := s.Store.Containers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	live := s.liveState(ctx)
+	out := make([]containerRow, 0, len(rows))
+	for _, r := range rows {
+		st := "unknown"
+		if live != nil {
+			if st = live[r.Key]; st == "" {
+				st = "gone"
+			}
+		}
+		out = append(out, containerRow{r, st})
+	}
+	return out, nil
+}
+
+// ---- dashboard ----
+
+type dashboardData struct {
+	Status      statusData
+	Timeline    timeline
+	Events      []store.Event
+	NeedsReview int
+}
+
+type statusData struct {
+	S         monitor.Status
+	ISPName   string
+	Primary   string
+	Run       *store.Run
+	Actions   []store.RunAction
+	Stopped   int
+	IsAdmin   bool
+	NoPrimary bool
+}
+
+func (s *Server) statusData(r *http.Request) (statusData, error) {
+	ctx := r.Context()
+	st := s.Mon.Status()
+	names, err := s.Store.ISPNames(ctx)
+	if err != nil {
+		return statusData{}, err
+	}
+	d := statusData{
+		S: st, ISPName: names[st.ISP], Primary: names[st.PrimaryISP],
+		IsAdmin: sessionFrom(r).User.IsAdmin(), NoPrimary: st.PrimaryISP == 0,
+	}
+	if d.Run, err = s.Store.OpenRun(ctx); err != nil {
+		return d, err
+	}
+	if d.Run != nil {
+		if d.Actions, err = s.Store.RunActions(ctx, d.Run.ID); err != nil {
+			return d, err
+		}
+		for _, a := range d.Actions {
+			if a.Stopped && !a.Started {
+				d.Stopped++
+			}
+		}
+	}
+	return d, nil
+}
+
+func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	if setup, _ := s.Store.Flag(ctx, store.SettingSetupComplete); !setup && sessionFrom(r).User.IsAdmin() {
+		redirect(w, r, "/setup?step=2")
+		return
+	}
+	var d dashboardData
+	var err error
+	if d.Status, err = s.statusData(r); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if d.Timeline, err = s.timeline(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if d.Events, err = s.Store.Events(ctx, store.EventFilter{Limit: 8}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	rows, err := s.Store.Containers(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	for _, c := range rows {
+		if c.NeedsReview {
+			d.NeedsReview++
+		}
+	}
+	s.page(w, r, "dashboard", "Dashboard", d)
+}
+
+func (s *Server) statusPartial(w http.ResponseWriter, r *http.Request) {
+	d, err := s.statusData(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.partial(w, r, "dashboard", "status", d)
+}
+
+func (s *Server) timelinePartial(w http.ResponseWriter, r *http.Request) {
+	t, err := s.timeline(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.partial(w, r, "dashboard", "timeline", t)
+}
+
+// timeline is the last 24 hours of checks as coloured segments.
+type timeline struct {
+	Segments []segment
+	Legend   []legendItem
+	Ticks    []tick
+}
+
+type segment struct {
+	X, W  float64 // in a 0..1000 wide viewBox
+	Class string
+	Title string
+}
+
+type legendItem struct{ Class, Label string }
+
+type tick struct {
+	X     float64 // percent from the left
+	Label string
+}
+
+func (s *Server) timeline(ctx context.Context) (timeline, error) {
+	end := s.now()
+	start := end.Add(-24 * time.Hour)
+	pts, err := s.Store.ChecksSince(ctx, start)
+	if err != nil {
+		return timeline{}, err
+	}
+	names, err := s.Store.ISPNames(ctx)
+	if err != nil {
+		return timeline{}, err
+	}
+	primary := s.Mon.Status().PrimaryISP
+	d, err := s.Mon.Detection(ctx)
+	if err != nil {
+		return timeline{}, err
+	}
+	gap := 3 * d.CheckInterval // longer than this between checks = no data
+
+	x := func(t time.Time) float64 { return 1000 * t.Sub(start).Seconds() / (24 * time.Hour).Seconds() }
+	class := func(p store.CheckPoint) string {
+		switch {
+		case !p.Conclusive || p.ISP == 0:
+			return "inconclusive"
+		case p.ISP == primary:
+			return "primary"
+		}
+		return "backup"
+	}
+	label := func(p store.CheckPoint) string {
+		if !p.Conclusive || p.ISP == 0 {
+			return "Inconclusive"
+		}
+		return names[p.ISP]
+	}
+
+	var t timeline
+	for i := 0; i < len(pts); {
+		j := i
+		for j+1 < len(pts) && class(pts[j+1]) == class(pts[i]) && pts[j+1].ISP == pts[i].ISP &&
+			pts[j+1].TS.Sub(pts[j].TS) <= gap {
+			j++
+		}
+		segEnd := pts[j].TS.Add(d.CheckInterval)
+		if j+1 < len(pts) && pts[j+1].TS.Sub(pts[j].TS) <= gap {
+			segEnd = pts[j+1].TS
+		}
+		segEnd = minTime(segEnd, end)
+		t.Segments = append(t.Segments, segment{
+			X: x(pts[i].TS), W: max(x(segEnd)-x(pts[i].TS), 0.5), Class: class(pts[i]),
+			Title: fmt.Sprintf("%s · %s – %s", label(pts[i]), pts[i].TS.Local().Format("15:04"), segEnd.Local().Format("15:04")),
+		})
+		i = j + 1
+	}
+	if primary != 0 {
+		t.Legend = append(t.Legend, legendItem{"primary", "Primary: " + names[primary]})
+	}
+	t.Legend = append(t.Legend, legendItem{"backup", "Backup"}, legendItem{"inconclusive", "Inconclusive"})
+	for h := 0; h <= 24; h += 6 {
+		at := start.Add(time.Duration(h) * time.Hour)
+		lbl := at.Local().Format("15:04")
+		if h == 24 {
+			lbl = "now"
+		}
+		t.Ticks = append(t.Ticks, tick{X: x(at) / 10, Label: lbl}) // percent
+	}
+	return t, nil
+}
+
+func unix(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
+}
+
+func (s *Server) action(w http.ResponseWriter, r *http.Request) {
+	ctx, who := r.Context(), actorName(r)
+	var err error
+	switch r.PathValue("action") {
+	case "pause":
+		err = s.Mon.SetPaused(ctx, true, who)
+	case "resume":
+		err = s.Mon.SetPaused(ctx, false, who)
+	case "failover":
+		err = s.Mon.FailoverNow(ctx, who)
+	case "restore":
+		err = s.Mon.RestoreNow(ctx, who)
+	case "check":
+		err = s.Mon.CheckNow(ctx)
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.statusPartial(w, r)
+}
+
+// ---- stacks ----
+
+type stackRow struct {
+	store.StackRow
+	Running int
+}
+
+func (s *Server) stackRows(r *http.Request) ([]stackRow, error) {
+	ctx := r.Context()
+	stacks, err := s.Store.Stacks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cs, err := s.containerRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]stackRow, 0, len(stacks))
+	for _, st := range stacks {
+		row := stackRow{StackRow: st}
+		for _, c := range cs {
+			if c.Project == st.Project && c.State == "running" {
+				row.Running++
+			}
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
+type stacksData struct {
+	Stacks  []stackRow
+	IsAdmin bool
+}
+
+func (s *Server) stacksPage(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.stackRows(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d := stacksData{Stacks: rows, IsAdmin: sessionFrom(r).User.IsAdmin()}
+	if isHTMX(r) && r.URL.Query().Get("partial") == "1" {
+		s.partial(w, r, "stacks", "stacks-table", d)
+		return
+	}
+	s.page(w, r, "stacks", "Stacks", d)
+}
+
+func (s *Server) stackContainers(w http.ResponseWriter, r *http.Request) {
+	cs, err := s.containerRows(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	project := r.PathValue("project")
+	var rows []containerRow
+	for _, c := range cs {
+		if c.Project == project {
+			rows = append(rows, c)
+		}
+	}
+	s.partial(w, r, "stacks", "stack-containers", rows)
+}
+
+func (s *Server) setStackPolicy(w http.ResponseWriter, r *http.Request) {
+	project := r.PathValue("project")
+	on := r.PostFormValue("disable") == "on"
+	if err := s.Store.SetStackPolicy(r.Context(), project, on, actorName(r), s.now()); err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(r.Context(), "stack_policy", map[string]any{"stack": project, "disable": on, "by": actorName(r)})
+	s.Mon.PoliciesChanged()
+	s.Hub.Publish(TopicInventory)
+	rows, err := s.stackRows(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.partial(w, r, "stacks", "stacks-table", stacksData{Stacks: rows, IsAdmin: true})
+}
+
+// ---- containers ----
+
+type containersData struct {
+	Rows     []containerRow
+	Stacks   []string
+	Filter   containerFilter
+	IsAdmin  bool
+	Total    int
+	Disabled map[string]int // per stack: containers following a disabled stack
+}
+
+type containerFilter struct {
+	Stack, State, Policy, Q string
+}
+
+func (f containerFilter) match(c containerRow) bool {
+	switch {
+	case f.Stack == "-" && c.Project != "",
+		f.Stack != "" && f.Stack != "-" && c.Project != f.Stack,
+		f.State != "" && c.State != f.State,
+		f.Policy == "review" && !c.NeedsReview,
+		(f.Policy == store.Disable || f.Policy == store.Keep) && c.Effective != f.Policy,
+		f.Q != "" && !strings.Contains(strings.ToLower(c.Key+" "+c.Name), strings.ToLower(f.Q)):
+		return false
+	}
+	return true
+}
+
+func (s *Server) containersData(r *http.Request, f containerFilter) (containersData, error) {
+	cs, err := s.containerRows(r.Context())
+	if err != nil {
+		return containersData{}, err
+	}
+	d := containersData{Filter: f, IsAdmin: sessionFrom(r).User.IsAdmin(), Total: len(cs), Disabled: map[string]int{}}
+	seen := map[string]bool{}
+	for _, c := range cs {
+		if c.Project != "" && !seen[c.Project] {
+			seen[c.Project] = true
+			d.Stacks = append(d.Stacks, c.Project)
+		}
+		if c.StackDisabled && c.Policy == store.Inherit {
+			d.Disabled[c.Project]++
+		}
+		if f.match(c) {
+			d.Rows = append(d.Rows, c)
+		}
+	}
+	sort.Strings(d.Stacks)
+	return d, nil
+}
+
+func filterFrom(get func(string) string) containerFilter {
+	return containerFilter{Stack: get("stack"), State: get("state"), Policy: get("policy"), Q: strings.TrimSpace(get("q"))}
+}
+
+func (s *Server) containersPage(w http.ResponseWriter, r *http.Request) {
+	d, err := s.containersData(r, filterFrom(r.URL.Query().Get))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if isHTMX(r) && r.URL.Query().Get("partial") == "1" {
+		s.partial(w, r, "containers", "containers-table", d)
+		return
+	}
+	s.page(w, r, "containers", "Containers", d)
+}
+
+func (s *Server) setContainerPolicy(w http.ResponseWriter, r *http.Request) {
+	s.applyPolicies(w, r, []string{r.PostFormValue("key")}, r.PostFormValue("policy"))
+}
+
+func (s *Server) bulkContainerPolicy(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		invalid(w, "Could not read the form.")
+		return
+	}
+	keys := r.PostForm["keys"]
+	if len(keys) == 0 {
+		invalid(w, "Select at least one container.")
+		return
+	}
+	s.applyPolicies(w, r, keys, r.PostFormValue("bulk_policy"))
+}
+
+func (s *Server) applyPolicies(w http.ResponseWriter, r *http.Request, keys []string, policy string) {
+	ctx, now, who := r.Context(), s.now(), actorName(r)
+	for _, key := range keys {
+		converted, err := s.Store.SetContainerPolicy(ctx, key, policy, who, now)
+		if err != nil {
+			invalid(w, err.Error())
+			return
+		}
+		s.event(ctx, "container_policy", map[string]any{
+			"container": key, "policy": policy, "converted_stack": converted, "by": who,
+		})
+	}
+	s.Mon.PoliciesChanged()
+	s.Hub.Publish(TopicInventory)
+	d, err := s.containersData(r, filterFrom(r.PostFormValue))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.partial(w, r, "containers", "containers-table", d)
+}
+
+// ---- ISPs ----
+
+type ispsData struct {
+	ISPs      []store.ISPRow
+	WeekTotal int64
+	IsAdmin   bool
+	CurrentID int
+}
+
+func (s *Server) ispsData(r *http.Request) (ispsData, error) {
+	rows, err := s.Store.ISPs(r.Context(), s.now())
+	if err != nil {
+		return ispsData{}, err
+	}
+	d := ispsData{ISPs: rows, IsAdmin: sessionFrom(r).User.IsAdmin(), CurrentID: s.Mon.Status().ISP}
+	for _, i := range rows {
+		if i.Role != store.RoleIgnored {
+			d.WeekTotal += i.WeekSeconds
+		}
+	}
+	return d, nil
+}
+
+func (s *Server) ispsPage(w http.ResponseWriter, r *http.Request) {
+	d, err := s.ispsData(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.page(w, r, "isps", "ISPs", d)
+}
+
+func (s *Server) ispsTable(w http.ResponseWriter, r *http.Request) {
+	s.Hub.Publish(TopicState)
+	d, err := s.ispsData(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.partial(w, r, "isps", "isps-table", d)
+}
+
+func (s *Server) setISPRole(w http.ResponseWriter, r *http.Request) {
+	id := atoi(r.PathValue("id"), 0)
+	role := r.PostFormValue("role")
+	if err := s.Store.SetRole(r.Context(), id, role, true); err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(r.Context(), "isp_role", map[string]any{"isp": id, "role": role, "by": actorName(r)})
+	s.ispsTable(w, r)
+}
+
+func (s *Server) renameISP(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.RenameISP(r.Context(), atoi(r.PathValue("id"), 0), r.PostFormValue("name")); err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.ispsTable(w, r)
+}
+
+func (s *Server) relearn(w http.ResponseWriter, r *http.Request) {
+	if err := s.Mon.Relearn(r.Context(), actorName(r)); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.ispsTable(w, r)
+}
+
+func (s *Server) moveASN(w http.ResponseWriter, r *http.Request) {
+	asn := atoi(r.PathValue("asn"), 0)
+	to := r.PostFormValue("to")
+	target := 0
+	if to != "new" {
+		if target = atoi(to, -1); target <= 0 {
+			invalid(w, "Choose an ISP.")
+			return
+		}
+	}
+	id, err := s.Store.MoveASN(r.Context(), asn, target, s.now())
+	if err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(r.Context(), "asn_moved", map[string]any{"asn": asn, "isp": id, "by": actorName(r)})
+	s.ispsTable(w, r)
+}
+
+// ---- events ----
+
+type eventsData struct {
+	Events []store.Event
+	Types  []string
+	Type   string
+	Next   int64 // BeforeID for the next page, 0 if none
+}
+
+const eventsPageSize = 100
+
+func (s *Server) eventsPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	q := r.URL.Query()
+	d := eventsData{Type: q.Get("type")}
+	var err error
+	if d.Events, err = s.Store.Events(ctx, store.EventFilter{
+		Type: d.Type, BeforeID: int64(atoi(q.Get("before"), 0)), Limit: eventsPageSize,
+	}); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if len(d.Events) == eventsPageSize {
+		d.Next = d.Events[len(d.Events)-1].ID
+	}
+	if d.Types, err = s.Store.EventTypes(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.page(w, r, "events", "Events", d)
+}
+
+func (s *Server) eventsCSV(w http.ResponseWriter, r *http.Request) {
+	events, err := s.Store.Events(r.Context(), store.EventFilter{Type: r.URL.Query().Get("type"), Limit: 1000})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="drawbridge-events.csv"`)
+	cw := csv.NewWriter(w)
+	cw.Write([]string{"time", "type", "actor", "details"})
+	for _, e := range events {
+		cw.Write([]string{e.TS.UTC().Format(time.RFC3339), e.Type, e.Actor, csvSafe(summary(e.Payload))})
+	}
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		s.Log.Warn("events export interrupted", "err", err) // headers are sent: nothing else to do
+	}
+}
+
+// csvSafe stops spreadsheet apps from treating a cell as a formula.
+func csvSafe(s string) string {
+	if s != "" && strings.ContainsRune("=+-@\t\r", rune(s[0])) {
+		return "'" + s
+	}
+	return s
+}
+
+// ---- settings ----
+
+type settingsData struct {
+	SSO       ssoForm
+	Linked    []store.Identity
+	HasLocal  bool
+	Detection detectionForm
+	Docker    string
+	DockerOK  bool
+	DBPath    string
+	DBSize    string
+	IsAdmin   bool
+	Version   string
+}
+
+func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	det, err := s.Mon.Detection(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	me := sessionFrom(r).User
+	d := settingsData{Detection: formFromDetection(det), DBPath: s.DBPath, IsAdmin: me.IsAdmin(), HasLocal: me.HasLocal, Version: s.Version}
+	o, err := s.oidcSettings(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d.SSO = s.ssoForm(r, o)
+	if d.Linked, err = s.Store.Identities(ctx, me.ID); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d.Docker, err = s.Docker.Ping(ctx)
+	d.DockerOK = err == nil
+	if err != nil {
+		d.Docker = err.Error()
+	}
+	var size int64
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		if fi, err := os.Stat(s.DBPath + suffix); err == nil {
+			size += fi.Size()
+		}
+	}
+	d.DBSize = fmt.Sprintf("%.1f MB", float64(size)/1e6)
+	s.page(w, r, "settings", "Settings", d)
+}
+
+func (s *Server) saveDetection(w http.ResponseWriter, r *http.Request) {
+	d, err := s.Mon.Detection(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if err := applyDetectionForm(r, &d); err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	if err := s.Mon.ApplyDetection(r.Context(), d); err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(r.Context(), "settings_changed", map[string]any{"by": actorName(r)})
+	w.Header().Set("HX-Trigger", `{"toast":"Detection settings saved."}`)
+	s.partial(w, r, "settings", "detection-form", settingsData{Detection: formFromDetection(d), IsAdmin: true})
+}
+
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	u := sessionFrom(r).User
+	if _, err := s.Store.Authenticate(ctx, u.Username, r.PostFormValue("current"), s.now()); err != nil {
+		invalid(w, "Your current password is wrong.")
+		return
+	}
+	if r.PostFormValue("new") != r.PostFormValue("confirm") {
+		invalid(w, "The new passwords do not match.")
+		return
+	}
+	if err := s.Store.SetPassword(ctx, u.ID, r.PostFormValue("new")); err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(ctx, "password_changed", map[string]any{"user": u.Username})
+	// SetPassword ended every session, this one included: sign in again.
+	redirect(w, r, "/login?next=/settings")
+}
+
+// ---- users ----
+
+type usersData struct {
+	Users []store.User
+	Me    int
+	Error string
+}
+
+func (s *Server) usersPage(w http.ResponseWriter, r *http.Request) {
+	users, err := s.Store.Users(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.page(w, r, "users", "Users", usersData{Users: users, Me: sessionFrom(r).User.ID})
+}
+
+func (s *Server) usersTable(w http.ResponseWriter, r *http.Request) {
+	users, err := s.Store.Users(r.Context())
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.partial(w, r, "users", "users-table", usersData{Users: users, Me: sessionFrom(r).User.ID})
+}
+
+func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
+	u, err := s.Store.CreateUser(r.Context(), r.PostFormValue("username"), r.PostFormValue("password"),
+		r.PostFormValue("role"), s.now())
+	if err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(r.Context(), "user_created", map[string]any{"user": u.Username, "role": u.Role, "by": actorName(r)})
+	s.usersTable(w, r)
+}
+
+func (s *Server) userOp(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := atoi(r.PathValue("id"), 0)
+	var err error
+	op := r.PathValue("op")
+	switch op {
+	case "disable":
+		if id == sessionFrom(r).User.ID {
+			invalid(w, "You cannot disable yourself.")
+			return
+		}
+		err = s.Store.SetUserDisabled(ctx, id, true)
+	case "enable":
+		err = s.Store.SetUserDisabled(ctx, id, false)
+	case "password":
+		err = s.Store.SetPassword(ctx, id, r.PostFormValue("password"))
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(ctx, "user_"+op, map[string]any{"user_id": id, "by": actorName(r)})
+	s.usersTable(w, r)
+}

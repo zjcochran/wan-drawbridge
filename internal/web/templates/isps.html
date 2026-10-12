@@ -1,0 +1,69 @@
+{{define "content"}}
+<h1>ISPs</h1>
+<p class="lead">Drawbridge groups networks (ASNs) that belong to the same provider into one ISP. Traffic on any ISP other than the primary counts as a failover.</p>
+<section class="card">{{template "isps-table" .Data}}</section>
+{{end}}
+
+{{define "isps-table"}}
+{{$d := .}}
+<div id="isps-table">
+<div class="table-wrap">
+<table>
+  <thead><tr><th>ISP</th><th>Role</th><th>Last 7 days</th><th>All time</th><th>Networks (ASNs)</th></tr></thead>
+  <tbody>
+  {{range .ISPs}}{{$isp := .}}
+  <tr>
+    <td>
+      {{if $d.IsAdmin}}
+      <form hx-post="/isps/{{.ID}}/rename" hx-target="#isps-table" hx-swap="outerHTML" class="inline">
+        <input name="name" value="{{.Name}}" aria-label="Name for ISP {{.ID}}" size="18">
+        <button class="link">Rename</button>
+      </form>
+      {{else}}<strong>{{.Name}}</strong>{{end}}
+      {{if eq .ID $d.CurrentID}}<span class="badge ok">current</span>{{end}}
+      <div class="sub">group {{.GroupKey}} · last seen {{ago .LastSeen}}</div>
+    </td>
+    <td>
+      {{if $d.IsAdmin}}
+      <select name="role" hx-post="/isps/{{.ID}}/role" hx-target="#isps-table" hx-swap="outerHTML" aria-label="Role for {{.Name}}">
+        <option value="primary" {{if eq .Role "primary"}}selected{{end}}>Primary{{if .Pinned}} (pinned){{end}}</option>
+        <option value="backup" {{if eq .Role "backup"}}selected{{end}}>Backup</option>
+        <option value="ignored" {{if eq .Role "ignored"}}selected{{end}}>Ignored</option>
+      </select>
+      {{if and (eq .Role "primary") (not .Pinned)}}<div class="sub">learned</div>{{end}}
+      {{else}}{{.Role}}{{if .Pinned}} (pinned){{end}}{{end}}
+    </td>
+    <td>{{if eq .Role "ignored"}}–{{else}}{{pct .WeekSeconds $d.WeekTotal}}{{end}}</td>
+    <td>{{hours .AllSeconds}}</td>
+    <td>
+      <ul class="asn-list">
+      {{range .ASNs}}
+        <li>AS{{.ASN}} <span class="sub">{{.Name}}{{if .Manual}} · grouped by hand{{end}}</span>
+        {{if $d.IsAdmin}}
+          <form class="inline" hx-post="/asns/{{.ASN}}/move" hx-target="#isps-table" hx-swap="outerHTML" hx-trigger="change">
+            <select name="to" aria-label="Move AS{{.ASN}}">
+              <option value="">Move to…</option>
+              {{range $d.ISPs}}{{if ne .ID $isp.ID}}<option value="{{.ID}}">{{.Name}}</option>{{end}}{{end}}
+              <option value="new">Its own ISP</option>
+            </select>
+          </form>
+        {{end}}
+        </li>
+      {{end}}
+      </ul>
+    </td>
+  </tr>
+  {{else}}
+  <tr><td colspan="5" class="empty">No ISPs seen yet. They appear after the first successful check.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{if .IsAdmin}}
+<div class="actions">
+  <button class="secondary" hx-post="/isps/relearn" hx-target="#isps-table" hx-swap="outerHTML"
+    hx-confirm="Forget the primary ISP and learn it again? Drawbridge takes no action until it knows the primary again.">Re-learn primary ISP</button>
+</div>
+{{end}}
+</div>
+{{end}}

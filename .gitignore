@@ -1,0 +1,10 @@
+/data/
+/drawbridge
+*.db
+*.db-*
+.DS_Store
+.go/
+/report.xml
+/smoke-report.xml
+/coverage.out
+/coverage.xml

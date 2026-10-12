@@ -1,0 +1,89 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Dashboard</h1>
+{{if $d.NeedsReview}}<div class="banner warn">{{$d.NeedsReview}} new containers joined stacks with per-container settings and keep running until you decide. <a href="/containers?policy=review">Review them</a></div>{{end}}
+{{template "status" $d.Status}}
+<section class="card">
+  <h2>Last 24 hours</h2>
+  {{template "timeline" $d.Timeline}}
+</section>
+<section class="card">
+  <h2>Recent events</h2>
+  <ul class="events">
+  {{range $d.Events}}<li><time title="{{datetime .TS}}">{{ago .TS}}</time> <strong>{{.Type}}</strong> <span class="sub">{{summary .Payload}}</span></li>
+  {{else}}<li class="muted">No events yet.</li>{{end}}
+  </ul>
+  <a href="/events">All events</a>
+</section>
+{{end}}
+
+{{define "status"}}
+<section id="status" class="grid two" hx-get="/partials/status" hx-trigger="sse:state, sse:inventory" hx-swap="outerHTML">
+  <div class="card">
+    <div class="state {{stateClass .S.State}}">
+      <span class="state-label">{{stateLabel .S.State}}</span>
+      {{if eq .S.State "failover_pending"}}<span class="sub">failing over in {{until .S.Due}} unless the primary returns</span>{{end}}
+      {{if eq .S.State "failback_pending"}}<span class="sub">failing back in {{until .S.Due}} if the primary stays stable</span>{{end}}
+      {{if .S.Paused}}<span class="badge warn">Paused</span>{{end}}
+      {{with .S.Busy}}<span class="badge muted spinner">{{.}} containers</span>{{end}}
+    </div>
+    {{if .S.Flaps}}<div class="banner warn">The primary ISP has been flapping, so failback now waits {{duration .S.Hold}} of stable connection (normally less). This resets after six hours without a failover.</div>{{end}}
+    <dl class="facts">
+      <dt>Current ISP</dt>
+      <dd>{{if .ISPName}}{{.ISPName}} <span class="sub">AS{{.S.ASN}}</span>{{else}}–{{end}}</dd>
+      <dt>Primary ISP</dt>
+      <dd>{{if .Primary}}{{.Primary}}{{else}}<span class="warn-text">Not known yet</span> <a href="/isps">Set it</a>{{end}}</dd>
+      <dt>Public IP</dt><dd>{{or .S.LastIP "–"}}</dd>
+      <dt>Last check</dt><dd><time title="{{datetime .S.LastCheck}}">{{ago .S.LastCheck}}</time>{{if and (not .S.LastCheck.IsZero) (not .S.Conclusive)}} · inconclusive{{end}}</dd>
+      <dt>In this state</dt><dd>since {{ago .S.Since}}</dd>
+    </dl>
+    {{if .IsAdmin}}
+    <div class="actions">
+      {{if .S.Paused}}<button hx-post="/actions/resume" hx-target="#status" hx-swap="outerHTML">Resume automation</button>
+      {{else}}<button class="secondary" hx-post="/actions/pause" hx-target="#status" hx-swap="outerHTML">Pause automation</button>{{end}}
+      <button class="secondary" hx-post="/actions/check" hx-target="#status" hx-swap="outerHTML">Check now</button>
+      {{if or .Run (eq .S.State "failover") (eq .S.State "failback_pending")}}
+      <button hx-post="/actions/restore" hx-target="#status" hx-swap="outerHTML"
+        hx-confirm="Start the containers Drawbridge stopped? If traffic is still on a backup ISP, Drawbridge fails over again after the usual checks.">Restore now</button>
+      {{else}}
+      <button class="danger" hx-post="/actions/failover" hx-target="#status" hx-swap="outerHTML"
+        hx-confirm="Stop every container set to stop on failover, now? Drawbridge restores them once it confirms the primary ISP, unless automation is paused.">Fail over now</button>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+  <div class="card">
+    <h2>Stopped by Drawbridge</h2>
+    {{if .Run}}
+      <p>{{.Stopped}} stopped since <time title="{{datetime .Run.StartedAt}}">{{ago .Run.StartedAt}}</time>{{if eq .Run.Trigger "manual"}} (manual failover){{end}}.</p>
+      <ul class="mini-list">
+      {{range .Actions}}
+        <li>
+          {{if .Error}}<span class="dot stopped"></span>{{.Name}} <span class="bad-text">{{.Error}}</span>
+          {{else if .Started}}<span class="dot running"></span>{{.Name}} <span class="sub">started again</span>
+          {{else if .Stopped}}<span class="dot stopped"></span>{{.Name}} <span class="sub">stopped</span>
+          {{else if not .WasRunning}}<span class="dot gone"></span>{{.Name}} <span class="sub">was already stopped; left alone</span>
+          {{else}}<span class="dot unknown"></span>{{.Name}} <span class="sub">waiting</span>{{end}}
+        </li>
+      {{end}}
+      </ul>
+    {{else}}
+      <p class="muted">Nothing. Every container is as you left it.</p>
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{define "timeline"}}
+<div id="timeline" hx-get="/partials/timeline" hx-trigger="sse:state" hx-swap="outerHTML">
+  <svg class="timeline" viewBox="0 0 1000 32" preserveAspectRatio="none" role="img" aria-label="Which ISP carried traffic over the last 24 hours">
+    <rect class="seg-none" x="0" y="0" width="1000" height="32"></rect>
+    {{range .Segments}}<rect class="seg-{{.Class}}" x="{{printf "%.2f" .X}}" y="0" width="{{printf "%.2f" .W}}" height="32"><title>{{.Title}}</title></rect>{{end}}
+  </svg>
+  <div class="ticks">{{range .Ticks}}<span style="left: {{printf "%.1f" .X}}%">{{.Label}}</span>{{end}}</div>
+  <ul class="legend">
+    {{range .Legend}}<li><span class="swatch seg-{{.Class}}"></span>{{.Label}}</li>{{end}}
+    <li><span class="swatch seg-none"></span>No data</li>
+  </ul>
+</div>
+{{end}}

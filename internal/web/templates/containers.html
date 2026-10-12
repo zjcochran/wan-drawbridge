@@ -1,0 +1,80 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Containers</h1>
+<p class="lead">Each container follows its stack unless you give it its own setting.</p>
+<form id="filters" class="filters" hx-get="/containers" hx-target="#containers-table" hx-swap="outerHTML" hx-push-url="true"
+      hx-trigger="change, input changed delay:300ms from:input[name=q]">
+  <input type="hidden" name="partial" value="1">
+  <input type="search" name="q" value="{{$d.Filter.Q}}" placeholder="Search containers" aria-label="Search containers">
+  <select name="stack" aria-label="Stack">
+    <option value="">All stacks</option>
+    <option value="-" {{if eq $d.Filter.Stack "-"}}selected{{end}}>Standalone only</option>
+    {{range $d.Stacks}}<option {{if eq . $d.Filter.Stack}}selected{{end}}>{{.}}</option>{{end}}
+  </select>
+  <select name="state" aria-label="State">
+    <option value="">Any state</option>
+    {{range $v := (list "running" "stopped" "gone")}}<option {{if eq $v $d.Filter.State}}selected{{end}}>{{$v}}</option>{{end}}
+  </select>
+  <select name="policy" aria-label="On failover">
+    <option value="">Any setting</option>
+    <option value="disable" {{if eq $d.Filter.Policy "disable"}}selected{{end}}>Stops on failover</option>
+    <option value="keep" {{if eq $d.Filter.Policy "keep"}}selected{{end}}>Keeps running</option>
+    <option value="review" {{if eq $d.Filter.Policy "review"}}selected{{end}}>New, not configured</option>
+  </select>
+</form>
+<section class="card">{{template "containers-table" $d}}</section>
+{{end}}
+
+{{define "containers-table"}}
+<div id="containers-table" hx-get="/containers?partial=1" hx-include="#filters" hx-trigger="sse:inventory" hx-swap="outerHTML">
+{{if .IsAdmin}}
+<div class="bulkbar">
+  <label class="visually-hidden" for="bulk-policy">Set selected to</label>
+  <select id="bulk-policy" name="bulk_policy">
+    <option value="inherit">Follow stack</option>
+    <option value="disable">Stop on failover</option>
+    <option value="keep">Keep running</option>
+  </select>
+  <button class="secondary" hx-post="/containers/bulk" hx-include="#filters, #bulk-policy, #containers-table input[name=keys]:checked"
+          hx-target="#containers-table" hx-swap="outerHTML">Apply to selected</button>
+  <span class="sub">{{len .Rows}} of {{.Total}} shown</span>
+</div>
+{{end}}
+<div class="table-wrap">
+<table>
+  <thead><tr>
+    {{if .IsAdmin}}<th class="check"><input type="checkbox" data-select-all="keys" aria-label="Select all"></th>{{end}}
+    <th>Container</th><th>Stack</th><th>State</th><th>On failover</th>{{if .IsAdmin}}<th>Setting</th>{{end}}
+  </tr></thead>
+  <tbody>
+  {{range .Rows}}
+  <tr>
+    {{if $.IsAdmin}}<td class="check"><input type="checkbox" name="keys" value="{{.Key}}" aria-label="Select {{.Name}}"></td>{{end}}
+    <td><strong>{{.Name}}</strong>{{if ne .Name .Key}}<div class="sub">{{.Key}}</div>{{end}}</td>
+    <td>{{if .Project}}<a href="/containers?stack={{query .Project}}">{{.Project}}</a>{{else}}<span class="muted">standalone</span>{{end}}</td>
+    <td><span class="dot {{.State}}"></span>{{.State}}</td>
+    <td>
+      {{if eq .Effective "disable"}}<span class="badge bad">Stops</span>{{else}}<span class="badge ok">Keeps running</span>{{end}}
+      <div class="sub {{if .NeedsReview}}warn-text{{end}}">{{.Source}}</div>
+    </td>
+    {{if $.IsAdmin}}
+    <td>
+      <input type="hidden" name="key" value="{{.Key}}">
+      <select name="policy" aria-label="Setting for {{.Name}}"
+              hx-post="/containers/policy" hx-include="closest td, #filters" hx-target="#containers-table" hx-swap="outerHTML"
+              {{if and .StackDisabled (eq .Policy "inherit")}}hx-confirm="This removes the stack-wide setting from {{.Project}}. The other {{sub (index $.Disabled .Project) 1}} containers in it will stay disabled individually."{{end}}>
+        <option value="inherit" {{if eq .Policy "inherit"}}selected{{end}}>{{if .Project}}Follow stack{{else}}Default (keep running){{end}}</option>
+        <option value="disable" {{if eq .Policy "disable"}}selected{{end}}>Stop on failover</option>
+        <option value="keep" {{if eq .Policy "keep"}}selected{{end}}>Keep running</option>
+      </select>
+    </td>
+    {{end}}
+  </tr>
+  {{else}}
+  <tr><td colspan="6" class="empty">No containers match.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+</div>
+{{end}}

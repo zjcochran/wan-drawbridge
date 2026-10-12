@@ -1,0 +1,93 @@
+{{define "content"}}
+{{$d := .Data}}
+<div class="wizard">
+  <h1>Set up WAN Drawbridge</h1>
+  <ol class="steps">
+    {{range $i, $name := $d.Steps}}{{$n := add $i 1}}
+    <li class="{{if eq $n $d.Step}}current{{else if lt $n $d.Step}}done{{end}}">
+      {{if and (lt $n $d.Step) (gt $n 1)}}<a href="/setup?step={{$n}}">{{$name}}</a>{{else}}{{$name}}{{end}}
+    </li>
+    {{end}}
+  </ol>
+
+  <section class="card">
+  {{if eq $d.Step 1}}
+    <h2>Create the admin account</h2>
+    <p>This account manages Drawbridge. You can add single sign-on later.</p>
+    {{with $d.Error}}<div class="banner bad">{{.}}</div>{{end}}
+    <form method="post" action="/setup/admin" class="stack">
+      <label>Username <input name="username" autocomplete="username" required autofocus></label>
+      <label>Password <input name="password" type="password" minlength="12" autocomplete="new-password" required>
+        <small>At least 12 characters.</small></label>
+      <label>Confirm password <input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
+      <button type="submit">Create account</button>
+    </form>
+
+  {{else if eq $d.Step 2}}
+    <h2>Single sign-on (optional)</h2>
+    <p>Let people sign in with Pocket ID or another OIDC provider. You can set this up later in Settings.</p>
+    {{template "sso-fields" $d.SSO}}
+    <div class="actions"><a class="button secondary" href="/setup?step=3">Skip</a></div>
+
+  {{else if eq $d.Step 3}}
+    <h2>Docker</h2>
+    {{if $d.DockerOK}}
+      <p><span class="dot running"></span>Connected to Docker {{$d.Docker}}. Found {{$d.Count}} containers.</p>
+      <div class="actions"><a class="button" href="/setup?step=4">Continue</a></div>
+    {{else}}
+      <div class="banner bad">Cannot reach Docker: {{$d.Docker}}</div>
+      <p>Mount the Docker socket into this container:</p>
+      <pre>volumes:
+  - /var/run/docker.sock:/var/run/docker.sock</pre>
+      <div class="actions"><a class="button" href="/setup?step=3">Test again</a>
+        <a class="button secondary" href="/setup?step=4">Skip for now</a></div>
+    {{end}}
+
+  {{else if eq $d.Step 4}}
+    <h2>WAN detection</h2>
+    <p>The defaults suit most connections. Run a check to see what Drawbridge sees right now.</p>
+    <div class="row">
+      <button class="secondary" hx-post="/setup/check" hx-target="#check-result" hx-swap="outerHTML">Run a check</button>
+      <div id="check-result"></div>
+    </div>
+    <form hx-post="/setup/detection" class="stack">
+      {{template "detection-fields" $d.Detection}}
+      <button type="submit">Save and continue</button>
+    </form>
+
+  {{else if eq $d.Step 5}}
+    <h2>Primary ISP</h2>
+    {{if $d.ISP}}
+      <p>Right now your traffic leaves through <strong>{{$d.ISPName}}</strong>. Is this your primary ISP?</p>
+      <form hx-post="/setup/primary" class="actions">
+        <input type="hidden" name="isp" value="{{$d.ISP}}">
+        <button name="choice" value="pin">Yes, pin it as primary</button>
+        <button class="secondary" name="choice" value="learn">No, learn it over the learning period</button>
+      </form>
+    {{else}}
+      <p>No check has identified your ISP yet.</p>
+      <div class="actions">
+        <a class="button secondary" href="/setup?step=5">Check again</a>
+        <form hx-post="/setup/primary"><button class="secondary" name="choice" value="learn">Learn it over the learning period</button></form>
+      </div>
+    {{end}}
+
+  {{else if eq $d.Step 6}}
+    <h2>What to stop on failover</h2>
+    <p>Turn on the stacks to stop when traffic moves to a backup ISP. Exceptions for single containers are on the Containers page.</p>
+    {{template "stacks-table" (dict "Stacks" $d.Stacks "IsAdmin" true)}}
+    <div class="actions"><a class="button" href="/setup?step=7">Continue</a></div>
+
+  {{else}}
+    <h2>Review and start</h2>
+    <p>When you finish, Drawbridge stops the selected containers whenever traffic moves to a backup ISP, and starts them again when the primary is back.</p>
+    <ul>
+      <li>Change what is stopped on the <a href="/stacks">Stacks</a> and <a href="/containers">Containers</a> pages.</li>
+      <li>Fix ISP grouping and the primary ISP on the <a href="/isps">ISPs</a> page.</li>
+      <li>Pause automation from the dashboard at any time.</li>
+    </ul>
+    <form hx-post="/setup/finish" class="actions"><button>Finish and turn on automation</button></form>
+  {{end}}
+  </section>
+</div>
+{{end}}

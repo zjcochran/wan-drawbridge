@@ -1,0 +1,143 @@
+{{/* Fragments shared by several pages and returned alone to HTMX requests. */}}
+
+{{define "stacks-table"}}
+<div id="stacks-table" hx-get="/stacks?partial=1" hx-trigger="sse:inventory" hx-swap="outerHTML">
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Stack</th><th>Containers</th><th>On failover</th><th>Stop whole stack</th><th></th></tr></thead>
+  <tbody>
+  {{range $i, $s := .Stacks}}
+  <tr>
+    <td><strong>{{.Project}}</strong></td>
+    <td>{{.Running}} running of {{.Containers}}</td>
+    <td>
+      {{if eq .Status "disabled"}}<span class="badge bad">Stops (stack rule)</span>
+      {{else if eq .Status "partial"}}<span class="badge warn">Partial · {{.Disabling}} of {{.Containers}}</span>
+      {{else}}<span class="badge muted">Not affected</span>{{end}}
+    </td>
+    <td>
+      {{if $.IsAdmin}}
+      <label class="switch" title="Changing this resets every container in the stack to follow it">
+        <input type="checkbox" name="disable" {{if .Disabled}}checked{{end}}
+               hx-post="/stacks/{{.Project}}/policy" hx-target="#stacks-table" hx-swap="outerHTML">
+        <span class="slider"></span>
+        <span class="visually-hidden">Stop {{.Project}} on failover</span>
+      </label>
+      {{else}}{{if .Disabled}}Yes{{else}}No{{end}}{{end}}
+    </td>
+    <td class="right">
+      <button class="link" hx-get="/stacks/{{.Project}}/containers" hx-target="#stack-{{$i}}" hx-swap="innerHTML">Show containers</button>
+    </td>
+  </tr>
+  <tr class="detail"><td colspan="5" id="stack-{{$i}}"></td></tr>
+  {{else}}
+  <tr><td colspan="5" class="empty">No Compose stacks found. Stacks appear here once Drawbridge can read Docker.</td></tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+<p class="hint">Turning a stack on or off resets every container in it to follow the stack. To make exceptions, use the <a href="/containers">Containers</a> page.</p>
+</div>
+{{end}}
+
+{{define "stack-containers"}}
+<ul class="mini-list">
+{{range .}}
+  <li><span class="dot {{.State}}"></span>{{.Name}} <span class="sub">{{.State}}</span>
+    {{if eq .Effective "disable"}}<span class="badge bad">Stops</span>{{else}}<span class="badge ok">Keeps running</span>{{end}}
+    <span class="sub">{{.Source}}</span></li>
+{{else}}<li class="muted">No containers.</li>{{end}}
+</ul>
+{{end}}
+
+{{define "detection-fields"}}
+<div class="form-grid">
+  <label>Check interval
+    <input name="check_interval" value="{{.CheckInterval}}" required>
+    <small>How often to check, 15s to 1h. Examples: 30s, 1m, 5m.</small>
+  </label>
+  <label>Fail over after
+    <input name="failover_after" value="{{.FailoverAfter}}" required>
+    <small>How long traffic must be on a backup ISP before containers stop, up to 30m. Checks that reach nothing do not reset it.</small>
+  </label>
+  <label>Fail back after
+    <input name="failback_after" value="{{.FailbackAfter}}" required>
+    <small>How long the primary must be stable before containers start again, up to 6h. Any backup sighting, failed check or disagreeing provider restarts the wait.</small>
+  </label>
+  <label>Longest failback wait
+    <input name="failback_max_hold" value="{{.FailbackMaxHold}}" required>
+    <small>Each failover within an hour of a failback doubles the failback wait, up to this, so a flapping primary does not churn your containers. Six quiet hours reset it.</small>
+  </label>
+  <label>Provider quorum
+    <input name="quorum" type="number" min="1" value="{{.Quorum}}" required>
+    <small>How many IP providers must agree for a check to count.</small>
+  </label>
+  <label>Request timeout
+    <input name="timeout" value="{{.Timeout}}" required>
+    <small>Per provider, 1s to 30s.</small>
+  </label>
+  <label>Learning period
+    <input name="learning_period" value="{{.LearningPeriod}}" required>
+    <small>How long to watch before deciding which ISP is primary, 1h to 14d.</small>
+  </label>
+  <label>Keep check history for
+    <input name="retention" value="{{.Retention}}" required>
+    <small>1d to 365d.</small>
+  </label>
+  <label class="wide">IP providers, one URL per line
+    <textarea name="ip_providers" rows="4" required>{{.IPProviders}}</textarea>
+    <small>Each must return your public IPv4 address as plain text (or a Cloudflare trace).</small>
+  </label>
+</div>
+{{end}}
+
+{{define "check-result"}}
+<div id="check-result" class="check-result">
+  {{if .Status.Conclusive}}
+  <p><span class="dot running"></span>Your traffic leaves through <strong>{{or .Name "an unknown ISP"}}</strong>
+    <span class="sub">AS{{.Status.ASN}} {{.Status.ASNName}} · {{.Status.LastIP}}</span></p>
+  {{else if .Status.LastCheck.IsZero}}
+  <p class="muted">No check has run yet.</p>
+  {{else}}
+  <p><span class="dot stopped"></span>The last check was inconclusive: the IP providers did not agree or could not be reached.</p>
+  {{end}}
+</div>
+{{end}}
+
+{{define "sso-fields"}}
+<form id="sso-form" hx-post="/settings/sso" {{if not .Wizard}}hx-target="#sso-form" hx-swap="outerHTML"{{end}} class="stack">
+  {{if .Wizard}}<input type="hidden" name="from" value="setup">{{end}}
+  <label class="check"><input type="checkbox" name="enabled" {{if .Enabled}}checked{{end}}> Turn on single sign-on</label>
+  <div class="form-grid">
+    <label>Issuer URL
+      <input name="issuer" value="{{.Issuer}}" placeholder="https://id.example.com" autocomplete="off">
+      <small>Your Pocket ID address.</small></label>
+    <label>Client ID
+      <input name="client_id" value="{{.ClientID}}" autocomplete="off"></label>
+    <label>Client secret
+      <input name="client_secret" type="password" autocomplete="new-password"
+             placeholder="{{if .HasSecret}}Saved. Leave blank to keep it.{{else}}None (public client){{end}}">
+      <small>Stored encrypted.</small></label>
+    <label>Button label
+      <input name="display_name" value="{{.DisplayName}}" placeholder="Pocket ID"></label>
+    <label>Allowed group
+      <input name="allowed_group" value="{{.AllowedGroup}}">
+      <small>Only members may sign in. Leave blank to allow everyone.</small></label>
+    <label>Admin group
+      <input name="admin_group" value="{{.AdminGroup}}">
+      <small>Members of this group get the admin role; other accounts created by sign-on are viewers.</small></label>
+  </div>
+  <label class="check"><input type="checkbox" name="auto_provision" {{if .AutoProvision}}checked{{end}}> Create an account the first time someone signs in</label>
+  {{if not .Wizard}}
+  <label class="check"><input type="checkbox" name="sso_only" {{if .SSOOnly}}checked{{end}}>
+    <span>Turn off password sign-in <small>If {{.Name}} is ever unreachable, set <code>DRAWBRIDGE_LOCAL_LOGIN=force</code> to turn passwords back on.</small></span></label>
+  {{end}}
+  {{if .HasSecret}}<label class="check"><input type="checkbox" name="clear_secret"> Remove the saved client secret</label>{{end}}
+  <p class="hint">Callback URL to register in {{.Name}}: <code>{{.CallbackURL}}</code></p>
+  <div class="actions">
+    <button>Save{{if .Wizard}} and continue{{end}}</button>
+    <button class="secondary" type="button" hx-post="/settings/sso/test" hx-include="closest form" hx-target="#sso-test" hx-swap="outerHTML">Test connection</button>
+  </div>
+  <div id="sso-test"></div>
+</form>
+{{end}}

@@ -1,0 +1,47 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · WAN Drawbridge</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+<script src="/static/htmx-sse.min.js" defer></script>
+<script src="/static/app.js" defer></script>
+</head>
+<body{{with .Session}} hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}' hx-ext="sse" sse-connect="/sse"{{end}}>
+{{if .Session}}
+<header class="topbar">
+  <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="22" height="22"> WAN Drawbridge</a>
+  <nav>
+    <a href="/" {{if eq .Nav "dashboard"}}aria-current="page"{{end}}>Dashboard</a>
+    <a href="/stacks" {{if eq .Nav "stacks"}}aria-current="page"{{end}}>Stacks</a>
+    <a href="/containers" {{if eq .Nav "containers"}}aria-current="page"{{end}}>Containers</a>
+    <a href="/isps" {{if eq .Nav "isps"}}aria-current="page"{{end}}>ISPs</a>
+    <a href="/events" {{if eq .Nav "events"}}aria-current="page"{{end}}>Events</a>
+    <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a>
+    {{if .Session.User.IsAdmin}}<a href="/users" {{if eq .Nav "users"}}aria-current="page"{{end}}>Users</a>{{end}}
+  </nav>
+  <form class="whoami" method="post" action="/logout">
+    <input type="hidden" name="_csrf" value="{{.Session.CSRF}}">
+    <span>{{.Session.User.Username}}</span>
+    <button class="link" type="submit">Sign out</button>
+  </form>
+</header>
+{{if not .Setup}}{{if and .Session.User.IsAdmin (ne .Nav "setup")}}<div class="banner warn">Setup is not finished, so Drawbridge is only watching. <a href="/setup?step=2">Finish setup</a></div>{{end}}
+{{else if .Status.Paused}}<div class="banner warn">Automation is paused: Drawbridge keeps checking but will not stop or start containers.</div>{{end}}
+{{end}}
+<main class="{{if not .Session}}narrow{{end}}">
+{{with .Flash}}<div class="banner ok">{{.}}</div>{{end}}
+{{template "content" .}}
+</main>
+<footer class="footer">
+  WAN Drawbridge {{or .Version "dev"}} · free software under the
+  <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="license">GNU AGPL v3 or later</a>{{with .Source}}
+  · <a href="{{.}}">Source code</a>{{end}}
+</footer>
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,193 @@
+# Security
+
+## What is being protected
+
+Drawbridge has the Docker socket, which is equivalent to root on the host. Its
+web UI can stop and start containers and change what is stopped. The threat
+model:
+
+| Threat | Mitigation |
+| --- | --- |
+| Someone on the network uses the UI | Authentication required for every page except `/login`, `/setup` (until an admin exists), `/healthz`, `/metrics` (token), static files |
+| Password guessing | argon2id hashes, minimum 12 characters, rate limit per IP and per username |
+| Stolen session cookie | `HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS; only a hash stored server-side; sessions end on password change or disable |
+| Cross-site request forgery | Per-session CSRF token on every POST, plus Go's cross-origin protection |
+| Script injection | `html/template` escaping; strict Content-Security-Policy without inline scripts |
+| Clickjacking | `X-Frame-Options: DENY`, `frame-ancestors 'none'` |
+| Forged proxy headers | Only honoured from configured trusted proxies |
+| Single sign-on attacks | Authorization code + PKCE (S256), state, nonce, ID-token verification, issuer+subject matching |
+| Leaked database backup | Passwords hashed; session tokens hashed; client secret encrypted with a key stored separately (or in the environment) |
+| Open redirect after sign-in | `next` must be a local path |
+
+What Drawbridge does **not** protect against: someone with access to the host,
+the Docker socket or the database file; a malicious OIDC provider you
+configured; and network attackers when served over plain HTTP. Serve it over
+HTTPS (see [Behind a reverse proxy](../user/reverse-proxy.md)) whenever it is
+reachable by anyone you do not trust.
+
+## Setup window
+
+Until the first user exists, every request is redirected to `/setup`, and
+`POST /setup/admin` creates an admin **without authentication**. After that it
+returns 403. Complete setup immediately after the first start.
+
+## Passwords
+
+- Minimum length 12 (`store.MinPasswordLength`); no other composition rules.
+- Hashed with **argon2id**, memory 64 MiB, 3 iterations, parallelism 2, 16-byte
+  random salt, 32-byte key (RFC 9106's second recommended parameter set),
+  stored as a PHC string:
+  `$argon2id$v=19$m=65536,t=3,p=2$<salt>$<key>`.
+- Verification uses the parameters stored in the hash, so they can be raised
+  later without invalidating existing hashes, and compares in constant time.
+- A sign-in for an unknown username verifies against a dummy hash, so it takes
+  as long as a real one and does not reveal which usernames exist.
+- Usernames are case-insensitive (`COLLATE NOCASE`).
+
+## Sign-in rate limit
+
+In memory, per process (cleared on restart). A failure is counted against two
+keys: `ip:<client IP>` and `user:<lower-cased username>`. A sign-in attempt is
+refused with 429 while **either** key has 5 or more failures in the last 15
+minutes (sliding window). A successful sign-in clears both keys. The client IP
+comes from trusted proxies' headers when configured (see below).
+
+## Sessions
+
+- Created at sign-in: a 32-byte random token (base64url) in the cookie
+  `drawbridge_session`. The database stores only its SHA-256, so a database
+  leak does not reveal usable tokens.
+- Cookie: `Path=/`, `HttpOnly`, `SameSite=Lax`, `Max-Age` 7 days, `Secure` when
+  the request arrived over HTTPS (directly, through a trusted proxy with
+  `X-Forwarded-Proto: https`, or when `DRAWBRIDGE_BASE_URL` is `https://…`).
+- Lifetime: 7 days, sliding. Each authenticated request extends the expiry,
+  at most once per hour.
+- Ended by: signing out (row deleted, cookie cleared), changing or resetting
+  the password (all of that user's sessions deleted), disabling the user (all
+  deleted), expiry (pruned daily).
+- A disabled user's existing session is rejected even before it is deleted.
+
+## CSRF and cross-origin requests
+
+Two independent layers:
+
+1. **CSRF token.** Each session has a random token. Every authenticated
+   `POST` must carry it in the `X-CSRF-Token` header (HTMX sends it from the
+   `hx-headers` attribute on `<body>`) or the `_csrf` form field; otherwise 403
+   "invalid or missing CSRF token; reload the page". Compared exactly.
+2. **Cross-origin protection.** Go's `http.CrossOriginProtection` wraps the
+   whole handler and rejects unsafe-method requests that browsers mark as
+   cross-site (`Sec-Fetch-Site`) or whose `Origin` does not match the `Host`.
+   `DRAWBRIDGE_BASE_URL` is added as a trusted origin, for proxies that rewrite
+   `Host`.
+
+`POST /login` and `POST /setup/admin` have no session yet and rely on layer 2.
+
+## Authorisation
+
+| Role | Can |
+| --- | --- |
+| viewer | Read every page except Users; change own password; link or unlink own single sign-on |
+| admin | Everything |
+
+Enforced per route by middleware (`auth`, `admin`), not only by hiding
+controls. Safeguards in the store: the last enabled admin cannot be disabled
+or demoted; users cannot disable themselves (web UI).
+
+## Response headers
+
+Every response:
+
+```
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: same-origin
+Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'
+```
+
+There is no inline JavaScript: `script-src` falls back to `'self'`, and all
+scripts are served from `/static/`. `'unsafe-inline'` for styles is needed by
+HTMX's injected indicator styles and the timeline's computed tick positions;
+only numbers generated by the server are placed in style attributes, never
+user input.
+
+`Strict-Transport-Security` is not set by Drawbridge; set it at your HTTPS
+reverse proxy.
+
+## Trusted proxies
+
+`DRAWBRIDGE_TRUSTED_PROXIES` (IPs or CIDR ranges). For a request whose direct
+peer is trusted:
+
+- **Client IP:** walk `X-Forwarded-For` (all values joined) from the right,
+  skipping addresses that are themselves trusted; the first untrusted address
+  is the client. Stop at an unparseable entry. If none is found, use
+  `X-Real-IP`, else the peer.
+- **HTTPS:** `X-Forwarded-Proto: https`.
+- **Host for the callback URL:** `X-Forwarded-Host`.
+
+From any other peer, these headers are ignored and the peer address is used.
+Walking from the right means a client cannot choose its apparent address by
+sending its own `X-Forwarded-For`: proxies append, so the rightmost untrusted
+entry is the one the trusted proxy saw.
+
+## Single sign-on
+
+- Discovery from `<issuer>/.well-known/openid-configuration`, cached until the
+  settings change (10 s timeout).
+- Authorization code flow with **PKCE S256**. Per sign-in: random `state`
+  (24 bytes), `nonce` (24 bytes) and verifier, kept in memory for 10 minutes
+  and usable once.
+- The ID token is verified by go-oidc: signature against the provider's JWKS,
+  `iss` equal to the configured issuer, `aud` containing the client ID, expiry.
+  Drawbridge then checks the `nonce`.
+- Accounts are matched by `(issuer, subject)`. Username and email are never
+  used to match, so an attacker who controls an account named like a local
+  user at the provider gets a separate, provisioned account at most.
+- Allowed group and admin group come from the `groups` claim (ID token, or
+  userinfo if absent).
+- Linking requires being signed in already, and the callback checks that the
+  same user is still signed in.
+- "SSO only" can be enabled only by an admin whose own account is linked.
+  `DRAWBRIDGE_LOCAL_LOGIN=force` overrides it from the environment.
+- The post-login redirect (`next`) is restricted to local paths: it must start
+  with `/`, must not start with `//`, and must not contain `\`.
+
+## Stored secrets
+
+The OIDC client secret is sealed with AES-256-GCM:
+
+- Key: SHA-256 of `DRAWBRIDGE_SECRET_KEY`, or of the contents of
+  `$DRAWBRIDGE_DB_DIR/secret.key`. If neither exists, 32 random bytes are
+  generated, base64-encoded and written to `secret.key` with mode 0600.
+- Format: `v1:` + base64(12-byte random nonce ‖ ciphertext ‖ tag).
+- The secret is never sent back to the browser; the form only shows whether
+  one is saved.
+
+The key file is in the database folder so that backups include it. If you
+store backups somewhere less trusted than the host, set `DRAWBRIDGE_SECRET_KEY`
+instead and keep it out of the backup.
+
+## Metrics endpoint
+
+Off unless `DRAWBRIDGE_METRICS_TOKEN` is set (404). With a token, requires
+`Authorization: Bearer <token>`, compared in constant time; otherwise 401 with
+`WWW-Authenticate`. Metrics reveal the ISP name, ASN and container counts, not
+container names or IPs.
+
+## Docker access
+
+Drawbridge uses these Docker API calls only: version, list containers, inspect
+container, stop, start, and the container event stream. It never creates,
+removes, or execs into containers and never reads their logs or environment.
+The socket nonetheless grants full control; protect the UI accordingly.
+
+## Logging
+
+Logs contain usernames and client IPs for failed sign-ins, container names, and
+public IPs from checks. They never contain passwords, session tokens, CSRF
+tokens or the client secret.
+
+## Reporting vulnerabilities
+
+Open a confidential issue in the GitLab project.

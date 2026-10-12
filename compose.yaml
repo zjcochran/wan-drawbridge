@@ -1,0 +1,24 @@
+services:
+  drawbridge:
+    build: .
+    image: wan-drawbridge:dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    labels:
+      drawbridge.self: "true" # never stop this container, even if its stack is selected
+    volumes:
+      - ./db:/data/db # only the SQLite database: back up this folder
+      - cache:/data/cache # downloaded ASN database, re-downloaded if lost
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      TZ: Etc/UTC
+      # Behind a reverse proxy (see README):
+      # DRAWBRIDGE_BASE_URL: https://drawbridge.example.com
+      # DRAWBRIDGE_TRUSTED_PROXIES: 192.0.2.0/24
+      # DRAWBRIDGE_PRIMARY_ASN: "64500"   # pin the primary ISP instead of learning it
+      # DRAWBRIDGE_CHECK_INTERVAL: 60s
+      # LOG_LEVEL: debug
+
+volumes:
+  cache:

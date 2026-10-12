@@ -1,0 +1,44 @@
+# golangci-lint v2 configuration. CI runs it as the code-quality job and fails
+# on any issue; the report is published to GitLab's Code Quality widget.
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose     # HTTP response bodies are closed
+    - copyloopvar   # no needless loop variable copies
+    - errorlint     # errors compared and wrapped with errors.Is/As/%w
+    - gocritic      # common bugs and simplifications
+    - gocyclo       # function complexity
+    - gosec         # security problems
+    - misspell      # spelling in comments and strings
+    - nilerr        # returning nil after checking an error
+    - noctx         # HTTP requests carry a context
+    - rowserrcheck  # sql.Rows.Err is checked
+    - sqlclosecheck # sql.Rows and statements are closed
+    - unconvert     # needless type conversions
+    - unparam       # unused function parameters and results
+    - usestdlibvars # http.MethodGet and friends instead of literals
+  settings:
+    errcheck:
+      exclude-functions:
+        - (*database/sql.Tx).Rollback      # deferred; a no-op after Commit
+        - (net/http.ResponseWriter).Write  # fails only when the client has gone
+        - (*encoding/csv.Writer).Write     # errors are checked once, after Flush
+    gocyclo:
+      min-complexity: 30
+    gosec:
+      excludes:
+        - G104 # unhandled errors: errcheck covers this, with the exclusions above
+  exclusions:
+    presets:
+      - std-error-handling # unchecked Close and similar on deferred cleanup
+    rules:
+      # Tests may ignore errors and bodies of fake servers, and use plain
+      # requests; they never touch real services.
+      - path: _test\.go
+        linters: [errcheck, bodyclose, gosec, noctx]
+
+formatters:
+  enable:
+    - gofmt

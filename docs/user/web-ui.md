@@ -1,0 +1,212 @@
+# Using the web UI
+
+The web UI is a set of server-rendered pages that update themselves live: when
+the WAN state changes or a container starts or stops, open pages refresh the
+affected part within a second, without reloading. It works on phones (the
+navigation bar scrolls sideways) and follows your system's light or dark mode.
+
+There are two roles:
+
+- **Admins** can change everything.
+- **Viewers** see every page except **Users**, and can change only their own
+  password and single sign-on link. Controls they cannot use are not shown.
+
+Every page footer shows the version and links to the source code, as the AGPL
+requires.
+
+## Dashboard
+
+![Dashboard on the primary ISP](../images/dashboard.jpg)
+
+### Status card
+
+The coloured dot and label show the state:
+
+| Label | Colour | Meaning |
+| --- | --- | --- |
+| Learning | grey | No primary ISP is known yet. Nothing is stopped. |
+| On primary | green | Traffic leaves through the primary ISP. |
+| Failover pending | amber | Traffic is on a backup ISP; Drawbridge is confirming it. Shows "failing over in 32s unless the primary returns". |
+| Failover | red | Confirmed on a backup. Selected containers are stopped. |
+| Failback pending | amber | The primary is back; Drawbridge is making sure it stays. Shows "failing back in 4m 56s if the primary stays stable". |
+
+Badges next to the label:
+
+- **Paused**: automation is paused; states still change but no container is
+  touched.
+- **stopping containers / starting containers / applying containers**: a
+  container run is in progress.
+
+If the primary ISP has been flapping, a banner explains how long failback now
+waits (see [flapping](during-an-outage.md#flapping)).
+
+The facts below the label:
+
+| Fact | Meaning |
+| --- | --- |
+| Current ISP | The ISP of the last conclusive check, with the ASN that announced the IP. |
+| Primary ISP | The primary, or "Not known yet" with a link to the ISPs page. |
+| Public IP | The IPv4 address the providers agreed on. |
+| Last check | How long ago; "· inconclusive" if the last check could not determine the IP. |
+| In this state | How long the current state has lasted. |
+
+### Buttons (admins)
+
+| Button | When shown | What it does |
+| --- | --- | --- |
+| Pause automation / Resume automation | Always | Pausing keeps checking but stops all container actions. Resuming brings containers in line with the current state at once: stopped if in Failover, started again if on the primary. |
+| Check now | Always | Runs a check immediately instead of waiting for the next one. |
+| Fail over now | When nothing is stopped | After a confirmation, stops every container set to stop, as if a backup ISP had been confirmed. |
+| Restore now | While Drawbridge holds stopped containers, or the state is Failover or Failback pending | After a confirmation, starts what Drawbridge stopped and returns to the primary state. If traffic is still on a backup, the normal failover checks run again. |
+
+See [manual controls](during-an-outage.md#manual-controls) for the details.
+
+### Stopped by Drawbridge
+
+Lists every container in the current failover run and what happened to it:
+
+| Entry | Meaning |
+| --- | --- |
+| stopped | Drawbridge stopped it and will start it at failback. |
+| started again | Started during this failover (its setting changed). |
+| was already stopped; left alone | It was not running when the failover began, so it will not be started at failback. |
+| waiting | Not processed yet. |
+| *error text* in red | Stopping or starting it failed; the Docker error is shown. |
+
+"Nothing. Every container is as you left it." means there is no open run.
+
+### Last 24 hours
+
+A timeline of every check: green for the primary, amber for a backup, grey for
+inconclusive checks and light grey for no data (Drawbridge not running, or a
+gap longer than three check intervals). Hover a segment for the ISP and times.
+A short failover is a thin sliver at this scale.
+
+### Recent events
+
+The last few audit events. **All events** opens the Events page.
+
+### New containers banner
+
+"N new containers joined stacks with per-container settings and keep running
+until you decide" appears when a stack you configured container by container
+gets a new service. **Review them** opens the Containers page filtered to
+them. See [new containers](stacks-and-containers.md#new-containers).
+
+## Stacks
+
+![Stacks page](../images/stacks.jpg)
+
+One row per Docker Compose project:
+
+| Column | Meaning |
+| --- | --- |
+| Stack | The Compose project name. |
+| Containers | "3 running of 5". |
+| On failover | **Stops (stack rule)**: the stack switch is on. **Partial · 4 of 5**: some containers stop through their own settings. **Not affected**: nothing in it stops. |
+| Stop whole stack | The switch (admins). |
+| Show containers | Expands the stack's containers with their state and whether each stops. |
+
+Flipping the switch **resets every container in the stack** to follow it, on or
+off. Exceptions are made on the Containers page.
+
+![A stack after one container was overridden](../images/stacks-partial.jpg)
+
+## Containers
+
+![Containers page](../images/containers-override.jpg)
+
+Every container Drawbridge has seen, including ones that no longer exist.
+
+**Filters** (combine freely; the URL keeps them, so you can bookmark a view):
+
+- Search by name or key.
+- Stack: all, standalone only, or one stack.
+- State: running, stopped, or gone (no longer in Docker). "unknown" is shown
+  when Docker cannot be reached.
+- Setting: stops on failover, keeps running, or "New, not configured".
+
+**Columns:** container name (and its key, `project/service`, when different),
+stack, state, what happens on failover (with where that comes from: "from
+stack", "own setting", "default", or "new, not configured"), and the setting
+(admins).
+
+**Setting** for a container in a stack: *Follow stack*, *Stop on failover* or
+*Keep running*. For a standalone container, *Default (keep running)* replaces
+*Follow stack*.
+
+Choosing *Keep running* for a container whose stack is switched on asks for
+confirmation, because it converts the stack rule into per-container settings.
+See [Choosing what to stop](stacks-and-containers.md#rule-2-overriding-one-container).
+
+**Bulk edit:** tick containers (or the header box to select all shown), choose
+a setting next to "Apply to selected", and apply.
+
+## ISPs
+
+![ISPs page](../images/isps.jpg)
+
+One row per ISP:
+
+| Column | Meaning |
+| --- | --- |
+| ISP | Name (editable by admins; empty resets it), "current" badge, group key and when last seen. |
+| Role | Primary (pinned or "learned"), Backup or Ignored. |
+| Last 7 days | Share of observed time, excluding ignored ISPs. |
+| All time | Hours observed. |
+| Networks (ASNs) | Each ASN with its name, "grouped by hand" if moved, and a **Move to…** menu. |
+
+**Re-learn primary ISP** forgets the primary and starts a new learning period.
+See [ISPs and the primary ISP](isps.md).
+
+## Events
+
+![Events page](../images/events.jpg)
+
+The audit log, newest first, 100 per page (**Older** for the next page). Filter
+by type; **Export CSV** downloads up to 1,000 events of the selected type as
+`drawbridge-events.csv`. The list of event types is in
+[Monitoring → events](monitoring.md#event-types).
+
+## Settings
+
+![Settings page](../images/settings.jpg)
+
+- **WAN detection**: the detection settings described in the
+  [setup wizard](setup-wizard.md#4-wan-detection). Viewers see them read-only.
+  Changes apply from the next check.
+- **Your sign-in**: link or unlink your single sign-on account; change your
+  password (this signs you out everywhere, including this browser).
+- **Single sign-on** (admins): see [Single sign-on](single-sign-on.md).
+- **System**: Drawbridge version, Docker connection and version, database path
+  and size.
+
+## Users (admins)
+
+![Users page](../images/users.jpg)
+
+Lists every account with its role, how it signs in (password, single sign-on,
+or both), last sign-in and status. For other users you can **Disable** (signs
+them out everywhere), **Enable** and **Reset password**. **Add a user** creates
+a viewer or admin with a password.
+
+Safety rules:
+
+- You cannot disable yourself.
+- The last enabled admin cannot be disabled or turned into a viewer.
+
+Usernames are case-insensitive: `Alice` and `alice` are the same account.
+
+## Phone and dark mode
+
+| Phone | Dark mode |
+| --- | --- |
+| ![Dashboard on a phone](../images/phone-dashboard.jpg) | ![Dashboard in dark mode](../images/dark-dashboard.jpg) |
+
+## Notes
+
+- Over plain HTTP, browsers allow only about six open connections to one host.
+  Each open Drawbridge tab keeps one for live updates, so with many tabs open
+  pages can stall. Serving Drawbridge over HTTPS (through a reverse proxy)
+  lifts this limit.
+- Toast messages at the bottom confirm saves and show errors.

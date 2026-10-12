@@ -1,0 +1,441 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+// Package web serves Drawbridge's UI: server-rendered pages enhanced with
+// HTMX, live updates over Server-Sent Events, no JavaScript build step.
+package web
+
+import (
+	"context"
+	"embed"
+	"errors"
+	"fmt"
+	"html/template"
+	"io/fs"
+	"log/slog"
+	"net/http"
+	"net/netip"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/zjcochran/wan-drawbridge/internal/config"
+	"github.com/zjcochran/wan-drawbridge/internal/docker"
+	"github.com/zjcochran/wan-drawbridge/internal/monitor"
+	"github.com/zjcochran/wan-drawbridge/internal/secrets"
+	"github.com/zjcochran/wan-drawbridge/internal/store"
+)
+
+//go:embed templates/*.html
+var templateFS embed.FS
+
+//go:embed static
+var staticFS embed.FS
+
+// Monitor is what the UI needs from the check loop.
+type Monitor interface {
+	Status() monitor.Status
+	Detection(ctx context.Context) (config.Detection, error)
+	ApplyDetection(ctx context.Context, d config.Detection) error
+	SetPaused(ctx context.Context, paused bool, actor string) error
+	CompleteSetup(ctx context.Context, actor string) error
+	FailoverNow(ctx context.Context, actor string) error
+	RestoreNow(ctx context.Context, actor string) error
+	CheckNow(ctx context.Context) error
+	Relearn(ctx context.Context, actor string) error
+	PoliciesChanged()
+}
+
+// Docker is what the UI needs from Docker: live container state.
+type Docker interface {
+	List(ctx context.Context) ([]docker.Container, error)
+	Ping(ctx context.Context) (string, error)
+}
+
+// Syncer refreshes the container inventory.
+type Syncer interface {
+	Sync(ctx context.Context) error
+}
+
+type Server struct {
+	Store   *store.Store
+	Mon     Monitor
+	Docker  Docker
+	Sync    Syncer
+	Hub     *Hub
+	Log     *slog.Logger
+	BaseURL string // external URL; https marks cookies Secure
+	DBPath  string
+	// TrustedProxies are reverse proxies whose X-Forwarded-* headers are believed.
+	TrustedProxies []netip.Prefix
+	Secrets        *secrets.Box // seals the OIDC client secret
+	MetricsToken   string       // enables /metrics with this bearer token
+	Version        string
+	SourceURL      string // where to get this build's source (AGPL section 13)
+	ForceLocal     bool   // DRAWBRIDGE_LOCAL_LOGIN=force: passwords work even in SSO-only mode
+
+	oidc *oidcFlows
+
+	now     func() time.Time
+	pages   map[string]*template.Template
+	limiter *limiter
+}
+
+func New(s Server) (*Server, error) {
+	srv := &s
+	srv.now = time.Now
+	srv.limiter = newLimiter(5, 15*time.Minute)
+	srv.oidc = &oidcFlows{pending: map[string]pendingLogin{}}
+	if srv.Secrets == nil {
+		return nil, errors.New("web: Secrets is required")
+	}
+	if err := srv.parseTemplates(); err != nil {
+		return nil, err
+	}
+	return srv, nil
+}
+
+func (s *Server) parseTemplates() error {
+	files, err := fs.Glob(templateFS, "templates/*.html")
+	if err != nil {
+		return err
+	}
+	s.pages = map[string]*template.Template{}
+	for _, f := range files {
+		name := strings.TrimSuffix(strings.TrimPrefix(f, "templates/"), ".html")
+		if name == "layout" || name == "partials" {
+			continue
+		}
+		t, err := template.New(name).Funcs(funcs).ParseFS(templateFS, "templates/layout.html", "templates/partials.html", f)
+		if err != nil {
+			return fmt.Errorf("template %s: %w", name, err)
+		}
+		s.pages[name] = t
+	}
+	return nil
+}
+
+// Handler returns the routed, protected handler.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	static, _ := fs.Sub(staticFS, "static")
+	mux.Handle("GET /static/", http.StripPrefix("/static/", cacheStatic(http.FileServerFS(static))))
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
+	mux.HandleFunc("GET /metrics", s.metrics)
+
+	mux.HandleFunc("GET /login", s.loginPage)
+	mux.HandleFunc("POST /login", s.login)
+	mux.HandleFunc("POST /logout", s.logout)
+	mux.HandleFunc("GET /auth/oidc/login", s.oidcLogin)
+	mux.HandleFunc("GET /auth/oidc/callback", s.oidcCallback)
+
+	mux.HandleFunc("GET /setup", s.setupPage)
+	mux.HandleFunc("POST /setup/admin", s.setupAdmin)
+	mux.Handle("POST /setup/detection", s.admin(s.setupDetection))
+	mux.Handle("POST /setup/check", s.admin(s.setupCheck))
+	mux.Handle("POST /setup/primary", s.admin(s.setupPrimary))
+	mux.Handle("POST /setup/finish", s.admin(s.setupFinish))
+
+	mux.Handle("GET /{$}", s.auth(s.dashboard))
+	mux.Handle("GET /partials/status", s.auth(s.statusPartial))
+	mux.Handle("GET /partials/timeline", s.auth(s.timelinePartial))
+	mux.Handle("GET /sse", s.auth(s.Hub.ServeHTTP))
+	mux.Handle("POST /actions/{action}", s.admin(s.action))
+
+	mux.Handle("GET /stacks", s.auth(s.stacksPage))
+	mux.Handle("GET /stacks/{project}/containers", s.auth(s.stackContainers))
+	mux.Handle("POST /stacks/{project}/policy", s.admin(s.setStackPolicy))
+
+	mux.Handle("GET /containers", s.auth(s.containersPage))
+	mux.Handle("POST /containers/policy", s.admin(s.setContainerPolicy))
+	mux.Handle("POST /containers/bulk", s.admin(s.bulkContainerPolicy))
+
+	mux.Handle("GET /isps", s.auth(s.ispsPage))
+	mux.Handle("POST /isps/{id}/role", s.admin(s.setISPRole))
+	mux.Handle("POST /isps/{id}/rename", s.admin(s.renameISP))
+	mux.Handle("POST /isps/relearn", s.admin(s.relearn))
+	mux.Handle("POST /asns/{asn}/move", s.admin(s.moveASN))
+
+	mux.Handle("GET /events", s.auth(s.eventsPage))
+	mux.Handle("GET /events.csv", s.auth(s.eventsCSV))
+
+	mux.Handle("GET /settings", s.auth(s.settingsPage))
+	mux.Handle("POST /settings/detection", s.admin(s.saveDetection))
+	mux.Handle("POST /settings/password", s.auth(s.changePassword))
+	mux.Handle("POST /settings/sso", s.admin(s.saveSSO))
+	mux.Handle("POST /settings/sso/test", s.admin(s.testSSO))
+	mux.Handle("POST /settings/sso/unlink", s.auth(s.unlinkSSO))
+
+	mux.Handle("GET /users", s.admin(s.usersPage))
+	mux.Handle("POST /users", s.admin(s.createUser))
+	mux.Handle("POST /users/{id}/{op}", s.admin(s.userOp))
+
+	var h http.Handler = mux
+	h = s.requireSetup(h)
+	cop := http.NewCrossOriginProtection()
+	if s.BaseURL != "" {
+		// A proxy that rewrites Host would otherwise make the browser's Origin look foreign.
+		if err := cop.AddTrustedOrigin(s.BaseURL); err != nil {
+			s.Log.Warn("DRAWBRIDGE_BASE_URL is not a valid origin", "url", s.BaseURL, "err", err)
+		}
+	}
+	h = cop.Handler(h)
+	return securityHeaders(h)
+}
+
+func cacheStatic(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		h.ServeHTTP(w, r)
+	})
+}
+
+func securityHeaders(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hd := w.Header()
+		hd.Set("X-Content-Type-Options", "nosniff")
+		hd.Set("X-Frame-Options", "DENY")
+		hd.Set("Referrer-Policy", "same-origin")
+		hd.Set("Content-Security-Policy",
+			"default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'")
+		h.ServeHTTP(w, r)
+	})
+}
+
+// requireSetup sends every request to the wizard until an admin exists.
+func (s *Server) requireSetup(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p == "/healthz" || p == "/metrics" || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/setup") {
+			h.ServeHTTP(w, r)
+			return
+		}
+		n, err := s.Store.CountUsers(r.Context())
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if n == 0 {
+			redirect(w, r, "/setup")
+			return
+		}
+		h.ServeHTTP(w, r)
+	})
+}
+
+// ---- sessions and auth ----
+
+const sessionCookie = "drawbridge_session"
+
+type ctxKey struct{}
+
+func sessionFrom(r *http.Request) *store.Session {
+	s, _ := r.Context().Value(ctxKey{}).(*store.Session)
+	return s
+}
+
+func (s *Server) loadSession(r *http.Request) (*store.Session, error) {
+	c, err := r.Cookie(sessionCookie)
+	if errors.Is(err, http.ErrNoCookie) || (err == nil && c.Value == "") {
+		return nil, nil // not signed in
+	}
+	sess, ok, err := s.Store.SessionByToken(r.Context(), c.Value, s.now())
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &sess, nil
+}
+
+// auth requires a logged-in user; POSTs also need the session's CSRF token.
+func (s *Server) auth(h http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sess, err := s.loadSession(r)
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if sess == nil {
+			if r.Header.Get("HX-Request") != "" {
+				w.Header().Set("HX-Redirect", "/login")
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			redirect(w, r, "/login?next="+urlQueryEscape(r.URL.RequestURI()))
+			return
+		}
+		if r.Method == http.MethodPost && !validCSRF(r, sess.CSRF) {
+			http.Error(w, "invalid or missing CSRF token; reload the page", http.StatusForbidden)
+			return
+		}
+		h(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, sess)))
+	})
+}
+
+// admin is auth plus the admin role.
+func (s *Server) admin(h http.HandlerFunc) http.Handler {
+	return s.auth(func(w http.ResponseWriter, r *http.Request) {
+		if !sessionFrom(r).User.IsAdmin() {
+			http.Error(w, "admins only", http.StatusForbidden)
+			return
+		}
+		h(w, r)
+	})
+}
+
+func validCSRF(r *http.Request, want string) bool {
+	got := r.Header.Get("X-CSRF-Token")
+	if got == "" {
+		got = r.PostFormValue("_csrf")
+	}
+	return got != "" && got == want
+}
+
+func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u store.User) error {
+	token, err := s.Store.CreateSession(r.Context(), u.ID, s.clientIP(r), r.UserAgent(), s.now())
+	if err != nil {
+		return err
+	}
+	// Secure whenever the browser uses HTTPS; plain-HTTP setups need the cookie too.
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // G124: Secure is set from s.secure(r)
+		Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: s.secure(r),
+		SameSite: http.SameSiteLaxMode, MaxAge: int(store.SessionTTL.Seconds()),
+	})
+	return nil
+}
+
+// limiter counts failed logins per key in a sliding window.
+type limiter struct {
+	mu     sync.Mutex
+	max    int
+	window time.Duration
+	fails  map[string][]time.Time
+}
+
+func newLimiter(max int, window time.Duration) *limiter {
+	return &limiter{max: max, window: window, fails: map[string][]time.Time{}}
+}
+
+func (l *limiter) blocked(now time.Time, keys ...string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, k := range keys {
+		if len(l.recent(now, k)) >= l.max {
+			return true
+		}
+	}
+	return false
+}
+
+func (l *limiter) fail(now time.Time, keys ...string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, k := range keys {
+		l.fails[k] = append(l.recent(now, k), now)
+	}
+}
+
+func (l *limiter) reset(keys ...string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, k := range keys {
+		delete(l.fails, k)
+	}
+}
+
+func (l *limiter) recent(now time.Time, k string) []time.Time {
+	ts := l.fails[k]
+	i := 0
+	for i < len(ts) && now.Sub(ts[i]) > l.window {
+		i++
+	}
+	ts = ts[i:]
+	if len(ts) == 0 {
+		delete(l.fails, k)
+	}
+	return ts
+}
+
+// ---- rendering ----
+
+// Page is what every full page template gets.
+type Page struct {
+	Title   string
+	Nav     string // which nav item is active
+	Session *store.Session
+	Status  monitor.Status
+	Setup   bool // the setup wizard has been completed
+	Flash   string
+	Version string
+	Source  string
+	Data    any
+}
+
+func (s *Server) page(w http.ResponseWriter, r *http.Request, name, title string, data any) {
+	setup, _ := s.Store.Flag(r.Context(), store.SettingSetupComplete)
+	p := Page{
+		Title: title, Nav: name, Session: sessionFrom(r), Status: s.Mon.Status(),
+		Setup: setup, Flash: r.URL.Query().Get("flash"), Data: data,
+		Version: s.Version, Source: s.SourceURL,
+	}
+	s.execute(w, r, name, "layout", p)
+}
+
+// partial renders one named template from a page's file.
+func (s *Server) partial(w http.ResponseWriter, r *http.Request, page, name string, data any) {
+	s.execute(w, r, page, name, data)
+}
+
+func (s *Server) execute(w http.ResponseWriter, r *http.Request, page, name string, data any) {
+	t, ok := s.pages[page]
+	if !ok {
+		s.fail(w, r, fmt.Errorf("no page %q", page))
+		return
+	}
+	var buf strings.Builder
+	if err := t.ExecuteTemplate(&buf, name, data); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(buf.String()))
+}
+
+// event records an audit event. A failed write is logged; it does not fail
+// the request that caused it.
+func (s *Server) event(ctx context.Context, typ string, payload map[string]any) {
+	if err := s.Store.AddEvent(ctx, s.now(), typ, payload); err != nil {
+		s.Log.Error("cannot record event", "type", typ, "err", err)
+	}
+}
+
+// fail logs an unexpected error and shows a generic message.
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	s.Log.Error("web request failed", "path", r.URL.Path, "err", err)
+	http.Error(w, "something went wrong: "+err.Error(), http.StatusInternalServerError)
+}
+
+// invalid reports a user error. HTMX shows it in the toast.
+func invalid(w http.ResponseWriter, msg string) {
+	http.Error(w, msg, http.StatusUnprocessableEntity)
+}
+
+func redirect(w http.ResponseWriter, r *http.Request, to string) {
+	if r.Header.Get("HX-Request") != "" {
+		w.Header().Set("HX-Redirect", to)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	// Callers pass fixed paths or safeNext output, which only allows local paths.
+	http.Redirect(w, r, to, http.StatusSeeOther) //nolint:gosec // G710: see above
+}
+
+func isHTMX(r *http.Request) bool { return r.Header.Get("HX-Request") != "" }
+
+func actorName(r *http.Request) string {
+	if s := sessionFrom(r); s != nil {
+		return s.User.Username
+	}
+	return "unknown"
+}

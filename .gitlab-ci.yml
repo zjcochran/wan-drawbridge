@@ -1,0 +1,256 @@
+# Tests (JUnit and Cobertura coverage reports, at least 80% coverage in every
+# package), golangci-lint (Code Quality report), SAST, secret detection and
+# container scanning with a gate on their findings, on every pipeline; a
+# real-Docker smoke test (JUnit report). Every one of these must pass. Merge requests need exactly one of the
+# labels major, minor or patch; each merge to the default branch creates the
+# next semantic-version release (ci/release.sh), then copies the code, tags and
+# releases to GitHub and publishes the image to ghcr.io (no GitHub Actions); multi-arch images pushed to this project's container registry from the
+# default branch (:edge) and from version tags vX.Y.Z (:X.Y.Z, :X.Y, :latest).
+#
+# The smoke and release jobs use Docker-in-Docker, so they need a runner that
+# allows privileged containers (GitLab.com's shared Linux runners do). The
+# daemon is reached over plain TCP: it is only reachable from inside the job,
+# and it needs no runner configuration for TLS certificates.
+
+stages: [test, smoke, release, publish]
+
+# GitLab SAST (Semgrep for Go) and secret detection run in "test"; container
+# scanning runs in "smoke", on the image "build-image" builds.
+include:
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/Container-Scanning.gitlab-ci.yml
+
+variables:
+  DOCKER_VERSION: "28"
+  # Run SAST, secret detection and container scanning in merge request
+  # pipelines too; branch pipelines are skipped while a merge request is open.
+  AST_ENABLE_MR_PIPELINES: "true"
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never # the merge request pipeline covers it
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+default:
+  interruptible: true
+
+.docker:
+  image: docker:${DOCKER_VERSION}
+  services:
+    - name: docker:${DOCKER_VERSION}-dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - for i in $(seq 30); do docker info >/dev/null 2>&1 && break; sleep 1; done
+    - docker info --format 'Docker {{.ServerVersion}}'
+
+test:
+  stage: test
+  image: golang:1.26
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+  cache:
+    key:
+      files: [go.sum]
+    paths: [.go/pkg/mod/]
+  script:
+    - unformatted=$(gofmt -l $(git ls-files '*.go')) # not .go/, the module cache
+    - test -z "$unformatted" || { echo "Not gofmt-formatted:"; echo "$unformatted"; exit 1; }
+    - go vet ./...
+    - export PATH="$GOPATH/bin:$PATH"
+    - go install gotest.tools/gotestsum@v1.13.0
+    - go install github.com/boumenot/gocover-cobertura@v1.5.0
+    - gotestsum --junitfile report.xml --format testname -- -race -coverprofile=coverage.out ./...
+    - go tool cover -func=coverage.out | tail -1
+    - gocover-cobertura < coverage.out > coverage.xml
+    - test/coverage.sh coverage.out 80 # every package, not just the total
+  coverage: '/^total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    when: always
+    reports:
+      junit: report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    paths: [coverage.out]
+    expire_in: 30 days
+
+# golangci-lint with .golangci.yml; any issue fails the job. The report feeds
+# GitLab's Code Quality widget in merge requests.
+code-quality:
+  stage: test
+  image: golang:1.26
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+    GOLANGCI_LINT_CACHE: $CI_PROJECT_DIR/.go/lint-cache
+  cache:
+    key:
+      files: [go.sum]
+    paths: [.go/pkg/mod/]
+  script:
+    - export PATH="$GOPATH/bin:$PATH"
+    - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+    - golangci-lint run --output.text.path=stdout --output.code-climate.path=gl-code-quality-report.json ./...
+  artifacts:
+    when: always
+    reports:
+      codequality: gl-code-quality-report.json
+
+# The scanners' jobs must succeed: a broken scan is not a clean scan.
+semgrep-sast:
+  allow_failure: false
+
+secret_detection:
+  allow_failure: false
+
+# GitLab Free cannot block merges on scan findings; this job does.
+security-gate:
+  stage: smoke
+  image: alpine:3
+  needs:
+    - job: semgrep-sast
+      artifacts: true
+    - job: secret_detection
+      artifacts: true
+    - job: container_scanning
+      artifacts: true
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never # tags were scanned on their branch
+    - when: on_success
+  before_script:
+    - apk add --no-cache jq
+  script:
+    - ci/security-gate.sh
+
+# Builds the image into a tar file for container scanning: there is no
+# registry to push it to.
+build-image:
+  stage: test
+  extends: .docker
+  script:
+    - docker build --build-arg VERSION="${CI_COMMIT_TAG:-ci-$CI_COMMIT_SHORT_SHA}" -t drawbridge:ci .
+    - docker save drawbridge:ci -o drawbridge.tar
+    - chmod 644 drawbridge.tar # the scanner runs as a non-root user
+  artifacts:
+    paths: [drawbridge.tar]
+    expire_in: 1 day
+
+container_scanning:
+  stage: smoke
+  dependencies: [build-image]
+  allow_failure: false # findings never fail it; a broken scan should
+  variables:
+    CS_IMAGE: archive://drawbridge.tar
+    CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false" # the Go modules in the binary
+
+smoke:
+  stage: smoke
+  extends: .docker
+  variables:
+    SMOKE_HOST: docker
+    SMOKE_BIND: 0.0.0.0
+    SMOKE_JUNIT: $CI_PROJECT_DIR/smoke-report.xml
+  before_script:
+    - !reference [.docker, before_script]
+    - apk add --no-cache bash curl
+  script:
+    - test/smoke/smoke.sh
+  artifacts:
+    when: always
+    reports:
+      junit: smoke-report.xml
+
+# Every merge request must say how it changes the version.
+release-label:
+  stage: test
+  image: alpine:3
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    - |
+      found=$(printf '%s' "$CI_MERGE_REQUEST_LABELS" | tr ',' '\n' | grep -xE 'major|minor|patch' || true)
+      if [ "$(printf '%s' "$found" | grep -c .)" != 1 ]; then
+        echo "Add exactly one of the labels major, minor or patch to this merge request, then run the pipeline again."
+        echo "Labels now: ${CI_MERGE_REQUEST_LABELS:-none}"
+        exit 1
+      fi
+      echo "This merge request makes a $found release."
+
+# After a merge to the default branch: tag and publish the next version.
+release:
+  stage: release
+  image: alpine:3
+  interruptible: false
+  resource_group: release # one release at a time, in merge order
+  variables:
+    GIT_DEPTH: "0" # tags and history for the version and the notes
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+  before_script:
+    - apk add --no-cache curl git jq
+  script:
+    - ci/release.sh
+  artifacts:
+    reports:
+      dotenv: release.env # RELEASE_TAG for the publish jobs
+
+# GitHub publishing uses the CI/CD variables GHCR_REPO (owner/name), GHCR_USER
+# and GHCR_TOKEN (classic token: repo, write:packages). Nothing runs on GitHub.
+
+# After a release: copy main, the version tags and the releases to GitHub.
+github-sync:
+  stage: publish
+  image: alpine:3
+  interruptible: false
+  resource_group: github # one sync at a time, in order
+  needs: [release]
+  variables:
+    GIT_DEPTH: "0" # the whole history goes to GitHub
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+  before_script:
+    - apk add --no-cache curl git git-filter-repo jq
+  script:
+    - ci/github-sync.sh
+
+# After a release: multi-arch image to ghcr.io as X.Y.Z, X.Y and latest.
+github-image:
+  stage: publish
+  extends: .docker
+  interruptible: false
+  needs: [release]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+  before_script:
+    - |
+      if [ -z "$RELEASE_TAG" ]; then
+        echo "Nothing was released in this pipeline: no image."
+        exit 0
+      fi
+    - !reference [.docker, before_script]
+    - apk add --no-cache grep # GNU grep for ci/leak-check.sh
+    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+    - docker run --rm --privileged tonistiigi/binfmt --install arm64
+    - docker buildx create --use --name multiarch
+  script:
+    - |
+      [ -n "$RELEASE_TAG" ] || exit 0
+      ci/leak-check.sh tree . # the image is built from these files
+      repo=$(ci/github-repo.sh "$GHCR_REPO")
+      image="ghcr.io/$repo"
+      version="${RELEASE_TAG#v}"
+      docker buildx build --push \
+        --platform linux/amd64,linux/arm64 \
+        --build-arg VERSION="$RELEASE_TAG" \
+        --build-arg SOURCE_URL="https://github.com/$repo" \
+        --cache-from type=registry,ref="$image:buildcache" \
+        --cache-to type=registry,ref="$image:buildcache",mode=max \
+        -t "$image:$version" -t "$image:${version%.*}" -t "$image:latest" .
+      echo "Published $image:$version"

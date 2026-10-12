@@ -1,0 +1,18 @@
+{{define "content"}}
+<div class="auth-card card">
+  <h1><img src="/static/icon.svg" alt="" width="28" height="28"> WAN Drawbridge</h1>
+  {{with .Data.Error}}<div class="banner bad">{{.}}</div>{{end}}
+  {{if .Data.SSO}}
+  <a class="button block" href="/auth/oidc/login?next={{query .Data.Next}}">Sign in with {{.Data.SSOName}}</a>
+  {{end}}
+  {{if and .Data.SSO .Data.Local}}<p class="or"><span>or</span></p>{{end}}
+  {{if .Data.Local}}
+  <form method="post" action="/login" class="stack">
+    <input type="hidden" name="next" value="{{.Data.Next}}">
+    <label>Username <input name="username" value="{{.Data.Username}}" autocomplete="username" {{if not .Data.SSO}}autofocus{{end}} required></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+    <button type="submit" {{if .Data.SSO}}class="secondary"{{end}}>Sign in with password</button>
+  </form>
+  {{end}}
+</div>
+{{end}}

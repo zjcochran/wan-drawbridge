@@ -1,0 +1,16 @@
+# The stack Drawbridge stops on failover.
+name: dbsmoke-victims
+services:
+  db:
+    image: busybox:1.37
+    command: ["sleep", "infinity"]
+    init: true
+  app:
+    image: busybox:1.37
+    command: ["sleep", "infinity"]
+    init: true
+    depends_on: [db]
+  idle:
+    image: busybox:1.37
+    command: ["sleep", "infinity"]
+    init: true
