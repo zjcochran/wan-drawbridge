@@ -122,4 +122,6 @@ Don't ask the user to paste logs.
 
 - `test/smoke/smoke.sh` has never been run on a real Docker host.
 - Single sign-on has only been tested against a fake IdP, not a real Pocket ID.
+- The reverse proxy examples in `docs/user/reverse-proxy.md` are written from
+  each proxy's documentation and not yet tested against a real proxy.
 
