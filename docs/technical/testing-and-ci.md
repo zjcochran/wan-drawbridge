@@ -103,7 +103,7 @@ Drawbridge's log.
 | `secret_detection` | test | GitLab template | Secret scanning of the repository. Not allowed to fail. | `secret_detection` |
 | `build-image` | test | `docker:28` + dind | Builds the image and saves it as `drawbridge.tar` (artifact, 1 day) | |
 | `container_scanning` | smoke | GitLab template | Scans `archive://drawbridge.tar`, including Go modules in the binary (`CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"`). Not allowed to fail: findings do not fail it, a broken scan does. | `container_scanning`, `cyclonedx` SBOM |
-| `security-gate` | smoke | `alpine:3` | `ci/security-gate.sh` on the three scan reports; fails on Critical or High SAST and container findings, any secret, or a missing or unreadable report. Not run in tag pipelines. | |
+| `security-gate` | smoke | `alpine:3` | `ci/security-gate.sh` on the three scan reports; fails on Critical or High SAST and container findings, any secret, or a missing or unreadable report. | |
 | `smoke` | smoke | `docker:28` + dind | `test/smoke/smoke.sh` | `junit: smoke-report.xml` |
 | `release-label` | test | `alpine:3` | Merge request pipelines only: fails unless the MR has exactly one of the labels `major`, `minor`, `patch`. | |
 | `release` | release | `alpine:3` | Pushes to the default branch only: `ci/release.sh` creates the next version's tag and GitLab release. | `dotenv: release.env` |
@@ -124,7 +124,8 @@ for the daemon. **The runner must allow privileged containers**
 ### Pipelines run on
 
 Merge request pipelines, branch pipelines (skipped for branches with an open
-merge request, which get the MR pipeline instead) and tag pipelines.
+merge request, which get the MR pipeline instead). Tags start no pipeline:
+the release job creates them on a commit the merge pipeline has just tested.
 
 ### What blocks a merge
 
@@ -298,8 +299,7 @@ The default-branch pipeline runs every test and scan; if they pass, the
    commits since the previous release, and a compare link.
 
 The `publish` stage then copies the release to GitHub and pushes the image to
-ghcr.io (see [Publishing to GitHub](#publishing-to-github)). The new tag also
-starts a tag pipeline, which runs the tests again.
+ghcr.io (see [Publishing to GitHub](#publishing-to-github)).
 
 The job uses `resource_group: release`, so merges in quick succession are
 released one at a time, in order. API errors fail the job instead of skipping
