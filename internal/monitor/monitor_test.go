@@ -435,3 +435,69 @@ func TestLoadBackupRefusesWithOpenRun(t *testing.T) {
 		t.Fatalf("open run: %v", err)
 	}
 }
+
+func TestPauseFor(t *testing.T) {
+	ctx := context.Background()
+	actor := &countingActor{}
+	m := newMonitor(t, newFakeWAN(t), actor)
+	stop := runMonitor(m)
+	defer stop()
+
+	if err := m.PauseFor(ctx, 0, "test"); err == nil {
+		t.Fatal("zero duration accepted")
+	}
+	if err := m.PauseFor(ctx, time.Second, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	st := m.Status()
+	if !st.Paused || !st.PausedTill.Equal(m.now().Add(time.Second)) {
+		t.Fatalf("status = paused %v till %v", st.Paused, st.PausedTill)
+	}
+
+	// A restart keeps the end time.
+	other := New(m.cfg, m.store, m.resolver, actor, m.log, nil)
+	other.now = m.now
+	if err := other.load(ctx); err != nil || !other.paused || !other.pausedTil.Equal(st.PausedTill) {
+		t.Fatalf("reloaded: paused %v till %v (%v)", other.paused, other.pausedTil, err)
+	}
+
+	// The timer fires on the wall clock but resumes only once the monitor's
+	// clock has reached the end time.
+	clock.Add(1)
+	waitFor(t, "timed resume", func() bool { return !m.Status().Paused })
+	if !m.Status().PausedTill.IsZero() {
+		t.Error("end time kept after resuming")
+	}
+	evs, err := m.store.Events(ctx, store.EventFilter{Type: "resumed", Limit: 1})
+	if err != nil || len(evs) != 1 || evs[0].Payload["by"] != "timer" {
+		t.Fatalf("resumed event = %v (%v)", evs, err)
+	}
+	paused, _ := m.store.Flag(ctx, store.SettingPaused)
+	var till time.Time
+	m.store.GetSetting(ctx, store.SettingPausedUntil, &till)
+	if paused || !till.IsZero() {
+		t.Errorf("saved: paused %v till %v", paused, till)
+	}
+
+	// Pausing until resumed clears an earlier end time.
+	m.PauseFor(ctx, time.Hour, "alice")
+	m.SetPaused(ctx, true, "alice")
+	if st := m.Status(); !st.Paused || !st.PausedTill.IsZero() {
+		t.Fatalf("open-ended pause: %v %v", st.Paused, st.PausedTill)
+	}
+}
+
+func TestTimedPauseIgnoredBeforeSetup(t *testing.T) {
+	ctx := context.Background()
+	m := newMonitor(t, newFakeWAN(t), &countingActor{})
+	m.store.SetSetting(ctx, store.SettingSetupComplete, false)
+	m.store.SetSetting(ctx, store.SettingPaused, true)
+	m.store.SetSetting(ctx, store.SettingPausedUntil, m.now().Add(-time.Minute))
+	if err := m.load(ctx); err != nil {
+		t.Fatal(err)
+	}
+	m.resumeTimed(ctx)
+	if !m.paused {
+		t.Fatal("a timed pause resumed automation before setup was finished")
+	}
+}

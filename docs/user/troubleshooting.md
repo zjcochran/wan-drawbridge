@@ -76,7 +76,8 @@ If only one provider works, either fix the others or set the quorum to 1
 
 Check in this order:
 
-1. **Is automation paused?** The dashboard shows a **Paused** badge. Before
+1. **Is automation paused?** The dashboard shows a **Paused** badge (with the
+   end time for a timed pause). Before
    the setup wizard is finished, automation is always paused.
 2. **Is a primary known?** If the dashboard says "Primary ISP: Not known yet",
    the state is Learning and nothing is stopped. Pin a primary on the ISPs

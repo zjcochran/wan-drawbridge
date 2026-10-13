@@ -54,6 +54,7 @@ Key-value store of JSON values.
 | `detection` | `config.Detection` as JSON: `check_interval`, `failover_after`, `failback_after`, `failback_max_hold`, `quorum`, `timeout`, `learning_period`, `ip_providers`, `retention`. Durations in nanoseconds. Missing fields take defaults when loaded. |
 | `setup_complete` | `true` once the wizard has finished |
 | `paused` | `true` while automation is paused |
+| `paused_until` | end of a timed pause (RFC 3339), or the zero time `0001-01-01T00:00:00Z` when the pause has no end |
 | `oidc` | single sign-on settings (`web.OIDCSettings`); `client_secret` is sealed (`v1:…`) |
 
 ### isps

@@ -35,6 +35,7 @@ type Status struct {
 	Hold       time.Duration // current failback wait; grows while the primary flaps
 	Flaps      int           // consecutive flaps behind that wait
 	Paused     bool
+	PausedTill time.Time // when a timed pause ends; zero until resumed by hand
 	LastCheck  time.Time
 	LastIP     string
 	Conclusive bool
@@ -74,6 +75,7 @@ type Monitor struct {
 	prober    *probe.Prober
 	state     store.WANState
 	paused    bool
+	pausedTil time.Time // end of a timed pause
 	lastCheck time.Time
 	// announced remembers learner notices already logged, so each is logged once.
 	announcedUndecided bool
@@ -120,8 +122,16 @@ func (m *Monitor) load(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	var till time.Time
+	if _, err := m.store.GetSetting(ctx, store.SettingPausedUntil, &till); err != nil {
+		return err
+	}
 	// Until the setup wizard is finished, Drawbridge only watches.
 	m.paused = paused || !setup
+	m.pausedTil = time.Time{}
+	if paused && setup {
+		m.pausedTil = till
+	}
 	m.publish(func(s *Status) {})
 	return nil
 }
@@ -144,11 +154,17 @@ func (m *Monitor) Run(ctx context.Context) error {
 
 	next := time.After(0)
 	for {
+		var resume <-chan time.Time
+		if m.paused && !m.pausedTil.IsZero() {
+			resume = time.After(m.pausedTil.Sub(m.now()))
+		}
 		select {
 		case <-ctx.Done():
 			return nil
 		case cmd := <-m.cmds:
 			cmd(ctx)
+		case <-resume:
+			m.resumeTimed(ctx)
 		case <-next:
 			m.Check(ctx)
 			wait := m.cfg.CheckInterval
@@ -218,24 +234,62 @@ func (m *Monitor) Detection(ctx context.Context) (config.Detection, error) {
 	return d, err
 }
 
-// SetPaused pauses or resumes automation. Resuming brings containers in line
-// with the current state, like a restart would.
+// SetPaused pauses automation until it is resumed, or resumes it. Resuming
+// brings containers in line with the current state, like a restart would.
 func (m *Monitor) SetPaused(ctx context.Context, paused bool, actor string) error {
-	return m.do(ctx, func(ctx context.Context) error {
-		if err := m.store.SetSetting(ctx, store.SettingPaused, paused); err != nil {
-			return err
-		}
-		if m.paused == paused {
-			return nil
-		}
-		m.paused = paused
-		m.event(ctx, map[bool]string{true: "paused", false: "resumed"}[paused], map[string]any{"by": actor})
-		m.publish(func(s *Status) {})
-		if !paused {
-			m.post(m.recover)
-		}
+	return m.do(ctx, func(ctx context.Context) error { return m.setPaused(ctx, paused, 0, actor) })
+}
+
+// PauseFor pauses automation for d, then resumes it on its own. Pausing again
+// replaces the end time.
+func (m *Monitor) PauseFor(ctx context.Context, d time.Duration, actor string) error {
+	if d <= 0 {
+		return errors.New("pause duration must be positive")
+	}
+	return m.do(ctx, func(ctx context.Context) error { return m.setPaused(ctx, true, d, actor) })
+}
+
+// setPaused runs on the loop. d > 0 makes a pause end on its own.
+func (m *Monitor) setPaused(ctx context.Context, paused bool, d time.Duration, actor string) error {
+	var till time.Time
+	if paused && d > 0 {
+		till = m.now().Add(d).Truncate(time.Second)
+	}
+	if err := m.store.SetSetting(ctx, store.SettingPaused, paused); err != nil {
+		return err
+	}
+	if err := m.store.SetSetting(ctx, store.SettingPausedUntil, till); err != nil {
+		return err
+	}
+	if m.paused == paused && m.pausedTil.Equal(till) {
 		return nil
-	})
+	}
+	payload := map[string]any{"by": actor}
+	if !till.IsZero() {
+		payload["until"] = till.UTC().Format(time.RFC3339)
+	}
+	wasPaused := m.paused
+	m.paused, m.pausedTil = paused, till
+	if paused || wasPaused {
+		m.event(ctx, map[bool]string{true: "paused", false: "resumed"}[paused], payload)
+	}
+	m.publish(func(s *Status) {})
+	if !paused && wasPaused {
+		m.post(m.recover)
+	}
+	return nil
+}
+
+// resumeTimed ends a timed pause whose time has come.
+func (m *Monitor) resumeTimed(ctx context.Context) {
+	if !m.paused || m.pausedTil.IsZero() || m.now().Before(m.pausedTil) {
+		return
+	}
+	if err := m.setPaused(ctx, false, 0, "timer"); err != nil {
+		m.log.Error("cannot end the timed pause", "err", err)
+		return
+	}
+	m.log.Info("timed pause ended; automation resumed")
 }
 
 // CompleteSetup marks the wizard done and turns automation on.
@@ -587,6 +641,7 @@ func (m *Monitor) publish(fn func(*Status)) {
 	m.status.Flaps = m.state.Machine.Flaps
 	m.status.Since = m.state.Since
 	m.status.Paused = m.paused
+	m.status.PausedTill = m.pausedTil
 	m.mu.Unlock()
 	if m.notify != nil {
 		m.notify()

@@ -156,12 +156,21 @@ crash in the middle of stopping containers):
 changing state, but it does not touch any container. Events show
 `"paused": true` for failovers and failbacks that happened while paused.
 
+Choose how long next to the button: 30 minutes, 1 hour (the default), 4, 12
+or 24 hours, or **until I resume**. A timed pause ends on its own: the badge
+and the banner show when ("Paused until 15:30"), and when the time comes
+Drawbridge resumes with a `resumed` event `by=timer`. The end time is saved,
+so it survives a restart; if Drawbridge was down when the pause ended, it
+resumes as soon as it starts. Pausing again replaces the end time.
+
 **Resume automation** brings containers in line with the current state right
 away: in Failover the selected containers are stopped; on the primary,
-containers Drawbridge stopped earlier are started.
+containers Drawbridge stopped earlier are started. A timed pause does the
+same when it ends.
 
 Pause before maintenance on your network (swapping a router, testing the
-backup link) so that Drawbridge does not react to it.
+backup link) so that Drawbridge does not react to it. A timed pause means you
+cannot forget to resume.
 
 ## Manual controls
 

@@ -86,6 +86,7 @@ main.narrow { max-width: 420px; padding-top: 12vh; }
 .stack { display: grid; gap: 0.9rem; }
 .row { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
 .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+.actions .pause { display: inline-flex; gap: 0.35rem; align-items: center; }
 .right { text-align: right; }
 .narrow-form { max-width: 360px; }
 

@@ -26,16 +26,17 @@ import (
 )
 
 type fakeMon struct {
-	state    wan.State // Primary when empty
-	failErr  error     // returned by the action methods when set
-	flaps    int
-	mu       sync.Mutex
-	det      config.Detection
-	paused   bool
-	setup    bool
-	calls    []string
-	policies int
-	loadErr  error // returned by LoadBackup when set
+	state     wan.State // Primary when empty
+	failErr   error     // returned by the action methods when set
+	flaps     int
+	mu        sync.Mutex
+	det       config.Detection
+	paused    bool
+	pausedFor time.Duration
+	setup     bool
+	calls     []string
+	policies  int
+	loadErr   error // returned by LoadBackup when set
 }
 
 func (f *fakeMon) record(c string) { f.mu.Lock(); f.calls = append(f.calls, c); f.mu.Unlock() }
@@ -45,7 +46,7 @@ func (f *fakeMon) Status() monitor.Status {
 	if state == "" {
 		state = wan.Primary
 	}
-	return monitor.Status{State: state, Due: time.Now().Add(90 * time.Second), Since: time.Now().Add(-3 * time.Hour), Paused: f.paused, LastCheck: time.Now(), Conclusive: true,
+	return monitor.Status{State: state, Due: time.Now().Add(90 * time.Second), Since: time.Now().Add(-3 * time.Hour), Paused: f.paused, PausedTill: f.till(), LastCheck: time.Now(), Conclusive: true,
 		LastIP: "203.0.113.7", ASN: 64500, ISP: 1, PrimaryISP: 1,
 		Flaps: f.flaps, Hold: (5 * time.Minute) << f.flaps}
 }
@@ -58,12 +59,22 @@ func (f *fakeMon) ApplyDetection(_ context.Context, d config.Detection) error {
 	return nil
 }
 func (f *fakeMon) SetPaused(_ context.Context, p bool, _ string) error { f.paused = p; return nil }
-func (f *fakeMon) CompleteSetup(context.Context, string) error         { f.setup = true; return nil }
-func (f *fakeMon) FailoverNow(context.Context, string) error           { f.record("failover"); return nil }
-func (f *fakeMon) RestoreNow(context.Context, string) error            { f.record("restore"); return nil }
-func (f *fakeMon) CheckNow(context.Context) error                      { f.record("check"); return f.failErr }
-func (f *fakeMon) Relearn(context.Context, string) error               { f.record("relearn"); return f.failErr }
-func (f *fakeMon) PoliciesChanged()                                    { f.policies++ }
+func (f *fakeMon) till() time.Time {
+	if f.pausedFor == 0 {
+		return time.Time{}
+	}
+	return time.Now().Add(f.pausedFor)
+}
+func (f *fakeMon) PauseFor(_ context.Context, d time.Duration, _ string) error {
+	f.paused, f.pausedFor = true, d
+	return nil
+}
+func (f *fakeMon) CompleteSetup(context.Context, string) error { f.setup = true; return nil }
+func (f *fakeMon) FailoverNow(context.Context, string) error   { f.record("failover"); return nil }
+func (f *fakeMon) RestoreNow(context.Context, string) error    { f.record("restore"); return nil }
+func (f *fakeMon) CheckNow(context.Context) error              { f.record("check"); return f.failErr }
+func (f *fakeMon) Relearn(context.Context, string) error       { f.record("relearn"); return f.failErr }
+func (f *fakeMon) PoliciesChanged()                            { f.policies++ }
 func (f *fakeMon) LoadBackup(ctx context.Context, replace func(context.Context) error) error {
 	if f.loadErr != nil {
 		return f.loadErr
@@ -397,8 +408,29 @@ func TestActions(t *testing.T) {
 		t.Errorf("calls = %v", e.mon.calls)
 	}
 	c.htmx("/actions/pause", url.Values{})
-	if !e.mon.paused {
-		t.Error("not paused")
+	if !e.mon.paused || e.mon.pausedFor != 0 {
+		t.Error("not paused until resumed")
+	}
+	resp, body := c.htmx("/actions/pause", url.Values{"for": {"4h"}})
+	if resp.StatusCode != http.StatusOK || e.mon.pausedFor != 4*time.Hour || !strings.Contains(body, "Paused until ") {
+		t.Errorf("pause for 4h: %d %v", resp.StatusCode, e.mon.pausedFor)
+	}
+	e.st.SetSetting(context.Background(), store.SettingSetupComplete, true)
+	if _, page := c.get("/"); !strings.Contains(page, "Automation is paused until ") {
+		t.Error("banner does not say when the pause ends")
+	}
+	if resp, _ := c.htmx("/actions/pause", url.Values{"for": {"7d"}}); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("unknown duration: %d", resp.StatusCode)
+	}
+}
+
+func TestClock(t *testing.T) {
+	now := time.Now()
+	if got := clock(now); got != now.Format("15:04") {
+		t.Errorf("today: %q", got)
+	}
+	if got := clock(now.Add(48 * time.Hour)); got != now.Add(48*time.Hour).Format("Mon 15:04") {
+		t.Errorf("later: %q", got)
 	}
 }
 

@@ -54,7 +54,7 @@ The facts below the label:
 
 | Button | When shown | What it does |
 | --- | --- | --- |
-| Pause automation / Resume automation | Always | Pausing keeps checking but stops all container actions. Resuming brings containers in line with the current state at once: stopped if in Failover, started again if on the primary. |
+| Pause automation / Resume automation | Always | Pausing keeps checking but stops all container actions, for the time chosen next to the button (30 minutes to 24 hours, default 1 hour) or until resumed. Resuming brings containers in line with the current state at once: stopped if in Failover, started again if on the primary. |
 | Check now | Always | Runs a check immediately instead of waiting for the next one. |
 | Fail over now | When nothing is stopped | After a confirmation, stops every container set to stop, as if a backup ISP had been confirmed. |
 | Restore now | While Drawbridge holds stopped containers, or the state is Failover or Failback pending | After a confirmation, starts what Drawbridge stopped and returns to the primary state. If traffic is still on a backup, the normal failover checks run again. |
