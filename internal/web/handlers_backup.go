@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/zjcochran/wan-drawbridge/internal/backup"
+	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
@@ -59,7 +60,7 @@ func (s *Server) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	// Stored secrets are sealed with this instance's key; the backup carries
 	// them in the clear, inside its own encryption, so another instance can
 	// seal them with its key.
-	if err := mapClientSecret(snap, s.Secrets.Open); err != nil {
+	if err := mapSecrets(snap, s.Secrets.Open); err != nil {
 		s.fail(w, r, err)
 		return
 	}
@@ -135,7 +136,7 @@ func (s *Server) restoreFrom(r *http.Request, actor string) error {
 	if meta.Schema > schema {
 		return fmt.Errorf("this backup was made by a newer version of Drawbridge (%s); upgrade Drawbridge first", meta.AppVersion)
 	}
-	if err := mapClientSecret(snap, s.Secrets.Seal); err != nil {
+	if err := mapSecrets(snap, s.Secrets.Seal); err != nil {
 		return fmt.Errorf("the single sign-on client secret in the backup cannot be stored: %w", err)
 	}
 	err = s.Mon.LoadBackup(ctx, func(ctx context.Context) error {
@@ -153,16 +154,19 @@ func (s *Server) restoreFrom(r *http.Request, actor string) error {
 	return nil
 }
 
-// mapClientSecret rewrites the single sign-on client secret in a snapshot's
-// settings with fn: Open on export, Seal on restore.
-func mapClientSecret(snap store.Snapshot, fn func(string) (string, error)) error {
+// mapSecrets rewrites every sealed value in a snapshot's settings with fn:
+// the single sign-on client secret and each notification channel's URL and
+// token. Open on export puts them in the encrypted backup as plain text; Seal
+// on restore encrypts them with this instance's key.
+func mapSecrets(snap store.Snapshot, fn func(string) (string, error)) error {
 	for _, row := range snap.Config["settings"] {
-		if row["key"] != SettingOIDC {
+		key, _ := row["key"].(string)
+		if key != SettingOIDC && key != notify.SettingKey {
 			continue
 		}
 		raw, ok := row["value"].(string)
 		if !ok {
-			return errors.New("malformed single sign-on settings")
+			return fmt.Errorf("malformed %s settings", key)
 		}
 		dec := json.NewDecoder(strings.NewReader(raw))
 		dec.UseNumber()
@@ -170,15 +174,27 @@ func mapClientSecret(snap store.Snapshot, fn func(string) (string, error)) error
 		if err := dec.Decode(&o); err != nil {
 			return err
 		}
-		secret, _ := o["client_secret"].(string)
-		if secret == "" {
-			continue
+		var err error
+		if key == SettingOIDC {
+			err = mapField(o, "client_secret", fn)
+		} else {
+			chans, _ := o["channels"].([]any)
+			for _, c := range chans {
+				ch, ok := c.(map[string]any)
+				if !ok {
+					return errors.New("malformed notification settings")
+				}
+				if err = mapField(ch, "url", fn); err == nil {
+					err = mapField(ch, "token", fn)
+				}
+				if err != nil {
+					break
+				}
+			}
 		}
-		v, err := fn(secret)
 		if err != nil {
 			return err
 		}
-		o["client_secret"] = v
 		b, err := json.Marshal(o)
 		if err != nil {
 			return err
@@ -186,4 +202,17 @@ func mapClientSecret(snap store.Snapshot, fn func(string) (string, error)) error
 		row["value"] = string(b)
 	}
 	return nil
+}
+
+// mapField applies fn to a non-empty string field.
+func mapField(o map[string]any, k string, fn func(string) (string, error)) error {
+	v, _ := o[k].(string)
+	if v == "" {
+		return nil
+	}
+	out, err := fn(v)
+	if err == nil {
+		o[k] = out
+	}
+	return err
 }

@@ -50,9 +50,12 @@ expects.
 | `drawbridge_failback_hold_seconds` | gauge | | How long the primary must currently be stable before failback; grows while it flaps. |
 | `drawbridge_pending_due_timestamp_seconds` | gauge | | When a pending failover or failback completes if nothing interrupts it; 0 when none is pending. |
 | `drawbridge_containers_stopped` | gauge | | Containers Drawbridge stopped and has not started yet. |
+| `drawbridge_notifications_total` | counter | `result` = `sent`, `failed` | Notification deliveries; `failed` counts those that failed after every retry. |
 | `drawbridge_containers` | gauge | `on_failover` = `stop`, `keep` | Known containers by effective setting. |
 
 ### Alert rules
+
+Drawbridge can also send these itself: see [Notifications](notifications.md).
 
 ```yaml
 groups:
@@ -113,6 +116,8 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `failover` | A failover was confirmed | `asn`, `name`, `isp`, `paused` if automation was paused |
 | `failback` | A failback was confirmed | as above |
 | `flapping` | A failover came within an hour of a failback | `flaps`, `failback_wait` |
+| `run_failed` | Stopping, starting or updating containers ended with an error | `action` (`stopping`, `starting`, `applying`), `error` |
+| `isp_new` | An ASN was seen whose ISP group did not exist yet | `isp`, `name`, `asn` |
 | `manual_failover` | Fail over now | `from`, `to`, `by` |
 | `manual_restore` | Restore now | `from`, `to`, `by` |
 | `paused`, `resumed` | Automation paused or resumed (finishing the wizard logs `resumed`; a timed pause ending logs `resumed` with `by=timer`) | `by`; `until` (RFC 3339, UTC) on a timed pause |
@@ -132,6 +137,7 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `password_changed` | A user changed their own password | `user` |
 | `sso_settings` | Single sign-on settings saved | `enabled`, `sso_only`, `by` |
 | `sso_linked`, `sso_unlinked` | An account was linked to or unlinked from single sign-on | `user`; `sso_user` when linked |
+| `notifications_changed` | A notification channel was added, changed or deleted | `channel`, `action` (`added`, `updated`, `deleted`), `by` |
 | `backup_created` | A backup file was downloaded | `history` (`none`, `30d`, `60d`, `90d`, `all`), `by` |
 | `backup_restored` | A backup file was restored (in Settings, or in the setup wizard with `by` = `setup`) | `created`, `app_version`, `history`, `by` |
 

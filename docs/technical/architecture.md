@@ -63,6 +63,7 @@ flowchart LR
 | `internal/docker` | Minimal Docker Engine API client (list, inspect, stop, start, events, version). |
 | `internal/store` | All persistence: SQLite, migrations, users, sessions, ISPs, policies, runs, events. |
 | `internal/secrets` | AES-GCM sealing of stored secrets. |
+| `internal/notify` | Notification channels: formats events into messages and delivers them in the background, with retries. |
 | `internal/backup` | Backup file format: argon2id key, AES-256-GCM, gzipped JSON of a `store.Snapshot`. |
 | `internal/web` | HTTP handlers, templates, middleware (auth, CSRF, cross-origin, headers), OIDC, metrics, SSE hub. |
 | `internal/e2e` | End-to-end test of the whole process against fakes. |
@@ -79,6 +80,7 @@ flowchart TB
     main --> inv[executor.WatchInventory<br/>sync every 30 s]
     inv --> ev[Docker event stream reader]
     loop --> hk[monitor.housekeeping<br/>daily]
+    main --> nt[notify.Run<br/>delivers notifications]
     http -. "do(): wait for result" .-> loop
     http -. "post(): fire and forget" .-> loop
 ```
@@ -124,6 +126,11 @@ seconds after Docker reports a container `create`, `destroy` or `rename`
 event. It writes only the `stacks` and `containers` tables. It publishes the
 `inventory` topic when the set of containers or their running state changes
 (a fingerprint of ID, name and running flag), not on every sync.
+
+**Notifications** are fed by the store: every recorded event is passed to
+`Notifier.Event`, which queues it (64 at most, never blocking the caller) if
+some channel could want it. `notify.Run` delivers the queue in order, to all
+matching channels of an event in parallel.
 
 **Housekeeping** runs once at start and then every 24 hours: prune old checks
 and daily totals, prune expired sessions, refresh the ASN database if it is

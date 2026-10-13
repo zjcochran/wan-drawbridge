@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/pressly/goose/v3"
@@ -21,7 +22,14 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db      *sql.DB
+	onEvent atomic.Pointer[func(Event)]
+}
+
+// OnEvent sets a function called with every event after it is recorded, for
+// notifications. It must not block.
+func (s *Store) OnEvent(fn func(Event)) { s.onEvent.Store(&fn) }
 
 // Open opens (or creates) the database at path and applies migrations.
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -141,8 +149,17 @@ func (s *Store) AddEvent(ctx context.Context, now time.Time, typ string, payload
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO events (ts, type, payload) VALUES (?, ?, ?)`, now.Unix(), typ, string(b))
-	return err
+	res, err := s.db.ExecContext(ctx, `INSERT INTO events (ts, type, payload) VALUES (?, ?, ?)`, now.Unix(), typ, string(b))
+	if err != nil {
+		return err
+	}
+	if fn := s.onEvent.Load(); fn != nil {
+		id, _ := res.LastInsertId()
+		var p map[string]any
+		_ = json.Unmarshal(b, &p)
+		(*fn)(Event{ID: id, TS: time.Unix(now.Unix(), 0), Type: typ, Payload: p})
+	}
+	return nil
 }
 
 // Prune deletes checks before checksBefore and daily totals before dailyBefore.

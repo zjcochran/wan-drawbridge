@@ -501,3 +501,22 @@ func TestTimedPauseIgnoredBeforeSetup(t *testing.T) {
 		t.Fatal("a timed pause resumed automation before setup was finished")
 	}
 }
+
+type failingActor struct{ countingActor }
+
+func (a *failingActor) Stop(context.Context, string, int) error {
+	return errors.New("docker unreachable")
+}
+
+func TestRunFailedEvent(t *testing.T) {
+	ctx := context.Background()
+	m := newMonitor(t, newFakeWAN(t), &failingActor{})
+	m.run(ctx, "stopping", func() error { return m.actor.Stop(ctx, "manual", 0) })
+	evs, err := m.store.Events(ctx, store.EventFilter{Type: "run_failed"})
+	if err != nil || len(evs) != 1 || evs[0].Payload["action"] != "stopping" || evs[0].Payload["error"] != "docker unreachable" {
+		t.Fatalf("events = %v (%v)", evs, err)
+	}
+	if m.Status().Counters.RunErrors != 1 {
+		t.Error("run error not counted")
+	}
+}

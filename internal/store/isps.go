@@ -65,6 +65,7 @@ func (s *Store) SeeASN(ctx context.Context, asn int, name string, now time.Time)
 	}
 	defer tx.Rollback()
 
+	newISP := false
 	err = tx.QueryRowContext(ctx, `SELECT isp_id FROM asns WHERE asn = ?`, asn).Scan(&ispID)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -78,7 +79,7 @@ func (s *Store) SeeASN(ctx context.Context, asn int, name string, now time.Time)
 				return 0, "", ierr
 			}
 			id, _ := res.LastInsertId()
-			ispID, err = int(id), nil
+			ispID, err, newISP = int(id), nil, true
 		}
 		if err != nil {
 			return 0, "", err
@@ -103,7 +104,13 @@ func (s *Store) SeeASN(ctx context.Context, asn int, name string, now time.Time)
 	if err := tx.QueryRowContext(ctx, `SELECT role FROM isps WHERE id = ?`, ispID).Scan(&role); err != nil {
 		return 0, "", err
 	}
-	return ispID, role, tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return 0, "", err
+	}
+	if newISP {
+		err = s.AddEvent(ctx, now, "isp_new", map[string]any{"isp": ispID, "name": GroupKey(name, asn), "asn": asn})
+	}
+	return ispID, role, err
 }
 
 // ISPOfASN returns the ISP group an ASN belongs to, or 0 if it was never seen.

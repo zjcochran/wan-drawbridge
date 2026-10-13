@@ -21,6 +21,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
+	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
@@ -69,8 +70,9 @@ type Server struct {
 	DBPath  string
 	// TrustedProxies are reverse proxies whose X-Forwarded-* headers are believed.
 	TrustedProxies []netip.Prefix
-	Secrets        *secrets.Box // seals the OIDC client secret
-	MetricsToken   string       // enables /metrics with this bearer token
+	Secrets        *secrets.Box // seals the OIDC client secret and notification URLs and tokens
+	Notify         *notify.Notifier
+	MetricsToken   string // enables /metrics with this bearer token
 	Version        string
 	SourceURL      string // where to get this build's source (AGPL section 13)
 	ForceLocal     bool   // DRAWBRIDGE_LOCAL_LOGIN=force: passwords work even in SSO-only mode
@@ -89,6 +91,9 @@ func New(s Server) (*Server, error) {
 	srv.oidc = &oidcFlows{pending: map[string]pendingLogin{}}
 	if srv.Secrets == nil {
 		return nil, errors.New("web: Secrets is required")
+	}
+	if srv.Notify == nil {
+		srv.Notify = &notify.Notifier{Store: srv.Store, Secrets: srv.Secrets, Log: srv.Log, Version: srv.Version}
 	}
 	if err := srv.parseTemplates(); err != nil {
 		return nil, err
@@ -169,6 +174,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/sso/test", s.admin(s.testSSO))
 	mux.Handle("POST /settings/sso/unlink", s.auth(s.unlinkSSO))
 	mux.Handle("POST /settings/backup", s.admin(s.downloadBackup))
+	mux.Handle("POST /settings/notifications", s.admin(s.saveChannel))
+	mux.Handle("POST /settings/notifications/delete", s.admin(s.deleteChannel))
+	mux.Handle("POST /settings/notifications/test", s.admin(s.testChannel))
 	mux.Handle("POST /settings/restore", limitBody(maxBackupUpload, s.admin(s.restoreBackup)))
 
 	mux.Handle("GET /users", s.admin(s.usersPage))

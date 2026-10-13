@@ -322,3 +322,18 @@ func TestClosedStoreReturnsErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestOnEventAndNewISP(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	var got []Event
+	s.OnEvent(func(e Event) { got = append(got, e) })
+	s.SeeASN(ctx, 64500, "EXAMPLENET-64500", t0)
+	s.SeeASN(ctx, 64501, "EXAMPLENET-64501", t0) // joins the same ISP: no event
+	s.SeeASN(ctx, 64500, "EXAMPLENET-64500", t0) // seen before: no event
+	s.AddEvent(ctx, t0, "relearn", map[string]any{"by": "alice"})
+	if len(got) != 2 || got[0].Type != "isp_new" || got[0].Payload["name"] != "EXAMPLENET" ||
+		got[0].Payload["asn"] != float64(64500) || got[1].Type != "relearn" || got[1].ID == 0 || !got[1].TS.Equal(t0) {
+		t.Fatalf("hooked events = %+v", got)
+	}
+}

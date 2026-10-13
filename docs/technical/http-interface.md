@@ -87,6 +87,9 @@ token.
 | `/settings/detection` | admin | detection fields | Validate and apply |
 | `/settings/password` | auth | `current`, `new`, `confirm` | Change own password; ends all own sessions |
 | `/settings/appearance` | auth | `theme`, `mode` | Save own colour theme and mode; 204, or 400 for an unknown value |
+| `/settings/notifications` | admin | `id` (empty to add), `name`, `kind`, `url`, `token`, `remove_token`, `topics` (repeated), `enabled` | Add or update a channel; blank `url`/`token` keep the saved ones. Returns the channel list; 422 with the reason if invalid, 404 for an unknown `id` |
+| `/settings/notifications/delete` | admin | `id` | Delete a channel; returns the channel list |
+| `/settings/notifications/test` | admin | as above | Send a test message with the form's values (saved ones for blanks); returns "✓ Sent…" or "✗ error" |
 | `/settings/sso` | admin | SSO fields | Save single sign-on settings |
 | `/settings/sso/test` | admin | `issuer` | Try discovery |
 | `/settings/sso/unlink` | auth | | Unlink own SSO identities (refused without a password) |
