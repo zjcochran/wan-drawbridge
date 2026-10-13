@@ -47,7 +47,8 @@ IPv6. A network without IPv4 internet access cannot be checked.
 Not yet; one instance manages the host whose socket it has.
 
 **Can it send notifications?**
-Not built in yet. Use the Prometheus metrics with Alertmanager (see
+Yes: to ntfy, Gotify, Discord or any webhook. See
+[Notifications](notifications.md). Prometheus alerts work too (see
 [Monitoring](monitoring.md#alert-rules)).
 
 **Will it ever stop itself?**

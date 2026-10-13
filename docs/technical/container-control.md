@@ -32,9 +32,11 @@ share a key.
 `store.SyncInventory`, which in one transaction:
 
 - inserts each new Compose project into `stacks` (switch off);
-- updates `name` and `last_seen` of known keys;
-- inserts unknown keys with policy `inherit`, flagging them `needs_review` if
-  their stack already has any container with a non-`inherit` policy;
+- updates `name`, `last_seen` and `label_policy` of known keys, clearing
+  `needs_review` when a label is now present;
+- inserts unknown keys with policy `inherit` and their `label_policy`,
+  flagging them `needs_review` if they have no label and their stack already
+  has any container with a non-`inherit` policy;
 - never deletes rows: containers that disappear keep their settings and show
   as "gone".
 
@@ -47,12 +49,15 @@ overridden). Self is excluded from the inventory and from every run.
 
 ## Policies
 
-Per container (`containers.policy`): `inherit`, `disable`, `keep`. Per stack
-(`stacks.disable_on_failover`): on or off.
+Per container (`containers.policy`): `inherit`, `disable`, `keep`. Per
+container from Docker (`containers.label_policy`, from the label
+`drawbridge.on-failover`: `stop` → `disable`, `keep` → `keep`, anything else
+→ `''`). Per stack (`stacks.disable_on_failover`): on or off.
 
 ```
-effective(policy, stackDisabled) =
+effective(policy, label, stackDisabled) =
     policy                 if policy ≠ inherit
+    label                  if label ≠ ''
     disable                if stackDisabled
     keep                   otherwise (including standalone containers)
 ```
@@ -62,7 +67,8 @@ in the project to `inherit` (clearing `needs_review`).
 
 `SetContainerPolicy(key, policy)`: if the container's stack is on and the new
 policy is `keep`, **convert** the stack first: turn the stack flag off and set
-every other `inherit` container in the project to `disable`. Then set the
+every other `inherit` container without a label in the project to `disable`
+(labelled ones keep following their label). Then set the
 container's policy and clear its `needs_review`. Reports whether it converted.
 
 Both run in a transaction.

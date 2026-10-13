@@ -112,6 +112,8 @@ func (c cmdEnv) containers([]string) error {
 		switch {
 		case r.NeedsReview:
 			note = "new, not configured"
+		case r.Policy == store.Inherit && r.Label != "":
+			note = "from label"
 		case r.Policy == store.Inherit && r.StackDisabled:
 			note = "from stack"
 		}

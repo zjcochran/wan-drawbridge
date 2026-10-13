@@ -165,14 +165,16 @@ entry is the one the trusted proxy saw.
 
 ## Stored secrets
 
-The OIDC client secret is sealed with AES-256-GCM:
+The OIDC client secret and each notification channel's URL and token are
+sealed with AES-256-GCM (a webhook URL, a Discord one in particular, is itself
+a credential):
 
 - Key: SHA-256 of `DRAWBRIDGE_SECRET_KEY`, or of the contents of
   `$DRAWBRIDGE_DB_DIR/secret.key`. If neither exists, 32 random bytes are
   generated, base64-encoded and written to `secret.key` with mode 0600.
 - Format: `v1:` + base64(12-byte random nonce ‖ ciphertext ‖ tag).
-- The secret is never sent back to the browser; the form only shows whether
-  one is saved.
+- Secrets are never sent back to the browser: the forms only show whether one
+  is saved, and a notification channel shows only its URL's host.
 
 The key file is in the database folder so that backups include it. If you
 store backups somewhere less trusted than the host, set `DRAWBRIDGE_SECRET_KEY`
@@ -180,18 +182,18 @@ instead and keep it out of the backup.
 
 ## Backup files
 
-Backup files (Settings → Backup and restore) hold password hashes and the
-single sign-on client secret, so the data is encrypted with the passphrase
-given at download:
+Backup files (Settings → Backup and restore) hold password hashes, the
+single sign-on client secret and notification URLs and tokens, so the data is
+encrypted with the passphrase given at download:
 
 - Key: argon2id(passphrase, 16-byte random salt, time 3, memory 64 MiB,
   2 threads) → 32 bytes. The parameters are stored in the file.
 - Data: the gzipped JSON payload, sealed with AES-256-GCM (12-byte random
   nonce, the format name as additional data). A wrong passphrase and a
   modified file fail the same way.
-- The client secret is unsealed from this instance's key before encryption,
-  and sealed with the restoring instance's key on restore, so `secret.key` is
-  not needed to move a backup.
+- The client secret and the notification URLs and tokens are unsealed with
+  this instance's key before encryption, and sealed with the restoring
+  instance's key on restore, so `secret.key` is not needed to move a backup.
 - Readable without the passphrase: the format name and version, the
   Drawbridge version, the creation time, the schema version and the history
   range. The encrypted copy of these is the one used.
@@ -203,6 +205,14 @@ more than 256 MiB of memory, 10 passes or 8 threads of argon2id are rejected
 before any key is derived. Restored rows may only name existing tables and
 columns, and are written in one transaction that is rolled back if any row is
 rejected or no enabled admin remains.
+
+## Notifications
+
+Notification requests go only to the URLs admins configure. They carry the
+event's title, message and fields (ISP names, ASNs, usernames in `by`), never
+secrets. Test messages use the URL from the form, so only admins can send
+them. Answers are read only for the status code and the first 300 bytes of an
+error.
 
 ## Metrics endpoint
 

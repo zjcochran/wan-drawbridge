@@ -1,8 +1,9 @@
 # Choosing what to stop
 
 You decide what stops during a failover at two levels: whole **stacks** (Docker
-Compose projects) and single **containers**. This page explains the rules
-precisely, because the two levels interact.
+Compose projects) and single **containers**, in the web UI or with a label in
+your Compose files. This page explains the rules precisely, because the levels
+interact.
 
 ## How Drawbridge identifies containers
 
@@ -26,7 +27,7 @@ key with default settings.
 
 | Setting | Shown as | Effect |
 | --- | --- | --- |
-| `inherit` | Follow stack / Default (keep running) | Do what the stack says. A standalone container has no stack, so it keeps running. |
+| `inherit` | Follow label / Follow stack / Default (keep running) | Do what the container's label says, if it has one (see [Labels](#labels-in-your-compose-files)); otherwise what the stack says. A standalone container without a label keeps running. |
 | `disable` | Stop on failover | Always stop, whatever the stack says. |
 | `keep` | Keep running | Never stop, whatever the stack says. |
 
@@ -38,7 +39,45 @@ The **effective** setting, shown in the "On failover" column, is:
 | Stop on failover | **Stops** | **Stops** |
 | Keep running | Keeps running | Keeps running |
 
+With a label, "Follow label" takes the label's value in both columns. The
+"On failover" column says where the setting came from: own setting, from
+label, from stack, or default.
+
 New containers start as *Follow stack*.
+
+## Labels in your Compose files
+
+Instead of choosing in the UI, you can declare it on the container with the
+label `drawbridge.on-failover`:
+
+```yaml
+services:
+  downloader:
+    image: example/downloader
+    labels:
+      drawbridge.on-failover: stop   # stop this container on failover
+  player:
+    image: example/player
+    labels:
+      drawbridge.on-failover: keep   # never stop it
+```
+
+- Values are `stop` and `keep` (case does not matter). Any other value is
+  ignored, as if there were no label.
+- A label is more specific than the stack switch, so it wins over it: a `keep`
+  container keeps running in a stack that is switched on.
+- A setting chosen for the container in the UI wins over the label. Set the
+  container back to **Follow label** to use the label again.
+- Labels are read on every inventory sync (every 30 seconds, and about 2
+  seconds after a container is created), so a `docker compose up -d` with a
+  changed label takes effect within seconds. Removing the label goes back to
+  the stack's setting.
+- A new container with a label is never flagged **new, not configured**: the
+  label says what to do. Adding a label to a flagged container clears the
+  flag.
+
+Labels need no restart of Drawbridge and keep working after you rebuild or
+move hosts, because they travel with your Compose files.
 
 ## Rule 1: the stack switch resets the stack
 
@@ -82,6 +121,8 @@ When Drawbridge sees a container key for the first time:
 - In a stack that has **no** per-container settings (every container follows
   the stack), the new container also follows the stack. If the stack is
   switched on, it will stop on failover like the rest.
+- A container with a `drawbridge.on-failover` label follows its label and is
+  never flagged.
 - In a stack that **has** per-container settings (it was converted, or you set
   containers individually), Drawbridge cannot know what you want. The new
   container is set to *Follow stack*, which in a converted stack means it keeps
@@ -139,7 +180,11 @@ media stacks; leave infrastructure (DNS, reverse proxy, home automation)
 alone.
 
 **A stack except one service.** Switch the stack on, then set the exception to
-*Keep running* (Rule 2).
+*Keep running* (Rule 2), or give it the label `drawbridge.on-failover: keep`.
+
+**Declared in Compose.** Put `drawbridge.on-failover: stop` on each service
+that should stop, and leave every stack switch off. New services get decided
+when you write them.
 
 **A few standalone containers.** Set each to *Stop on failover* on the
 Containers page; use the "Standalone only" filter and bulk edit.

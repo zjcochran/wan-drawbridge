@@ -68,6 +68,8 @@ func (c containerRow) Source() string {
 		return "new, not configured"
 	case c.Policy != store.Inherit:
 		return "own setting"
+	case c.Label != "":
+		return "from label"
 	case c.Project == "":
 		return "default"
 	}
@@ -685,6 +687,7 @@ type settingsData struct {
 	Version   string
 	Themes    []choice
 	Modes     []choice
+	Notify    notifyData
 }
 
 type choice struct{ ID, Name string }
@@ -748,6 +751,12 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.DBSize = fmt.Sprintf("%.1f MB", float64(size)/1e6)
+	if d.IsAdmin {
+		if d.Notify, err = s.notifyData(ctx); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+	}
 	s.page(w, r, "settings", "Settings", d)
 }
 

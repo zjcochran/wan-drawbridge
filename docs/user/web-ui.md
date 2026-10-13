@@ -180,6 +180,8 @@ by type; **Export CSV** downloads up to 1,000 events of the selected type as
   password (this signs you out everywhere, including this browser).
 - **Appearance**: your colour theme and mode; see [Appearance](#appearance).
 - **Single sign-on** (admins): see [Single sign-on](single-sign-on.md).
+- **Notifications** (admins): channels that get events; see
+  [Notifications](notifications.md).
 - **Backup and restore** (admins): download an encrypted backup file, with
   history of the last 30, 60 or 90 days, all time, or none; restore one. See
   [Backup and restore](backup-and-restore.md#backup-files).

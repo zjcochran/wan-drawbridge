@@ -308,7 +308,7 @@ func (m *Monitor) FailoverNow(ctx context.Context, actor string) error {
 		m.transition(ctx, wan.Failover, "manual_failover", map[string]any{"by": actor})
 		m.publish(func(s *Status) { s.Counters.ManualFailovers++ })
 		m.post(func(ctx context.Context) {
-			m.run("stopping", func() error { return m.actor.Stop(ctx, "manual", m.state.CurrentASN) })
+			m.run(ctx, "stopping", func() error { return m.actor.Stop(ctx, "manual", m.state.CurrentASN) })
 		})
 		return nil
 	})
@@ -320,7 +320,7 @@ func (m *Monitor) RestoreNow(ctx context.Context, actor string) error {
 	return m.do(ctx, func(ctx context.Context) error {
 		m.transition(ctx, wan.Primary, "manual_restore", map[string]any{"by": actor})
 		m.publish(func(s *Status) { s.Counters.ManualRestores++ })
-		m.post(func(ctx context.Context) { m.run("starting", func() error { return m.actor.Start(ctx) }) })
+		m.post(func(ctx context.Context) { m.run(ctx, "starting", func() error { return m.actor.Start(ctx) }) })
 		return nil
 	})
 }
@@ -380,7 +380,7 @@ func (m *Monitor) LoadBackup(ctx context.Context, replace func(context.Context) 
 func (m *Monitor) PoliciesChanged() {
 	m.post(func(ctx context.Context) {
 		if m.state.Machine.State == wan.Failover && !m.paused {
-			m.run("applying", func() error { return m.actor.Apply(ctx) })
+			m.run(ctx, "applying", func() error { return m.actor.Apply(ctx) })
 		}
 	})
 }
@@ -399,10 +399,13 @@ func (m *Monitor) transition(ctx context.Context, to wan.State, event string, pa
 }
 
 // run performs a container run while showing it as busy.
-func (m *Monitor) run(busy string, fn func() error) {
+func (m *Monitor) run(ctx context.Context, busy string, fn func() error) {
 	m.publish(func(s *Status) { s.Busy = busy })
 	err := fn()
 	m.report(err)
+	if err != nil {
+		m.event(ctx, "run_failed", map[string]any{"action": busy, "error": err.Error()})
+	}
 	m.publish(func(s *Status) {
 		s.Busy = ""
 		if err != nil {
@@ -485,7 +488,7 @@ func (m *Monitor) Check(ctx context.Context) {
 		// Leaving Learning for Primary (after a relearn mid-failover, say) must
 		// still bring back anything an open run holds. Start is a no-op otherwise.
 		if tr.From == wan.Learning && tr.To == wan.Primary && !m.paused {
-			m.run("starting", func() error { return m.actor.Start(ctx) })
+			m.run(ctx, "starting", func() error { return m.actor.Start(ctx) })
 		}
 		return
 	}
@@ -509,13 +512,13 @@ func (m *Monitor) Check(ctx context.Context) {
 		}
 		m.event(ctx, "failover", payload)
 		if !m.paused {
-			m.run("stopping", func() error { return m.actor.Stop(ctx, "auto", info.ASN) })
+			m.run(ctx, "stopping", func() error { return m.actor.Stop(ctx, "auto", info.ASN) })
 		}
 	case wan.StartContainers:
 		m.publish(func(s *Status) { s.Counters.Failbacks++ })
 		m.event(ctx, "failback", payload)
 		if !m.paused {
-			m.run("starting", func() error { return m.actor.Start(ctx) })
+			m.run(ctx, "starting", func() error { return m.actor.Start(ctx) })
 		}
 	}
 }
@@ -532,9 +535,9 @@ func (m *Monitor) recover(ctx context.Context) {
 	switch m.state.Machine.State {
 	case wan.Failover:
 		m.log.Info("in failover: making sure selected containers are stopped")
-		m.run("stopping", func() error { return m.actor.Stop(ctx, "auto", m.state.CurrentASN) })
+		m.run(ctx, "stopping", func() error { return m.actor.Stop(ctx, "auto", m.state.CurrentASN) })
 	case wan.Primary, wan.Learning:
-		m.run("starting", func() error { return m.actor.Start(ctx) })
+		m.run(ctx, "starting", func() error { return m.actor.Start(ctx) })
 	}
 }
 

@@ -81,8 +81,9 @@ dns                     inherit  keep
 ```
 
 `POLICY` is the container's own setting (`inherit`, `disable`, `keep`);
-`EFFECTIVE` is what happens on failover. `NOTE` is `from stack` when the
-container stops because of its stack, or `new, not configured` for
+`EFFECTIVE` is what happens on failover. `NOTE` is `from label` when the
+container follows its `drawbridge.on-failover` label, `from stack` when it
+stops because of its stack, or `new, not configured` for
 [new containers](stacks-and-containers.md#new-containers) awaiting review.
 
 ## set-stack

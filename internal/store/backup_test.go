@@ -135,7 +135,7 @@ func TestExportHistoryRange(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, table := range []string{"checks", "events", "asn_daily"} {
-			if n := len(snap.History[table]); n != want {
+			if n := len(withoutNewISP(snap.History[table])); n != want {
 				t.Errorf("since %v: %d %s, want %d", since, n, table, want)
 			}
 		}
@@ -155,8 +155,8 @@ func TestImportReplacesHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, table := range []string{"checks", "events", "asn_daily"} {
-		if n := count(t, dst, table); n != 2 {
-			t.Errorf("%s: %d rows, want the backup's 2", table, n)
+		if n := count(t, dst, table); n != len(snap.History[table]) || len(withoutNewISP(snap.History[table])) != 2 {
+			t.Errorf("%s: %d rows, want the backup's %d", table, n, len(snap.History[table]))
 		}
 	}
 }
@@ -221,4 +221,16 @@ func TestSchemaVersion(t *testing.T) {
 	if err != nil || v < 5 {
 		t.Fatalf("schema version %d, %v", v, err)
 	}
+}
+
+// withoutNewISP drops the isp_new events that fill records when it first sees
+// each ISP, leaving the one-a-day rows the range tests count.
+func withoutNewISP(rows []Row) []Row {
+	var out []Row
+	for _, r := range rows {
+		if r["type"] != "isp_new" {
+			out = append(out, r)
+		}
+	}
+	return out
 }

@@ -276,23 +276,23 @@ func TestMapClientSecret(t *testing.T) {
 		{"key": SettingOIDC, "value": `{"enabled":true,"client_secret":""}`},
 	}}}
 	called := false
-	if err := mapClientSecret(snap, func(s string) (string, error) { called = true; return s, nil }); err != nil || called {
+	if err := mapSecrets(snap, func(s string) (string, error) { called = true; return s, nil }); err != nil || called {
 		t.Fatalf("empty secret: %v called=%v", err, called)
 	}
 	snap.Config["settings"][1]["value"] = `{"client_secret":"abc","issuer":"https://id.example.com"}`
-	if err := mapClientSecret(snap, func(s string) (string, error) { return strings.ToUpper(s), nil }); err != nil {
+	if err := mapSecrets(snap, func(s string) (string, error) { return strings.ToUpper(s), nil }); err != nil {
 		t.Fatal(err)
 	}
 	if v := snap.Config["settings"][1]["value"].(string); !strings.Contains(v, `"client_secret":"ABC"`) || !strings.Contains(v, "id.example.com") {
 		t.Fatalf("value = %s", v)
 	}
 	fail := errors.New("cannot seal")
-	if err := mapClientSecret(snap, func(string) (string, error) { return "", fail }); !errors.Is(err, fail) {
+	if err := mapSecrets(snap, func(string) (string, error) { return "", fail }); !errors.Is(err, fail) {
 		t.Fatalf("seal error: %v", err)
 	}
 	for _, bad := range []any{42, "not json"} {
 		snap.Config["settings"][1]["value"] = bad
-		if err := mapClientSecret(snap, func(s string) (string, error) { return s, nil }); err == nil {
+		if err := mapSecrets(snap, func(s string) (string, error) { return s, nil }); err == nil {
 			t.Errorf("%v: accepted", bad)
 		}
 	}

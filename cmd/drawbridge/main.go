@@ -35,6 +35,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
 	"github.com/zjcochran/wan-drawbridge/internal/executor"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
+	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 	"github.com/zjcochran/wan-drawbridge/internal/web"
@@ -145,10 +146,14 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 	ex.OnChange = func() { hub.Publish(web.TopicInventory) }
 	m := monitor.New(cfg, st, newResolver(cfg.CacheDir, log), ex, log, func() { hub.Publish(web.TopicState) })
 
+	notifier := &notify.Notifier{Store: st, Secrets: box, Log: log, Version: version}
+	st.OnEvent(notifier.Event)
+	go notifier.Run(ctx)
+
 	ui, err := web.New(web.Server{
 		Store: st, Mon: m, Docker: dc, Sync: ex, Hub: hub, Log: log,
 		BaseURL: cfg.BaseURL, DBPath: filepath.Join(cfg.DBDir, "drawbridge.db"), TrustedProxies: proxies,
-		Secrets: box, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
+		Secrets: box, Notify: notifier, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
 		SourceURL: env("DRAWBRIDGE_SOURCE_URL", sourceURL),
 	})
 	if err != nil {

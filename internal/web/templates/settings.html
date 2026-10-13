@@ -56,6 +56,11 @@
   <h2>Single sign-on</h2>
   {{template "sso-fields" $d.SSO}}
 </section>
+<section class="card" id="notifications">
+  <h2>Notifications</h2>
+  <p>Send events to <a href="https://ntfy.sh">ntfy</a>, Gotify, Discord or any webhook. Each channel chooses what it gets.</p>
+  {{template "notify-list" $d.Notify}}
+</section>
 <section class="card" id="backup">
   <h2>Backup and restore</h2>
   <p>A backup holds the settings, ISPs, stack and container choices, users and single sign-on,
@@ -108,5 +113,56 @@
 {{end}}
 
 {{define "sso-form"}}{{template "sso-fields" .}}{{end}}
+
+{{define "notify-list"}}
+<div id="notify-list" class="stack">
+  {{range .Channels}}
+  <details class="channel">
+    <summary>
+      <strong>{{.Name}}</strong> <span class="sub">{{.KindName}} · {{.Host}}</span>
+      {{if not .Enabled}}<span class="badge muted">Off</span>{{end}}
+      {{with .Last}}{{if .Err}}<span class="badge bad" title="{{.Err}}">Last send failed {{ago .At}}</span>{{else}}<span class="badge ok">Last sent {{ago .At}}</span>{{end}}{{end}}
+    </summary>
+    {{template "channel-form" dict "C" . "Kinds" $.Kinds "Topics" $.Topics}}
+  </details>
+  {{end}}
+  <details class="channel" {{if not .Channels}}open{{end}}>
+    <summary><strong>Add a channel</strong></summary>
+    {{template "channel-form" dict "C" .New "Kinds" .Kinds "Topics" .Topics}}
+  </details>
+</div>
+{{end}}
+
+{{define "channel-form"}}
+<form hx-post="/settings/notifications" hx-target="#notify-list" hx-swap="outerHTML" class="stack">
+  <input type="hidden" name="id" value="{{.C.ID}}">
+  <div class="form-grid">
+    <label>Name <input name="name" value="{{.C.Name}}" placeholder="Phone" required></label>
+    <label>Kind
+      <select name="kind">{{range .Kinds}}<option value="{{.ID}}" {{if eq .ID $.C.Kind}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
+    <label class="wide">URL
+      <input name="url" type="url" autocomplete="off" {{if .C.ID}}placeholder="Saved. Leave blank to keep it."{{else}}placeholder="https://ntfy.sh/my-topic" required{{end}}>
+      <small>ntfy: the topic URL. Gotify: the server address. Discord: the channel's webhook URL. Webhook: any URL; Drawbridge POSTs JSON to it.</small></label>
+    <label class="wide">Token
+      <input name="token" type="password" autocomplete="new-password" placeholder="{{if .C.HasToken}}Saved. Leave blank to keep it.{{else}}Optional{{end}}">
+      <small>ntfy: an access token for a protected topic. Gotify: the application token (required). Webhook: sent as a bearer token. Stored encrypted.</small></label>
+  </div>
+  {{if .C.HasToken}}<label class="check"><input type="checkbox" name="remove_token"> Remove the saved token</label>{{end}}
+  <fieldset class="stack">
+    <legend>Send</legend>
+    {{range .Topics}}<label class="check"><input type="checkbox" name="topics" value="{{.ID}}" {{if index $.C.Topics .ID}}checked{{end}}> {{.Name}}</label>
+    {{end}}
+  </fieldset>
+  <label class="check"><input type="checkbox" name="enabled" {{if .C.Enabled}}checked{{end}}> Send to this channel (untick to pause it)</label>
+  <div class="actions">
+    <button>{{if .C.ID}}Save{{else}}Add channel{{end}}</button>
+    <button type="button" class="secondary" hx-post="/settings/notifications/test" hx-include="closest form" hx-target="next .notify-test" hx-swap="outerHTML">Send test</button>
+    {{if .C.ID}}<button type="button" class="danger" hx-post="/settings/notifications/delete" hx-include="closest form" hx-target="#notify-list" hx-swap="outerHTML" hx-confirm="Delete the channel {{.C.Name}}?">Delete</button>{{end}}
+  </div>
+  {{template "notify-test" ""}}
+</form>
+{{end}}
+
+{{define "notify-test"}}<div class="notify-test hint" role="status">{{.}}</div>{{end}}
 
 {{define "sso-test"}}<div id="sso-test" class="hint">{{.}}</div>{{end}}

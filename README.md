@@ -12,11 +12,14 @@ them again.
 - Learns your primary ISP, or lets you pin it.
 - Confirms a failover for 45 seconds and a failback for 5 minutes, and backs
   off further when the primary keeps dropping.
+- What stops is chosen per stack or per container, in the UI or with a
+  `drawbridge.on-failover` label in your Compose files.
 - Stops dependents first and starts dependencies first, waiting for
   healthchecks; only restarts what it stopped; survives restarts mid-run.
 - Web UI with a setup wizard, live updates, phone and dark mode support, and six
   colour themes per user; local accounts and single sign-on (Pocket ID or any
   OIDC provider); Prometheus metrics; a CLI for scripting and recovery.
+- Notifications to ntfy, Gotify, Discord or any webhook, chosen per channel.
 - Encrypted backup files of the configuration, with optional history, that
   restore from Settings or straight from the setup wizard on a new host.
 - One container, one SQLite database folder, the Docker socket. No Node.js, no

@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 )
@@ -147,4 +148,87 @@ func TestUnknownContainerAndBadPolicy(t *testing.T) {
 	if err := s.SetStackPolicy(ctx, "nope", true, "test", now); err == nil {
 		t.Error("expected error for unknown stack")
 	}
+}
+
+func TestLabels(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	items := []InventoryItem{
+		{Key: "media/player", Project: "media", Service: "player", Name: "media-player-1", Label: Keep},
+		{Key: "media/indexer", Project: "media", Service: "indexer", Name: "media-indexer-1"},
+		{Key: "media/fetcher", Project: "media", Service: "fetcher", Name: "media-fetcher-1", Label: Disable},
+		{Key: "automation", Name: "automation", Label: Disable},
+	}
+	if _, err := s.SyncInventory(ctx, items, t0); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"media/player": Keep, "media/indexer": Keep, "media/fetcher": Disable, "automation": Disable}
+	if got := effective(t, s); !mapsEqual(got, want) {
+		t.Fatalf("labels alone: %v", got)
+	}
+
+	// A label beats the stack switch.
+	s.SetStackPolicy(ctx, "media", true, "alice", t0)
+	want = map[string]string{"media/player": Keep, "media/indexer": Disable, "media/fetcher": Disable, "automation": Disable}
+	if got := effective(t, s); !mapsEqual(got, want) {
+		t.Fatalf("stack on: %v", got)
+	}
+
+	// A UI setting beats the label. Converting the stack leaves labelled
+	// containers following their label.
+	if conv, err := s.SetContainerPolicy(ctx, "media/indexer", Keep, "alice", t0); err != nil || !conv {
+		t.Fatalf("convert: %v %v", conv, err)
+	}
+	s.SetContainerPolicy(ctx, "automation", Keep, "alice", t0)
+	cs, _ := s.Containers(ctx)
+	for _, c := range cs {
+		if (c.Key == "media/player" || c.Key == "media/fetcher") && c.Policy != Inherit {
+			t.Errorf("%s got its own setting %q in the conversion", c.Key, c.Policy)
+		}
+	}
+	want = map[string]string{"media/player": Keep, "media/indexer": Keep, "media/fetcher": Disable, "automation": Keep}
+	if got := effective(t, s); !mapsEqual(got, want) {
+		t.Fatalf("after overrides: %v", got)
+	}
+
+	// A new labelled service in a split stack needs no review; an unlabelled
+	// one does until a label appears.
+	more := append(slices.Clone(items),
+		InventoryItem{Key: "media/subs", Project: "media", Service: "subs", Name: "media-subs-1", Label: Disable},
+		InventoryItem{Key: "media/web", Project: "media", Service: "web", Name: "media-web-1"})
+	s.SyncInventory(ctx, more, t0)
+	review := map[string]bool{}
+	cs, _ = s.Containers(ctx)
+	for _, c := range cs {
+		review[c.Key] = c.NeedsReview
+	}
+	if review["media/subs"] || !review["media/web"] {
+		t.Fatalf("review flags: %v", review)
+	}
+	more[len(more)-1].Label = Keep
+	s.SyncInventory(ctx, more, t0)
+	cs, _ = s.Containers(ctx)
+	for _, c := range cs {
+		if c.Key == "media/web" && (c.NeedsReview || c.Effective != Keep || c.Label != Keep) {
+			t.Fatalf("label added later: %+v", c)
+		}
+	}
+	// Removing a label goes back to the stack (no longer switched on).
+	more[0].Label = ""
+	s.SyncInventory(ctx, more, t0)
+	if got := effective(t, s)["media/player"]; got != Keep {
+		t.Errorf("label removed: %s", got)
+	}
+}
+
+func mapsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }

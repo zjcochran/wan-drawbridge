@@ -104,6 +104,11 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	metric("drawbridge_pending_due_timestamp_seconds", "When a pending failover or failback completes if nothing interrupts it; 0 when none.", "gauge")
 	fmt.Fprintf(&b, "drawbridge_pending_due_timestamp_seconds %d\n", unix(st.Due))
 
+	sent, failed := s.Notify.Counts()
+	metric("drawbridge_notifications_total", "Notifications since start, by result (failed means after every retry).", "counter")
+	fmt.Fprintf(&b, "drawbridge_notifications_total{result=\"sent\"} %d\n", sent)
+	fmt.Fprintf(&b, "drawbridge_notifications_total{result=\"failed\"} %d\n", failed)
+
 	metric("drawbridge_containers_stopped", "Containers Drawbridge has stopped and not yet started.", "gauge")
 	fmt.Fprintf(&b, "drawbridge_containers_stopped %d\n", stopped)
 	stop, keep := 0, 0
