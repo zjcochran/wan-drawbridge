@@ -153,7 +153,7 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 	ui, err := web.New(web.Server{
 		Store: st, Mon: m, Docker: dc, Sync: ex, Hub: hub, Log: log,
 		BaseURL: cfg.BaseURL, DBPath: filepath.Join(cfg.DBDir, "drawbridge.db"), TrustedProxies: proxies,
-		Secrets: box, Notify: notifier, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
+		Secrets: box, Notify: notifier, BackupDir: cfg.BackupDir, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
 		SourceURL: env("DRAWBRIDGE_SOURCE_URL", sourceURL),
 	})
 	if err != nil {
@@ -172,6 +172,7 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 		}
 	}()
 	go ex.WatchInventory(ctx, dc, 30*time.Second)
+	go ui.RunBackupSchedule(ctx)
 	go func() { errc <- m.Run(ctx) }()
 
 	select {

@@ -206,6 +206,13 @@ before any key is derived. Restored rows may only name existing tables and
 columns, and are written in one transaction that is rolled back if any row is
 rejected or no enabled admin remains.
 
+Scheduled backups use a passphrase stored in the database, sealed with the
+secret key like the other secrets, because nobody is there to type it. The
+backup files alone stay protected by it; whoever has the database folder and
+the key can recover it. Old files are deleted only if their names match
+`drawbridge-backup-YYYYMMDD-HHMMSS.json`, and downloads of stored files accept
+only such names, so no other path can be read.
+
 ## Notifications
 
 Notification requests go only to the URLs admins configure. They carry the

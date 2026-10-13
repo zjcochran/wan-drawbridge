@@ -688,6 +688,7 @@ type settingsData struct {
 	Themes    []choice
 	Modes     []choice
 	Notify    notifyData
+	Schedule  scheduleView
 }
 
 type choice struct{ ID, Name string }
@@ -753,6 +754,10 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 	d.DBSize = fmt.Sprintf("%.1f MB", float64(size)/1e6)
 	if d.IsAdmin {
 		if d.Notify, err = s.notifyData(ctx); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		if d.Schedule, err = s.scheduleView(ctx); err != nil {
 			s.fail(w, r, err)
 			return
 		}

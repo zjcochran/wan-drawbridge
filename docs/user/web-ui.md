@@ -183,7 +183,8 @@ by type; **Export CSV** downloads up to 1,000 events of the selected type as
 - **Notifications** (admins): channels that get events; see
   [Notifications](notifications.md).
 - **Backup and restore** (admins): download an encrypted backup file, with
-  history of the last 30, 60 or 90 days, all time, or none; restore one. See
+  history of the last 30, 60 or 90 days, all time, or none; schedule daily
+  backups into a folder; restore one. See
   [Backup and restore](backup-and-restore.md#backup-files).
 - **System**: Drawbridge version, Docker connection and version, database path
   and size.

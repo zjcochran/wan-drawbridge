@@ -28,6 +28,48 @@ too short, no file is made and Settings shows why.
 **Keep the passphrase.** It cannot be recovered, and without it the file
 cannot be restored.
 
+### Scheduled backups
+
+Drawbridge can make a backup file every day by itself. In **Settings → Backup
+and restore → Scheduled backups** (admins):
+
+| Field | Meaning |
+| --- | --- |
+| Make a backup every day | On or off. |
+| At | Time of day, in the server's time zone (`TZ` in the Compose file). Default 03:00. |
+| Keep | How many files to keep, 1 to 365 (default 14). After each backup, older `drawbridge-backup-*.json` files are deleted; other files in the folder are left alone. |
+| History | As for a downloaded backup. |
+| Passphrase | At least 12 characters, entered twice. Leave blank to keep the saved one. |
+
+- Files go to `/data/backups` (`DRAWBRIDGE_BACKUP_DIR`), named like downloaded
+  ones, with mode 0600. Mount a host folder there, as in the
+  [Compose file](installation.md); Settings warns when the folder is not a
+  mounted volume, because files in the container are lost when it is
+  re-created.
+- Drawbridge checks every minute. A backup is made when the time of day has
+  passed and none was made since: so the first one is made as soon as you
+  turn the schedule on, and if Drawbridge was off at the scheduled time, it
+  makes the backup when it starts.
+- **Back up now** makes one at once with the saved settings.
+- Each file is written under a temporary name and renamed when complete, so
+  a crash never leaves a half-written backup.
+- Success records a `backup_created` event (`by` = `schedule`, with the file
+  name). A failure (folder not writable, disk full) records `backup_failed`,
+  shows the error in Settings and is not retried until the next day, or
+  **Back up now**. Both can be sent as [notifications](notifications.md);
+  failures are on by default. The metric
+  `drawbridge_backup_last_success_timestamp_seconds` tells Prometheus when the
+  last one worked.
+- The table under the form lists the files with their size and age; click one
+  to download it.
+
+The passphrase is stored in the database, encrypted with the server's secret
+key, so that Drawbridge can use it unattended. Someone with the backup files
+alone still cannot read them; someone with the database folder (which holds
+the secret key) could decrypt the passphrase. **Keep your own copy of the
+passphrase**: a backup is only useful for starting over if you can type it in
+on the new instance.
+
 ### What is in it
 
 | Part | Contents |

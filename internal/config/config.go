@@ -103,6 +103,7 @@ type Config struct {
 	Detection
 	DBDir        string   // holds only the SQLite files: mount it to back them up
 	CacheDir     string   // the downloaded ASN database; safe to lose
+	BackupDir    string   // scheduled backup files
 	Listen       string   // web UI address
 	BaseURL      string   // external URL; https here marks cookies Secure
 	Proxies      []string // trusted reverse proxies: IPs or CIDR ranges
@@ -119,6 +120,7 @@ func Load() (Config, error) {
 		Detection:    DefaultDetection(),
 		DBDir:        env("DRAWBRIDGE_DB_DIR", "/data/db"),
 		CacheDir:     env("DRAWBRIDGE_CACHE_DIR", "/data/cache"),
+		BackupDir:    env("DRAWBRIDGE_BACKUP_DIR", "/data/backups"),
 		Listen:       env("DRAWBRIDGE_LISTEN", ":8080"),
 		BaseURL:      strings.TrimRight(os.Getenv("DRAWBRIDGE_BASE_URL"), "/"),
 		Proxies:      SplitList(os.Getenv("DRAWBRIDGE_TRUSTED_PROXIES")),

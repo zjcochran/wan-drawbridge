@@ -284,6 +284,8 @@ func TestFormat(t *testing.T) {
 		{"resumed", map[string]any{"by": "timer"}, "Automation resumed", "The timed pause ended."},
 		{"backup_created", map[string]any{"by": "alice", "history": "30d"}, "Backup downloaded", "(history: 30d)"},
 		{"backup_restored", map[string]any{"by": "alice", "created": "2027-01-15T07:00:00Z"}, "Backup restored", "restored a backup made 2027-01-1"},
+		{"backup_created", map[string]any{"by": "schedule", "history": "none", "file": "drawbridge-backup-20270115-030000.json"}, "Scheduled backup saved", "Saved drawbridge-backup-20270115-030000.json"},
+		{"backup_failed", map[string]any{"error": "disk full"}, "Scheduled backup failed", "disk full."},
 		{"something_else", nil, "something_else", ""},
 	}
 	for _, c := range cases {

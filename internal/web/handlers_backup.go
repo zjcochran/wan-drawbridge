@@ -8,9 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/zjcochran/wan-drawbridge/internal/backup"
 	"github.com/zjcochran/wan-drawbridge/internal/notify"
@@ -42,43 +44,55 @@ func (s *Server) downloadBackup(w http.ResponseWriter, r *http.Request) {
 		back(fmt.Sprintf("The passphrase must be at least %d characters. No backup was made.", backup.MinPassphrase))
 		return
 	}
-	include, since, label, err := backup.HistoryRange(r.PostFormValue("history"), s.now())
-	if err != nil {
+	var buf bytes.Buffer
+	meta, err := s.encodeBackup(ctx, &buf, r.PostFormValue("history"), pass)
+	if errors.Is(err, backup.ErrHistoryRange) {
 		back(err.Error())
 		return
 	}
-	snap, err := s.Store.Export(ctx, include, since)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	s.event(ctx, "backup_created", map[string]any{"history": meta.History, "by": actorName(r)})
+	name := backupName(meta.Created)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(buf.Bytes()) //nolint:errcheck,gosec // G705: a download, not HTML; nothing to do if the client went away
+}
+
+// encodeBackup writes an encrypted backup with the given history choice
+// ("none", "30", "60", "90", "all") to w.
+func (s *Server) encodeBackup(ctx context.Context, w io.Writer, history, pass string) (backup.Meta, error) {
+	include, since, label, err := backup.HistoryRange(history, s.now())
+	if err != nil {
+		return backup.Meta{}, err
+	}
+	snap, err := s.Store.Export(ctx, include, since)
+	if err != nil {
+		return backup.Meta{}, err
+	}
 	schema, err := s.Store.SchemaVersion(ctx)
 	if err != nil {
-		s.fail(w, r, err)
-		return
+		return backup.Meta{}, err
 	}
 	// Stored secrets are sealed with this instance's key; the backup carries
 	// them in the clear, inside its own encryption, so another instance can
 	// seal them with its key.
 	if err := mapSecrets(snap, s.Secrets.Open); err != nil {
-		s.fail(w, r, err)
-		return
+		return backup.Meta{}, err
 	}
 	meta := backup.Meta{AppVersion: s.Version, Schema: schema, Created: s.now().UTC(), History: label}
 	if meta.AppVersion == "" {
 		meta.AppVersion = "dev"
 	}
-	var buf bytes.Buffer
-	if err := backup.Encode(&buf, meta, snap, pass); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	s.event(ctx, "backup_created", map[string]any{"history": label, "by": actorName(r)})
-	name := "drawbridge-backup-" + meta.Created.Format("20060102-150405") + ".json"
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+name+`"`)
-	w.Header().Set("Cache-Control", "no-store")
-	w.Write(buf.Bytes()) //nolint:errcheck,gosec // G705: a download, not HTML; nothing to do if the client went away
+	return meta, backup.Encode(w, meta, snap, pass)
+}
+
+// backupName is the file name for a backup made at t.
+func backupName(t time.Time) string {
+	return "drawbridge-backup-" + t.UTC().Format("20060102-150405") + ".json"
 }
 
 // restoreBackup replaces the configuration from Settings. Everyone is signed

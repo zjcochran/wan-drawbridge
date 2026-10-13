@@ -8,6 +8,7 @@ services:
       drawbridge.self: "true" # never stop this container, even if its stack is selected
     volumes:
       - ./db:/data/db # only the SQLite database: back up this folder
+      - ./backups:/data/backups # scheduled backup files (Settings → Backup and restore)
       - cache:/data/cache # downloaded ASN database, re-downloaded if lost
       - /var/run/docker.sock:/var/run/docker.sock
     environment:

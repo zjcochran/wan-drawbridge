@@ -81,6 +81,7 @@ services:
       drawbridge.self: "true" # never stop this container, even if its stack is selected
     volumes:
       - ./db:/data/db # only the SQLite database: back up this folder
+      - ./backups:/data/backups # scheduled backup files (Settings → Backup and restore)
       - cache:/data/cache # downloaded ASN database, re-downloaded if lost
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -101,6 +102,11 @@ What each part does:
 - **`./db:/data/db`** holds everything worth keeping: `drawbridge.db` (with its
   `-wal` and `-shm` files while running) and `secret.key`. Back up this folder.
   See [Backup and restore](backup-and-restore.md).
+- **`./backups:/data/backups`** receives the
+  [scheduled backups](backup-and-restore.md#scheduled-backups), if you turn
+  them on. Each file is encrypted with its own passphrase. Without this mount
+  the files would be lost when the container is re-created; Settings warns
+  about that.
 - **`cache:/data/cache`** holds the downloaded ASN database. It can be lost; it
   is downloaded again.
 - **`/var/run/docker.sock`** gives Drawbridge the Docker API. It must be

@@ -180,5 +180,8 @@ func HistoryRange(choice string, now time.Time) (include bool, since time.Time, 
 	case "all":
 		return true, time.Time{}, "all", nil
 	}
-	return false, time.Time{}, "", fmt.Errorf("unknown history range %q", choice)
+	return false, time.Time{}, "", fmt.Errorf("%w %q", ErrHistoryRange, choice)
 }
+
+// ErrHistoryRange is returned for a history choice HistoryRange does not know.
+var ErrHistoryRange = errors.New("unknown history range")
