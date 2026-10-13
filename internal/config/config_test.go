@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zjcochran/wan-drawbridge/internal/syslog"
 )
 
 func TestDefaultsAreValid(t *testing.T) {
@@ -46,6 +48,9 @@ func TestLoadFromEnvironment(t *testing.T) {
 		"DRAWBRIDGE_QUORUM":            "1",
 		"DRAWBRIDGE_IP_PROVIDERS":      "https://a.example\nhttps://b.example",
 		"LOG_LEVEL":                    "debug",
+		"DRAWBRIDGE_SYSLOG":            "udp://192.0.2.10",
+		"DRAWBRIDGE_SYSLOG_FORMAT":     "rfc3164",
+		"DRAWBRIDGE_SYSLOG_FACILITY":   "local0",
 	} {
 		t.Setenv(k, v)
 	}
@@ -62,6 +67,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 		DBDir: "/db", CacheDir: "/cache", BackupDir: "/backups", Listen: ":9090", BaseURL: "https://drawbridge.example.com",
 		Proxies: []string{"192.0.2.1", "192.0.2.0/24"}, SecretKey: "key", MetricsToken: "token",
 		ForceLocal: true, PrimaryASN: 64500, LogLevel: slog.LevelDebug,
+		Syslog: syslog.Config{URL: "udp://192.0.2.10", Format: "rfc3164", Facility: "local0"},
 	}
 	if !reflect.DeepEqual(c, want) {
 		t.Fatalf("got  %+v\nwant %+v", c, want)
@@ -74,6 +80,7 @@ func TestLoadReportsEveryProblem(t *testing.T) {
 		"DRAWBRIDGE_QUORUM":         "two",
 		"DRAWBRIDGE_LOCAL_LOGIN":    "always",
 		"LOG_LEVEL":                 "loud",
+		"DRAWBRIDGE_SYSLOG":         "syslog.example.com",
 	} {
 		t.Setenv(k, v)
 	}
@@ -82,7 +89,7 @@ func TestLoadReportsEveryProblem(t *testing.T) {
 		t.Fatal("expected an error")
 	}
 	for _, want := range []string{"DRAWBRIDGE_CHECK_INTERVAL", "DRAWBRIDGE_QUORUM must be a number",
-		"DRAWBRIDGE_LOCAL_LOGIN must be force", "LOG_LEVEL must be"} {
+		"DRAWBRIDGE_LOCAL_LOGIN must be force", "LOG_LEVEL must be", "DRAWBRIDGE_SYSLOG must look like"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error does not mention %q: %v", want, err)
 		}

@@ -22,6 +22,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
+	"github.com/zjcochran/wan-drawbridge/internal/syslog"
 	"github.com/zjcochran/wan-drawbridge/internal/wan"
 )
 
@@ -497,6 +498,29 @@ func TestMetrics(t *testing.T) {
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q in:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "drawbridge_syslog_messages_total") {
+		t.Error("syslog metrics without syslog")
+	}
+
+	// With syslog: lines that could not be queued count as dropped.
+	sl, err := syslog.New(syslog.Config{URL: "udp://192.0.2.10"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := slog.New(sl.Handler(slog.LevelInfo))
+	for range syslog.QueueSize + 2 {
+		log.Info("line") // not sent: Run is not started
+	}
+	e.ui.Syslog = sl
+	_, body = c.do("GET", "/metrics", nil, "Authorization", "Bearer scrape-me")
+	for _, want := range []string{
+		`drawbridge_syslog_messages_total{result="sent"} 0`,
+		`drawbridge_syslog_messages_total{result="dropped"} 2`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("missing %q", want)
 		}
 	}
 }

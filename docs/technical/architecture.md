@@ -64,6 +64,7 @@ flowchart LR
 | `internal/store` | All persistence: SQLite, migrations, users, sessions, ISPs, policies, runs, events. |
 | `internal/secrets` | AES-GCM sealing of stored secrets. |
 | `internal/notify` | Notification channels: formats events into messages and delivers them in the background, with retries. |
+| `internal/syslog` | Optional copy of the log to a syslog server: an `slog` handler that queues RFC 5424 or RFC 3164 messages, and a sender over UDP, TCP or TLS that reconnects. |
 | `internal/backup` | Backup file format: argon2id key, AES-256-GCM, gzipped JSON of a `store.Snapshot`. |
 | `internal/web` | HTTP handlers, templates, middleware (auth, CSRF, cross-origin, headers), OIDC, metrics, SSE hub. |
 | `internal/e2e` | End-to-end test of the whole process against fakes. |
@@ -82,6 +83,7 @@ flowchart TB
     loop --> hk[monitor.housekeeping<br/>daily]
     main --> nt[notify.Run<br/>delivers notifications]
     main --> bs[web.RunBackupSchedule<br/>checks every minute]
+    main -. DRAWBRIDGE_SYSLOG .-> sl[syslog.Writer.Run<br/>sends the log]
     http -. "do(): wait for result" .-> loop
     http -. "post(): fire and forget" .-> loop
 ```
@@ -139,6 +141,13 @@ once at start and then every minute whether the day's backup time has passed
 without a backup. It reads the store and writes files to
 `DRAWBRIDGE_BACKUP_DIR`; it does not go through the check loop.
 
+**Syslog**, when `DRAWBRIDGE_SYSLOG` is set, is a `syslog.Writer` started
+before everything else: the logger writes each line to standard error and
+queues a copy (1024 at most; dropped when full, never blocking), and
+`Writer.Run` sends the queue on one connection, reconnecting after errors. It
+is stopped last, after the database is closed, so the final log lines are
+sent too.
+
 **Housekeeping** runs once at start and then every 24 hours: prune old checks
 and daily totals, prune expired sessions, refresh the ASN database if it is
 older than a week.
@@ -185,7 +194,8 @@ run is recovered on the next start (see
 `drawbridge` with no arguments:
 
 1. Load and validate configuration from the environment; any error stops
-   start-up with all problems listed.
+   start-up with all problems listed. With `DRAWBRIDGE_SYSLOG`, start sending
+   the log to syslog.
 2. Create `DRAWBRIDGE_DB_DIR` and `DRAWBRIDGE_CACHE_DIR` (mode 0750).
 3. Open `drawbridge.db` (WAL, busy timeout 5 s, foreign keys on) and run
    pending migrations.
@@ -208,7 +218,8 @@ backup schedule are then stopped, and Drawbridge waits for them and the
 monitor to return, so none of them is still writing when the database is
 closed, which checkpoints the WAL into the main file. The same happens when
 start-up fails after they were started (the listen address is in use, for
-example). A container run in progress is abandoned at the next
+example). With syslog on, the sender stops after that, once it has sent what
+is still queued (at most 2 seconds). A container run in progress is abandoned at the next
 Docker call; its progress is in the database and is resumed by `recover()` on
 the next start.
 

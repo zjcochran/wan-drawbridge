@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/zjcochran/wan-drawbridge/internal/probe"
+	"github.com/zjcochran/wan-drawbridge/internal/syslog"
 )
 
 // Detection is the part of the configuration that can be edited in the UI.
@@ -112,6 +113,7 @@ type Config struct {
 	ForceLocal   bool     // DRAWBRIDGE_LOCAL_LOGIN=force: passwords work even in SSO-only mode
 	PrimaryASN   int      // pinned primary; 0 = learn it
 	LogLevel     slog.Level
+	Syslog       syslog.Config // also send the log here; off when the URL is empty
 }
 
 // Load reads DRAWBRIDGE_* variables.
@@ -126,6 +128,12 @@ func Load() (Config, error) {
 		Proxies:      SplitList(os.Getenv("DRAWBRIDGE_TRUSTED_PROXIES")),
 		SecretKey:    os.Getenv("DRAWBRIDGE_SECRET_KEY"),
 		MetricsToken: os.Getenv("DRAWBRIDGE_METRICS_TOKEN"),
+		Syslog: syslog.Config{
+			URL:      os.Getenv("DRAWBRIDGE_SYSLOG"),
+			Format:   os.Getenv("DRAWBRIDGE_SYSLOG_FORMAT"),
+			Facility: os.Getenv("DRAWBRIDGE_SYSLOG_FACILITY"),
+			CAFile:   os.Getenv("DRAWBRIDGE_SYSLOG_CA_FILE"),
+		},
 	}
 	var errs []error
 	dur := func(key string, dst *time.Duration) {
@@ -169,6 +177,9 @@ func Load() (Config, error) {
 		errs = append(errs, errors.New("LOG_LEVEL must be debug, info, warn or error"))
 	}
 	if err := c.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := c.Syslog.Check(); err != nil {
 		errs = append(errs, err)
 	}
 	if len(errs) > 0 {

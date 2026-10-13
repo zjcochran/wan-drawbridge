@@ -57,6 +57,10 @@ also accepts days (`7d`).
 | Variable | Default | Description |
 | --- | --- | --- |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
+| `DRAWBRIDGE_SYSLOG` | off | Also send the log to a syslog server: `udp://host[:514]`, `tcp://host[:514]` or `tls://host[:6514]`. See [Sending the log to a syslog server](../user/monitoring.md#sending-the-log-to-a-syslog-server). |
+| `DRAWBRIDGE_SYSLOG_FORMAT` | `rfc5424` | `rfc5424` or `rfc3164`. |
+| `DRAWBRIDGE_SYSLOG_FACILITY` | `daemon` | A syslog facility name: `kern`, `user`, `mail`, `daemon`, `auth`, `syslog`, `lpr`, `news`, `uucp`, `cron`, `authpriv`, `ftp`, `local0` to `local7`. |
+| `DRAWBRIDGE_SYSLOG_CA_FILE` | none | `tls://` only: PEM file of extra CAs to trust. |
 | `DRAWBRIDGE_SOURCE_URL` | the URL set at build time (published images: `https://github.com/zjcochran/wan-drawbridge`) | Link to the source code in the page footer (AGPL §13). Set it when you run a modified version. |
 
 ## Build-time variables
@@ -105,6 +109,7 @@ Not configurable; listed for reference.
 | Failover test lengths | 2, 5, 10 or 15 min |
 | Scheduled backup check | every minute, and once at start |
 | Notification queue | 64 events; retried after 5 s and 30 s |
+| Syslog queue | 1024 lines; reconnect after 1 s, doubling to 30 s; 10 s connect and send timeouts; 2 s to send what is queued at shutdown |
 | Parallel container operations per layer | 4 |
 | Health wait per dependency layer | 120 s, polled every 2 s |
 | Session lifetime | 7 days, sliding |

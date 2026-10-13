@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -335,6 +336,44 @@ func TestServeStartsAndStops(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("serve did not stop")
+	}
+}
+
+func TestServeSendsLogToSyslog(t *testing.T) {
+	setup(t, false)
+	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	t.Setenv("DRAWBRIDGE_SYSLOG", "udp://"+pc.LocalAddr().String())
+	t.Setenv("DRAWBRIDGE_LISTEN", freePort(t))
+	t.Setenv("LOG_LEVEL", "info")
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	var stderr bytes.Buffer
+	go func() { done <- run(ctx, nil, strings.NewReader(""), &bytes.Buffer{}, &stderr) }()
+
+	buf := make([]byte, 4096)
+	pc.SetReadDeadline(time.Now().Add(10 * time.Second))
+	var got []string
+	for !slices.ContainsFunc(got, func(s string) bool { return strings.Contains(s, `msg="web UI listening"`) }) {
+		n, _, err := pc.ReadFrom(buf)
+		if err != nil {
+			cancel()
+			t.Fatalf("no syslog message about the web UI: %v\n%q", err, got)
+		}
+		got = append(got, string(buf[:n]))
+	}
+	if !strings.HasPrefix(got[0], "<30>1 ") || !strings.Contains(got[0], `msg="sending the log to syslog"`) {
+		t.Errorf("first message: %q", got[0])
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr.String(), "web UI listening") {
+		t.Error("the log no longer reaches stderr")
 	}
 }
 
