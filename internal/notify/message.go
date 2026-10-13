@@ -67,6 +67,16 @@ func Format(e store.Event, names map[int]string) Message {
 	case "manual_restore":
 		m.Title = "Manual restore"
 		m.Text = str("by") + " started the containers Drawbridge had stopped."
+	case "drill_started":
+		m.Title = "Failover test started"
+		m.Text = fmt.Sprintf("%s stopped the containers set to stop on failover, as a test. They start again in %s minutes.",
+			str("by"), str("minutes"))
+	case "drill_ended":
+		m.Title = "Failover test ended"
+		m.Text = "The containers stopped for the test are being started again."
+		if p["kept_stopped"] == true {
+			m.Text = "A failover took over during the test, so the containers stay stopped until failback."
+		}
 	case "run_failed":
 		m.Title, m.Priority = map[string]string{
 			"stopping": "Stopping containers failed", "starting": "Starting containers failed",
@@ -93,6 +103,15 @@ func Format(e store.Event, names map[int]string) Message {
 	case "primary_undecided":
 		m.Title = "Primary ISP not decided"
 		m.Text = "Learning ended without a clear primary ISP. Set one on the ISPs page."
+	default:
+		formatAdmin(&m, str)
+	}
+	return m
+}
+
+// formatAdmin covers events started by people or schedules: pausing, backups.
+func formatAdmin(m *Message, str func(string) string) {
+	switch m.Event {
 	case "paused":
 		m.Title = "Automation paused"
 		m.Text = str("by") + " paused automation until it is resumed."
@@ -123,7 +142,6 @@ func Format(e store.Event, names map[int]string) Message {
 		}
 		m.Text = fmt.Sprintf("%s restored a backup made %s. Everyone was signed out.", str("by"), made)
 	default:
-		m.Title, m.Text = e.Type, ""
+		m.Title, m.Text = m.Event, ""
 	}
-	return m
 }

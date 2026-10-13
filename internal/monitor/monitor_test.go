@@ -520,3 +520,107 @@ func TestRunFailedEvent(t *testing.T) {
 		t.Error("run error not counted")
 	}
 }
+
+func drillEvents(t *testing.T, m *Monitor, typ string) []store.Event {
+	t.Helper()
+	evs, err := m.store.Events(context.Background(), store.EventFilter{Type: typ})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return evs
+}
+
+func TestDrill(t *testing.T) {
+	ctx := context.Background()
+	actor := &countingActor{}
+	m := newMonitor(t, newFakeWAN(t), actor)
+	m.cfg.PrimaryASN = 64500
+	stop := runMonitor(m)
+	defer stop()
+	waitFor(t, "primary", func() bool { return m.Status().State == wan.Primary })
+
+	if err := m.StartDrill(ctx, 0, "alice"); err == nil {
+		t.Fatal("zero duration accepted")
+	}
+	if err := m.StartDrill(ctx, time.Second, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if st := m.Status(); !st.DrillTill.Equal(m.now().Add(time.Second)) || st.State != wan.Primary {
+		t.Fatalf("status: %+v", st)
+	}
+	waitFor(t, "drill stop", func() bool { s, _ := actor.counts(); return s == 1 })
+	if err := m.StartDrill(ctx, time.Second, "alice"); !errors.Is(err, ErrDrill) {
+		t.Fatalf("second test: %v", err)
+	}
+	if evs := drillEvents(t, m, "drill_started"); len(evs) != 1 || evs[0].Payload["by"] != "alice" {
+		t.Fatalf("started: %v", evs)
+	}
+
+	// Time is up: the containers start again.
+	_, before := actor.counts()
+	clock.Add(1)
+	waitFor(t, "drill end", func() bool { _, s := actor.counts(); return s > before })
+	if !m.Status().DrillTill.IsZero() {
+		t.Error("still shown as running")
+	}
+	if evs := drillEvents(t, m, "drill_ended"); len(evs) != 1 || evs[0].Payload["by"] != "timer" {
+		t.Fatalf("ended: %v", evs)
+	}
+
+	// Ended early by hand.
+	m.StartDrill(ctx, time.Hour, "alice")
+	_, before = actor.counts()
+	m.EndDrill(ctx, "bob")
+	waitFor(t, "early end", func() bool { _, s := actor.counts(); return s > before })
+	if evs := drillEvents(t, m, "drill_ended"); evs[0].Payload["by"] != "bob" {
+		t.Fatalf("early end: %v", evs[0])
+	}
+	m.EndDrill(ctx, "bob") // nothing running: no event
+	if n := len(drillEvents(t, m, "drill_ended")); n != 2 {
+		t.Errorf("%d drill_ended events", n)
+	}
+
+	// Restore now ends it; the restore starts the containers.
+	m.StartDrill(ctx, time.Hour, "alice")
+	m.RestoreNow(ctx, "carol")
+	if evs := drillEvents(t, m, "drill_ended"); evs[0].Payload["by"] != "carol" || evs[0].Payload["kept_stopped"] != nil {
+		t.Fatalf("restore: %v", evs[0])
+	}
+
+	// A failover takes over: the containers stay stopped.
+	m.StartDrill(ctx, time.Hour, "alice")
+	m.FailoverNow(ctx, "dave")
+	if evs := drillEvents(t, m, "drill_ended"); evs[0].Payload["by"] != "dave" || evs[0].Payload["kept_stopped"] != true {
+		t.Fatalf("failover: %v", evs[0])
+	}
+	if err := m.StartDrill(ctx, time.Minute, "alice"); !errors.Is(err, ErrDrill) {
+		t.Fatalf("test during a failover: %v", err)
+	}
+	if !m.Status().DrillTill.IsZero() {
+		t.Error("test still shown after the failover")
+	}
+}
+
+func TestDrillRefusedWithStoppedContainers(t *testing.T) {
+	ctx := context.Background()
+	m := newMonitor(t, newFakeWAN(t), &countingActor{})
+	stop := runMonitor(m)
+	defer stop()
+	if _, err := m.store.CreateRun(ctx, "manual", 0, m.now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.StartDrill(ctx, time.Minute, "alice"); !errors.Is(err, ErrDrill) {
+		t.Fatalf("open run: %v", err)
+	}
+}
+
+func TestDrillEndsWithAutomaticFailover(t *testing.T) {
+	ctx := context.Background()
+	m := newMonitor(t, newFakeWAN(t), &countingActor{})
+	m.drillTil = m.now().Add(time.Hour)
+	m.state.Machine.State = wan.Failover
+	m.drillTakenOver(ctx, "failover")
+	if evs := drillEvents(t, m, "drill_ended"); len(evs) != 1 || evs[0].Payload["by"] != "failover" || evs[0].Payload["kept_stopped"] != true {
+		t.Fatalf("events: %v", evs)
+	}
+}

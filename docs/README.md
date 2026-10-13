@@ -15,13 +15,13 @@ Start here if you run Drawbridge.
 | --- | --- |
 | [Installation](user/installation.md) | Requirements, the Compose file, first start, upgrading, uninstalling |
 | [Setup wizard](user/setup-wizard.md) | The seven first-run steps, with screenshots |
-| [Using the web UI](user/web-ui.md) | Every page: dashboard, stacks, containers, ISPs, events, settings, users |
-| [Choosing what to stop](user/stacks-and-containers.md) | Stack rules, container overrides, new containers, examples |
+| [Using the web UI](user/web-ui.md) | Every page: dashboard, stacks, containers, ISPs, events, settings, users; colour themes |
+| [Choosing what to stop](user/stacks-and-containers.md) | Stack rules, container overrides, the `drawbridge.on-failover` label, new containers, examples |
 | [ISPs and the primary ISP](user/isps.md) | How ISPs are recognised and grouped, pinning, learning, fixing a wrong grouping |
-| [What happens during an outage](user/during-an-outage.md) | A minute-by-minute walk-through of a failover and failback, flapping, manual controls |
+| [What happens during an outage](user/during-an-outage.md) | A minute-by-minute walk-through of a failover and failback, flapping, manual controls, timed pauses, failover tests |
 | [Single sign-on](user/single-sign-on.md) | Pocket ID or any OIDC provider: setup, groups, linking, SSO-only, lock-out recovery |
 | [Behind a reverse proxy](user/reverse-proxy.md) | Traefik, Caddy, nginx, Nginx Proxy Manager, HAProxy and Apache examples, trusted proxies, HTTPS |
-| [Backup and restore](user/backup-and-restore.md) | Encrypted backup files with optional history, folder backups, restoring, moving hosts |
+| [Backup and restore](user/backup-and-restore.md) | Encrypted backup files with optional history, daily scheduled backups, folder backups, restoring, moving hosts |
 | [Notifications](user/notifications.md) | Sending failovers, container errors and more to ntfy, Gotify, Discord or a webhook |
 | [Monitoring](user/monitoring.md) | Prometheus metrics, alert rules, the health check, logs |
 | [Command line](user/cli.md) | Every `drawbridge` subcommand, with examples |

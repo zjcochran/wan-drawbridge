@@ -169,7 +169,7 @@ Audit log. See [Monitoring → event types](../user/monitoring.md#event-types).
 | --- | --- | --- |
 | `id` | INTEGER PK | |
 | `started_at`, `ended_at` | INTEGER | |
-| `trigger` | TEXT | `auto` or `manual` |
+| `trigger` | TEXT | `auto`, `manual`, or `drill` (a failover test) |
 | `to_asn` | INTEGER | Backup ASN at failover; NULL for manual failovers before any check |
 | `status` | TEXT | `open`, `completed`, `failed` |
 

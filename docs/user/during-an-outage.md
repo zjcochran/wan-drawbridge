@@ -189,8 +189,27 @@ after 45 seconds.
 **Check now** runs a check immediately; it is useful right after you have
 fixed something.
 
-Both "Fail over now" and "Restore now" ask for confirmation, and only admins
-see them.
+**Test failover** (shown on the primary, or while learning, when nothing is
+stopped) checks your choices without an outage. Pick how long next to the
+button (2, 5, 10 or 15 minutes; default 5). After a confirmation, Drawbridge
+stops every container set to stop on failover, in dependency order as in a
+real failover, and starts them again when the time is up:
+
+- The WAN state does not change; checks go on as usual. The dashboard shows
+  **Failover test until 15:30** and the stopped containers, with
+  "(failover test)".
+- **End test now** starts them at once.
+- If a real failover is confirmed during the test, it takes over: the
+  containers stay stopped until failback. **Restore now** or **Fail over
+  now** during a test also end it.
+- The test restores the containers even while automation is paused: you
+  started it. If Drawbridge restarts during a test, it starts them when it
+  comes back.
+- `drill_started` and `drill_ended` events are recorded and can be sent as
+  [notifications](notifications.md), which also tests that those arrive.
+
+"Fail over now", "Restore now" and "Test failover" ask for confirmation, and
+only admins see them.
 
 ## Tuning
 

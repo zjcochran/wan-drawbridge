@@ -16,6 +16,8 @@ them again.
   `drawbridge.on-failover` label in your Compose files.
 - Stops dependents first and starts dependencies first, waiting for
   healthchecks; only restarts what it stopped; survives restarts mid-run.
+- A failover test stops and restarts the chosen containers on demand, and
+  automation can be paused for a set time or until resumed.
 - Web UI with a setup wizard, live updates, phone and dark mode support, and six
   colour themes per user; local accounts and single sign-on (Pocket ID or any
   OIDC provider); Prometheus metrics; a CLI for scripting and recovery.

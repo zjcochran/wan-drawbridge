@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 	"github.com/zjcochran/wan-drawbridge/internal/wan"
 )
@@ -505,5 +506,34 @@ func TestContainersShowLabels(t *testing.T) {
 	_, page := e.admin().get("/containers")
 	if !strings.Contains(page, "from label") || !strings.Contains(page, "Follow label (stop)") {
 		t.Fatal("the containers page does not show the label")
+	}
+}
+
+func TestDrillActions(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	if _, body := c.get("/partials/status"); !strings.Contains(body, "Test failover") {
+		t.Fatal("no Test failover button on the primary")
+	}
+	resp, body := c.htmx("/actions/drill", url.Values{"for": {"10m"}})
+	if resp.StatusCode != http.StatusOK || e.mon.drill != 10*time.Minute {
+		t.Fatalf("start: %d %v", resp.StatusCode, e.mon.drill)
+	}
+	if !strings.Contains(body, "Failover test until") || !strings.Contains(body, "End test now") || strings.Contains(body, "Restore now") {
+		t.Errorf("status during a test: %s", body)
+	}
+	if resp, _ := c.htmx("/actions/drill-end", nil); resp.StatusCode != http.StatusOK || e.mon.drill != 0 {
+		t.Errorf("end: %d", resp.StatusCode)
+	}
+	if resp, _ := c.htmx("/actions/drill", url.Values{"for": {"1h"}}); resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("unknown duration: %d", resp.StatusCode)
+	}
+	e.mon.failErr = monitor.ErrDrill
+	if resp, body := c.htmx("/actions/drill", url.Values{"for": {"5m"}}); resp.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "Cannot test now") {
+		t.Errorf("refused: %d %s", resp.StatusCode, body)
+	}
+	e.mon.failErr, e.mon.state = nil, wan.Failover
+	if _, body := c.get("/partials/status"); strings.Contains(body, "Test failover") {
+		t.Error("Test failover offered during a failover")
 	}
 }

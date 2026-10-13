@@ -81,6 +81,7 @@ flowchart TB
     inv --> ev[Docker event stream reader]
     loop --> hk[monitor.housekeeping<br/>daily]
     main --> nt[notify.Run<br/>delivers notifications]
+    main --> bs[web.RunBackupSchedule<br/>checks every minute]
     http -. "do(): wait for result" .-> loop
     http -. "post(): fire and forget" .-> loop
 ```
@@ -106,6 +107,7 @@ for {
     case <-ctx.Done():  return
     case cmd := <-cmds: cmd(ctx)
     case <-resume:      end a timed pause (only armed while one is set)
+    case <-drill:       end a failover test (only armed while one runs)
     case <-next:        Check(); next = after(interval or 15 s while pending)
     }
 }
@@ -131,6 +133,11 @@ event. It writes only the `stacks` and `containers` tables. It publishes the
 `Notifier.Event`, which queues it (64 at most, never blocking the caller) if
 some channel could want it. `notify.Run` delivers the queue in order, to all
 matching channels of an event in parallel.
+
+**Scheduled backups** are made by `web.RunBackupSchedule`, which checks
+once at start and then every minute whether the day's backup time has passed
+without a backup. It reads the store and writes files to
+`DRAWBRIDGE_BACKUP_DIR`; it does not go through the check loop.
 
 **Housekeeping** runs once at start and then every 24 hours: prune old checks
 and daily totals, prune expired sessions, refresh the ASN database if it is
@@ -185,8 +192,9 @@ run is recovered on the next start (see
 4. Create the Docker client from `DOCKER_HOST` (default
    `unix:///var/run/docker.sock`) and ping it. Failure is logged, not fatal.
 5. Parse trusted proxies; load or create the secret key.
-6. Build the hub, executor, monitor and web server; start the HTTP server, the
-   inventory watcher and the monitor.
+6. Build the hub, executor, monitor, notifier and web server; start the
+   notifier, the HTTP server, the inventory watcher, the backup schedule and
+   the monitor.
 7. The monitor loads its state and settings, refreshes the ASN database, and,
    unless paused, runs `recover()` to bring containers in line with the saved
    state. The first check runs immediately.

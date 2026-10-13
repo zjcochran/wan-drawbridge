@@ -26,6 +26,7 @@
       {{if eq .S.State "failback_pending"}}<span class="sub">failing back in {{until .S.Due}} if the primary stays stable</span>{{end}}
       {{if .S.Paused}}<span class="badge warn">Paused{{if not .S.PausedTill.IsZero}} until {{clock .S.PausedTill}}{{end}}</span>{{end}}
       {{with .S.Busy}}<span class="badge muted spinner">{{.}} containers</span>{{end}}
+      {{if not .S.DrillTill.IsZero}}<span class="badge warn">Failover test until {{clock .S.DrillTill}}</span>{{end}}
     </div>
     {{if .S.Flaps}}<div class="banner warn">The primary ISP has been flapping, so failback now waits {{duration .S.Hold}} of stable connection (normally less). This resets after six hours without a failover.</div>{{end}}
     <dl class="facts">
@@ -52,12 +53,24 @@
         </select>
       </span>{{end}}
       <button class="secondary" hx-post="/actions/check" hx-target="#status" hx-swap="outerHTML">Check now</button>
-      {{if or .Run (eq .S.State "failover") (eq .S.State "failback_pending")}}
+      {{if not .S.DrillTill.IsZero}}
+      <button hx-post="/actions/drill-end" hx-target="#status" hx-swap="outerHTML">End test now</button>
+      {{else if or .Run (eq .S.State "failover") (eq .S.State "failback_pending")}}
       <button hx-post="/actions/restore" hx-target="#status" hx-swap="outerHTML"
         hx-confirm="Start the containers Drawbridge stopped? If traffic is still on a backup ISP, Drawbridge fails over again after the usual checks.">Restore now</button>
       {{else}}
       <button class="danger" hx-post="/actions/failover" hx-target="#status" hx-swap="outerHTML"
         hx-confirm="Stop every container set to stop on failover, now? Drawbridge restores them once it confirms the primary ISP, unless automation is paused.">Fail over now</button>
+      {{if or (eq .S.State "primary") (eq .S.State "learning")}}<span class="pause">
+        <button class="secondary" hx-post="/actions/drill" hx-include="next select" hx-target="#status" hx-swap="outerHTML"
+          hx-confirm="Stop every container set to stop on failover, as a test, and start them again when the time is up?">Test failover</button>
+        <select name="for" aria-label="How long the test lasts">
+          <option value="2m">for 2 minutes</option>
+          <option value="5m" selected>for 5 minutes</option>
+          <option value="10m">for 10 minutes</option>
+          <option value="15m">for 15 minutes</option>
+        </select>
+      </span>{{end}}
       {{end}}
     </div>
     {{end}}
@@ -65,7 +78,7 @@
   <div class="card">
     <h2>Stopped by Drawbridge</h2>
     {{if .Run}}
-      <p>{{.Stopped}} stopped since <time title="{{datetime .Run.StartedAt}}">{{ago .Run.StartedAt}}</time>{{if eq .Run.Trigger "manual"}} (manual failover){{end}}.</p>
+      <p>{{.Stopped}} stopped since <time title="{{datetime .Run.StartedAt}}">{{ago .Run.StartedAt}}</time>{{if eq .Run.Trigger "manual"}} (manual failover){{else if eq .Run.Trigger "drill"}} (failover test){{end}}.</p>
       <ul class="mini-list">
       {{range .Actions}}
         <li>

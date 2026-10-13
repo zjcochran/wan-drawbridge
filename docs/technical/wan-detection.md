@@ -254,6 +254,12 @@ the past (Drawbridge was down) resumes at once after start. Before setup is
 finished the end time is ignored, so a timed pause cannot turn automation on
 early.
 
+A failover test (`StartDrill`) is not a state: it stops the selected
+containers with a run whose trigger is `drill`, and the loop starts them
+again at its end time (`endDrill`). A confirmed failover, Fail over now or
+Restore now ends it (`drill_ended`); a failover keeps the containers
+stopped.
+
 ## 7. Settings changes
 
 `ApplyDetection` validates, stores the settings and swaps the prober on the

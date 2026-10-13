@@ -39,6 +39,8 @@ type Monitor interface {
 	ApplyDetection(ctx context.Context, d config.Detection) error
 	SetPaused(ctx context.Context, paused bool, actor string) error
 	PauseFor(ctx context.Context, d time.Duration, actor string) error
+	StartDrill(ctx context.Context, d time.Duration, actor string) error
+	EndDrill(ctx context.Context, actor string) error
 	CompleteSetup(ctx context.Context, actor string) error
 	FailoverNow(ctx context.Context, actor string) error
 	RestoreNow(ctx context.Context, actor string) error
