@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/pressly/goose/v3"
+	// The pure-Go SQLite driver, registered as "sqlite".
 	_ "modernc.org/sqlite"
 
 	"github.com/zjcochran/wan-drawbridge/internal/wan"
@@ -22,6 +23,7 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
+// Store holds all of Drawbridge's data in one SQLite database.
 type Store struct {
 	db      *sql.DB
 	onEvent atomic.Pointer[func(Event)]
@@ -55,6 +57,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
 // WANState is the persisted state machine plus learning bookkeeping.
@@ -92,6 +95,7 @@ func (s *Store) LoadState(ctx context.Context, now time.Time) (WANState, error) 
 	return st, nil
 }
 
+// SaveState writes the WAN state, replacing the previous one.
 func (s *Store) SaveState(ctx context.Context, st WANState) error {
 	m := st.Machine
 	_, err := s.db.ExecContext(ctx, `
@@ -132,6 +136,7 @@ type Check struct {
 	LatencyMS  int64
 }
 
+// RecordCheck stores the result of one check.
 func (s *Store) RecordCheck(ctx context.Context, c Check) error {
 	providers, err := json.Marshal(c.Providers)
 	if err != nil {

@@ -270,6 +270,7 @@ type ISPRow struct {
 	ASNs        []ASNRow
 }
 
+// ASNRow is one ASN in an ISP group; Manual means it was grouped by hand.
 type ASNRow struct {
 	ASN    int
 	Name   string

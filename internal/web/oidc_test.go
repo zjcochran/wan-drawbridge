@@ -25,9 +25,9 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
-// fakeIdP is a minimal OIDC provider: discovery, JWKS, an authorize endpoint
+// fakeIDP is a minimal OIDC provider: discovery, JWKS, an authorize endpoint
 // that approves at once, and a token endpoint that checks PKCE.
-type fakeIdP struct {
+type fakeIDP struct {
 	t      *testing.T
 	srv    *httptest.Server
 	signer jose.Signer
@@ -47,13 +47,13 @@ type fakeIdP struct {
 
 type authReq struct{ nonce, challenge, redirect string }
 
-func newIdP(t *testing.T) *fakeIdP {
+func newIDP(t *testing.T) *fakeIDP {
 	key, _ := rsa.GenerateKey(rand.Reader, 2048)
 	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: jose.JSONWebKey{Key: key, KeyID: "k1"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &fakeIdP{t: t, signer: signer, key: key, codes: map[string]authReq{}, secret: "s3cret", algs: []string{"RS256"},
+	p := &fakeIDP{t: t, signer: signer, key: key, codes: map[string]authReq{}, secret: "s3cret", algs: []string{"RS256"},
 		user: map[string]any{"sub": "user-1", "preferred_username": "alice", "email": "alice@example.com"}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
@@ -122,14 +122,14 @@ func newIdP(t *testing.T) *fakeIdP {
 	return p
 }
 
-func (p *fakeIdP) as(claims map[string]any) {
+func (p *fakeIDP) as(claims map[string]any) {
 	p.mu.Lock()
 	p.user = claims
 	p.mu.Unlock()
 }
 
 // configureSSO turns single sign-on on through the settings page.
-func configureSSO(t *testing.T, c *client, idp *fakeIdP, extra url.Values) {
+func configureSSO(t *testing.T, c *client, idp *fakeIDP, extra url.Values) {
 	t.Helper()
 	form := url.Values{"enabled": {"on"}, "issuer": {idp.srv.URL}, "client_id": {"drawbridge"},
 		"client_secret": {idp.secret}, "auto_provision": {"on"}}
@@ -149,21 +149,21 @@ func (c *client) ssoLogin(path string) (*http.Response, string) {
 	if resp.StatusCode != http.StatusFound {
 		return resp, body // refused before reaching the provider
 	}
-	atIdP, err := c.http.Get(resp.Header.Get("Location"))
+	atIDP, err := c.http.Get(resp.Header.Get("Location"))
 	if err != nil {
 		c.e.t.Fatal(err)
 	}
-	atIdP.Body.Close()
-	cb, err := url.Parse(atIdP.Header.Get("Location"))
-	if err != nil || atIdP.StatusCode != http.StatusFound {
-		c.e.t.Fatalf("provider did not redirect back: %d", atIdP.StatusCode)
+	atIDP.Body.Close()
+	cb, err := url.Parse(atIDP.Header.Get("Location"))
+	if err != nil || atIDP.StatusCode != http.StatusFound {
+		c.e.t.Fatalf("provider did not redirect back: %d", atIDP.StatusCode)
 	}
 	return c.do("GET", cb.RequestURI(), nil)
 }
 
 func TestSSOAutoProvisionAndGroups(t *testing.T) {
 	e := newEnv(t)
-	idp := newIdP(t)
+	idp := newIDP(t)
 	admin := e.admin()
 	configureSSO(t, admin, idp, url.Values{"admin_group": {"drawbridge-admins"}})
 
@@ -198,7 +198,7 @@ func TestSSOAutoProvisionAndGroups(t *testing.T) {
 
 func TestSSOAllowedGroupAndNoProvisioning(t *testing.T) {
 	e := newEnv(t)
-	idp := newIdP(t)
+	idp := newIDP(t)
 	admin := e.admin()
 	configureSSO(t, admin, idp, url.Values{"allowed_group": {"staff"}})
 	resp, body := e.client().ssoLogin("/auth/oidc/login")
@@ -215,7 +215,7 @@ func TestSSOAllowedGroupAndNoProvisioning(t *testing.T) {
 
 func TestSSOLinkThenSSOOnly(t *testing.T) {
 	e := newEnv(t)
-	idp := newIdP(t)
+	idp := newIDP(t)
 	admin := e.admin()
 	configureSSO(t, admin, idp, nil)
 
@@ -262,7 +262,7 @@ func TestSSOLinkThenSSOOnly(t *testing.T) {
 
 func TestSSORejectsBadState(t *testing.T) {
 	e := newEnv(t)
-	idp := newIdP(t)
+	idp := newIDP(t)
 	configureSSO(t, e.admin(), idp, nil)
 	resp, body := e.client().do("GET", "/auth/oidc/callback?code=x&state=forged", nil)
 	if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(body, "expired or was already used") {
@@ -272,7 +272,7 @@ func TestSSORejectsBadState(t *testing.T) {
 
 func TestSSOWrongSecretFails(t *testing.T) {
 	e := newEnv(t)
-	idp := newIdP(t)
+	idp := newIDP(t)
 	configureSSO(t, e.admin(), idp, url.Values{"client_secret": {"wrong"}})
 	resp, body := e.client().ssoLogin("/auth/oidc/login")
 	if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(body, "Check the client ID and secret") {
@@ -282,7 +282,7 @@ func TestSSOWrongSecretFails(t *testing.T) {
 
 func TestSSOTestConnection(t *testing.T) {
 	e := newEnv(t)
-	idp := newIdP(t)
+	idp := newIDP(t)
 	c := e.admin()
 	if _, body := c.htmx("/settings/sso/test", url.Values{"issuer": {idp.srv.URL}}); !strings.Contains(body, "✓ Found") {
 		t.Fatalf("test ok: %s", body)
@@ -296,7 +296,7 @@ func TestSSOTestConnection(t *testing.T) {
 
 func TestSSONonceIsChecked(t *testing.T) {
 	e := newEnv(t)
-	idp := newIdP(t)
+	idp := newIDP(t)
 	configureSSO(t, e.admin(), idp, nil)
 	c := e.client()
 	// Start a login, then replay the authorize step with a different nonce.
@@ -324,7 +324,7 @@ func TestSSOScopes(t *testing.T) {
 	}
 	for _, c := range cases {
 		e := newEnv(t)
-		idp := newIdP(t)
+		idp := newIDP(t)
 		idp.scopes = c.scopes
 		configureSSO(t, e.admin(), idp, nil)
 		if resp, _ := e.client().ssoLogin("/auth/oidc/login"); resp.StatusCode != http.StatusSeeOther {
@@ -341,23 +341,23 @@ func TestSSOHS256(t *testing.T) {
 	cases := []struct {
 		name   string
 		algs   []string
-		key    func(*fakeIdP) []byte
+		key    func(*fakeIDP) []byte
 		secret string // the client secret, at the provider and in Drawbridge
 		ok     bool
 	}{
-		{"signed with the client secret", []string{"RS256", "HS256"}, func(*fakeIdP) []byte { return []byte(secret) }, secret, true},
-		{"signed with another key", []string{"HS256"}, func(*fakeIdP) []byte { return []byte("another-secret-of-at-least-32-bytes") }, secret, false},
-		{"signed with the public key", []string{"HS256"}, func(p *fakeIdP) []byte {
+		{"signed with the client secret", []string{"RS256", "HS256"}, func(*fakeIDP) []byte { return []byte(secret) }, secret, true},
+		{"signed with another key", []string{"HS256"}, func(*fakeIDP) []byte { return []byte("another-secret-of-at-least-32-bytes") }, secret, false},
+		{"signed with the public key", []string{"HS256"}, func(p *fakeIDP) []byte {
 			b, _ := x509.MarshalPKIXPublicKey(&p.key.PublicKey)
 			return b
 		}, secret, false},
-		{"provider does not list HS256", []string{"RS256"}, func(*fakeIdP) []byte { return []byte(secret) }, secret, false},
-		{"public client", []string{"HS256"}, func(*fakeIdP) []byte { return []byte(secret) }, "", false},
-		{"secret too short for HS256", []string{"HS256"}, func(*fakeIdP) []byte { return []byte("s3cret") }, "s3cret", false},
+		{"provider does not list HS256", []string{"RS256"}, func(*fakeIDP) []byte { return []byte(secret) }, secret, false},
+		{"public client", []string{"HS256"}, func(*fakeIDP) []byte { return []byte(secret) }, "", false},
+		{"secret too short for HS256", []string{"HS256"}, func(*fakeIDP) []byte { return []byte("s3cret") }, "s3cret", false},
 	}
 	for _, c := range cases {
 		e := newEnv(t)
-		idp := newIdP(t)
+		idp := newIDP(t)
 		idp.algs, idp.secret, idp.hsKey = c.algs, c.secret, c.key(idp)
 		configureSSO(t, e.admin(), idp, url.Values{"client_secret": {c.secret}})
 		resp, body := e.client().ssoLogin("/auth/oidc/login")
@@ -369,7 +369,7 @@ func TestSSOHS256(t *testing.T) {
 
 func TestSSOHS256StillAcceptsRS256(t *testing.T) {
 	e := newEnv(t)
-	idp := newIdP(t)
+	idp := newIDP(t)
 	idp.algs = []string{"HS256", "RS256"}
 	configureSSO(t, e.admin(), idp, nil)
 	if resp, body := e.client().ssoLogin("/auth/oidc/login"); resp.StatusCode != http.StatusSeeOther {

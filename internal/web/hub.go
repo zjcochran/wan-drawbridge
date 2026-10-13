@@ -24,6 +24,7 @@ const (
 	TopicInventory = "inventory" // containers, stacks, policies
 )
 
+// NewHub returns a Hub with its delivery goroutine running.
 func NewHub() *Hub {
 	h := &Hub{clients: map[chan string]struct{}{}, dirty: map[string]bool{}, wake: make(chan struct{}, 1)}
 	go h.loop()

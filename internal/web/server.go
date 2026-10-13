@@ -62,6 +62,7 @@ type Syncer interface {
 	Sync(ctx context.Context) error
 }
 
+// Server is the web UI. Fill in the exported fields and pass it to New.
 type Server struct {
 	Store   *store.Store
 	Mon     Monitor
@@ -89,6 +90,7 @@ type Server struct {
 	limiter *limiter
 }
 
+// New checks s, sets up its internal state and parses the templates.
 func New(s Server) (*Server, error) {
 	srv := &s
 	srv.now = time.Now
@@ -332,8 +334,8 @@ type limiter struct {
 	fails  map[string][]time.Time
 }
 
-func newLimiter(max int, window time.Duration) *limiter {
-	return &limiter{max: max, window: window, fails: map[string][]time.Time{}}
+func newLimiter(limit int, window time.Duration) *limiter {
+	return &limiter{max: limit, window: window, fails: map[string][]time.Time{}}
 }
 
 func (l *limiter) blocked(now time.Time, keys ...string) bool {

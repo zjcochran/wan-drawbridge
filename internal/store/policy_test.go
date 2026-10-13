@@ -30,6 +30,18 @@ func effective(t *testing.T, s *Store) map[string]string {
 	return out
 }
 
+// wantEffective fails the test for each container whose effective policy is
+// not the one in want.
+func wantEffective(t *testing.T, s *Store, step string, want map[string]string) {
+	t.Helper()
+	e := effective(t, s)
+	for k, w := range want {
+		if e[k] != w {
+			t.Errorf("%s: %s = %s, want %s", step, k, e[k], w)
+		}
+	}
+}
+
 func stack(t *testing.T, s *Store, project string) StackRow {
 	t.Helper()
 	rows, err := s.Stacks(context.Background())
@@ -56,25 +68,20 @@ func TestWorkedExample(t *testing.T) {
 	if err := s.SetStackPolicy(ctx, "media", true, "test", now); err != nil {
 		t.Fatal(err)
 	}
-	e := effective(t, s)
-	for _, k := range []string{"media/player", "media/indexer", "media/fetcher", "media/downloader"} {
-		if e[k] != Disable {
-			t.Errorf("step 1: %s = %s", k, e[k])
-		}
-	}
-	if e["automation"] != Keep {
-		t.Errorf("standalone container must default to keep, got %s", e["automation"])
-	}
+	// The standalone container keeps its default, keep.
+	wantEffective(t, s, "step 1", map[string]string{
+		"media/player": Disable, "media/indexer": Disable, "media/fetcher": Disable, "media/downloader": Disable,
+		"automation": Keep,
+	})
 
 	// 2. player set to keep running: the stack rule becomes per-container rules.
 	converted, err := s.SetContainerPolicy(ctx, "media/player", Keep, "test", now)
 	if err != nil || !converted {
 		t.Fatalf("step 2: converted=%v err=%v", converted, err)
 	}
-	e = effective(t, s)
-	if e["media/player"] != Keep || e["media/indexer"] != Disable || e["media/fetcher"] != Disable || e["media/downloader"] != Disable {
-		t.Errorf("step 2: %v", e)
-	}
+	wantEffective(t, s, "step 2", map[string]string{
+		"media/player": Keep, "media/indexer": Disable, "media/fetcher": Disable, "media/downloader": Disable,
+	})
 
 	// 3. The Stacks screen shows Partial, 3 of 4.
 	if r := stack(t, s, "media"); r.Status() != "partial" || r.Disabling != 3 || r.Containers != 4 || r.Disabled {

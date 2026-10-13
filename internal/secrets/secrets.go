@@ -16,6 +16,7 @@ import (
 	"strings"
 )
 
+// Box seals and opens stored secrets with AES-256-GCM.
 type Box struct{ aead cipher.AEAD }
 
 // Load returns a Box keyed by envKey when set, otherwise by the key file at
@@ -47,6 +48,7 @@ func Load(envKey, path string) (*Box, error) {
 	return New(key)
 }
 
+// New returns a Box keyed by the SHA-256 of key.
 func New(key string) (*Box, error) {
 	sum := sha256.Sum256([]byte(key))
 	block, err := aes.NewCipher(sum[:])

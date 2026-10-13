@@ -27,8 +27,11 @@ const (
 // MinPasswordLength is the spec's minimum for local passwords.
 const MinPasswordLength = 12
 
+// ErrBadLogin is Authenticate's answer for an unknown user, a wrong password
+// or a disabled account alike, so a sign-in reveals none of them.
 var ErrBadLogin = errors.New("wrong username or password")
 
+// User is an account; the password hash stays in the database.
 type User struct {
 	ID        int
 	Username  string
@@ -42,6 +45,7 @@ type User struct {
 	Mode      string // "auto", "light" or "dark"
 }
 
+// IsAdmin reports whether the user has the admin role.
 func (u User) IsAdmin() bool { return u.Role == RoleAdmin }
 
 // argon2id parameters (RFC 9106's second recommended option).
@@ -97,6 +101,7 @@ func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	return n, s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&n)
 }
 
+// CreateUser adds a user whose password is hashed with argon2id.
 func (s *Store) CreateUser(ctx context.Context, username, password, role string, now time.Time) (User, error) {
 	username = strings.TrimSpace(username)
 	if username == "" {
@@ -175,10 +180,12 @@ func (s *Store) SetAppearance(ctx context.Context, id int, theme, mode string) e
 	return nil
 }
 
+// UserByID returns the user with this ID.
 func (s *Store) UserByID(ctx context.Context, id int) (User, error) {
 	return scanUser(s.db.QueryRowContext(ctx, `SELECT `+userCols+` FROM users WHERE id = ?`, id))
 }
 
+// Users returns every user, by username.
 func (s *Store) Users(ctx context.Context) ([]User, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+userCols+` FROM users ORDER BY username`)
 	if err != nil {
@@ -285,11 +292,13 @@ func (s *Store) SessionByToken(ctx context.Context, token string, now time.Time)
 	return sess, true, err
 }
 
+// DeleteSession signs out the session with this token.
 func (s *Store) DeleteSession(ctx context.Context, token string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = ?`, hashToken(token))
 	return err
 }
 
+// PruneSessions deletes expired sessions.
 func (s *Store) PruneSessions(ctx context.Context, now time.Time) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at < ?`, now.Unix())
 	return err

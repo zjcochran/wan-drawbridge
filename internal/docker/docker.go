@@ -18,6 +18,8 @@ import (
 	"time"
 )
 
+// Container labels Drawbridge reads: Compose's project, service and
+// dependencies, and its own.
 const (
 	LabelProject   = "com.docker.compose.project"
 	LabelService   = "com.docker.compose.service"
@@ -75,6 +77,7 @@ func (c Container) DependsOn() []string {
 // otherwise "starting", "healthy" or "unhealthy".
 type Health string
 
+// Client talks to the Docker Engine API over a Unix socket or TCP.
 type Client struct {
 	http *http.Client
 	base string

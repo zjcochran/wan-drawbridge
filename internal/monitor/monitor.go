@@ -61,6 +61,8 @@ type Counters struct {
 	LastCheckSeconds   float64
 }
 
+// Monitor runs the checks and owns the WAN state: only Run's goroutine reads
+// or changes it, and everything else sends it commands.
 type Monitor struct {
 	store    *store.Store
 	resolver *asn.Resolver
@@ -87,6 +89,7 @@ type Monitor struct {
 	status Status
 }
 
+// New returns a Monitor; Run starts it.
 func New(cfg config.Config, st *store.Store, r *asn.Resolver, a Actor, log *slog.Logger, notify func()) *Monitor {
 	return &Monitor{
 		cfg: cfg, store: st, resolver: r, actor: a, log: log, notify: notify,
@@ -134,7 +137,7 @@ func (m *Monitor) load(ctx context.Context) error {
 	if paused && setup {
 		m.pausedTil = till
 	}
-	m.publish(func(s *Status) {})
+	m.publish(func(*Status) {})
 	return nil
 }
 
@@ -225,7 +228,7 @@ func (m *Monitor) ApplyDetection(ctx context.Context, d config.Detection) error 
 			return err
 		}
 		m.setDetection(d)
-		m.publish(func(s *Status) {})
+		m.publish(func(*Status) {})
 		m.log.Info("detection settings changed", "interval", d.CheckInterval)
 		return nil
 	})
@@ -282,7 +285,7 @@ func (m *Monitor) setPaused(ctx context.Context, paused bool, d time.Duration, a
 	if paused || wasPaused {
 		m.event(ctx, map[bool]string{true: "paused", false: "resumed"}[paused], payload)
 	}
-	m.publish(func(s *Status) {})
+	m.publish(func(*Status) {})
 	if !paused && wasPaused {
 		m.post(m.recover)
 	}
@@ -357,7 +360,7 @@ func (m *Monitor) StartDrill(ctx context.Context, d time.Duration, actor string)
 		m.drillTil = m.now().Add(d).Truncate(time.Second)
 		m.event(ctx, "drill_started", map[string]any{"by": actor, "minutes": int(d.Minutes()),
 			"until": m.drillTil.UTC().Format(time.RFC3339)})
-		m.publish(func(s *Status) {})
+		m.publish(func(*Status) {})
 		m.post(func(ctx context.Context) {
 			m.run(ctx, "stopping", func() error { return m.actor.Stop(ctx, "drill", 0) })
 		})
@@ -385,7 +388,7 @@ func (m *Monitor) endDrill(ctx context.Context, by string) {
 		m.post(func(ctx context.Context) { m.run(ctx, "starting", func() error { return m.actor.Start(ctx) }) })
 	}
 	m.event(ctx, "drill_ended", payload)
-	m.publish(func(s *Status) {})
+	m.publish(func(*Status) {})
 }
 
 // CheckNow runs a check right away and waits for it.
@@ -462,7 +465,7 @@ func (m *Monitor) transition(ctx context.Context, to wan.State, event string, pa
 		by, _ := payload["by"].(string)
 		m.drillTakenOver(ctx, by)
 	}
-	m.publish(func(s *Status) {})
+	m.publish(func(*Status) {})
 }
 
 // drillTakenOver ends a failover test because a failover or a manual restore
@@ -501,19 +504,7 @@ func (m *Monitor) Check(ctx context.Context) {
 	now := m.now()
 	started := time.Now()
 	res := m.prober.Probe(ctx)
-	obs := wan.Observation{At: now}
-	var info asn.Info
-
-	if res.Conclusive {
-		var err error
-		if info, err = m.resolver.Lookup(ctx, res.IP); err != nil {
-			m.log.Warn("asn lookup failed", "ip", res.IP, "err", err)
-		} else if id, role, err := m.store.SeeASN(ctx, info.ASN, info.Name, now); err != nil {
-			m.report(err)
-		} else if role != store.RoleIgnored {
-			obs = wan.Observation{At: now, Conclusive: true, Clean: res.Clean, ISP: id}
-		}
-	}
+	obs, info := m.observe(ctx, res, now)
 
 	var latency int64
 	for _, p := range res.Providers {
@@ -566,6 +557,31 @@ func (m *Monitor) Check(ctx context.Context) {
 		s.PrimaryISP = primary
 	})
 
+	m.act(ctx, tr, info, obs.ISP)
+}
+
+// observe turns a probe result into an observation: conclusive only when the
+// IP's ASN is known and its ISP is not ignored.
+func (m *Monitor) observe(ctx context.Context, res probe.Result, now time.Time) (wan.Observation, asn.Info) {
+	obs := wan.Observation{At: now}
+	var info asn.Info
+	if !res.Conclusive {
+		return obs, info
+	}
+	var err error
+	if info, err = m.resolver.Lookup(ctx, res.IP); err != nil {
+		m.log.Warn("asn lookup failed", "ip", res.IP, "err", err)
+	} else if id, role, err := m.store.SeeASN(ctx, info.ASN, info.Name, now); err != nil {
+		m.report(err)
+	} else if role != store.RoleIgnored {
+		obs = wan.Observation{At: now, Conclusive: true, Clean: res.Clean, ISP: id}
+	}
+	return obs, info
+}
+
+// act carries out a transition's action: events, counters and the container
+// run, unless automation is paused.
+func (m *Monitor) act(ctx context.Context, tr wan.Transition, info asn.Info, isp int) {
 	if tr.Action == wan.NoAction {
 		// Leaving Learning for Primary (after a relearn mid-failover, say) must
 		// still bring back anything an open run holds. Start is a no-op otherwise.
@@ -574,7 +590,7 @@ func (m *Monitor) Check(ctx context.Context) {
 		}
 		return
 	}
-	payload := map[string]any{"asn": info.ASN, "name": info.Name, "isp": obs.ISP}
+	payload := map[string]any{"asn": info.ASN, "name": info.Name, "isp": isp}
 	if m.paused {
 		m.log.Warn("automation paused: not acting", "action", tr.Action)
 		payload["paused"] = true

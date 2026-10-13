@@ -51,6 +51,8 @@ type Prober struct {
 	client    *http.Client
 }
 
+// New returns a Prober that asks the providers over IPv4, on a fresh
+// connection each time, and needs quorum of them to agree.
 func New(providers []string, quorum int, timeout time.Duration) *Prober {
 	dialer := &net.Dialer{Timeout: timeout}
 	tr := &http.Transport{

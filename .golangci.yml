@@ -7,6 +7,7 @@ linters:
   enable:
     - bodyclose     # HTTP response bodies are closed
     - copyloopvar   # no needless loop variable copies
+    - dupl          # duplicated blocks of code
     - errorlint     # errors compared and wrapped with errors.Is/As/%w
     - gocritic      # common bugs and simplifications
     - gocyclo       # function complexity
@@ -14,6 +15,7 @@ linters:
     - misspell      # spelling in comments and strings
     - nilerr        # returning nil after checking an error
     - noctx         # HTTP requests carry a context
+    - revive        # doc comments, naming and other Go conventions
     - rowserrcheck  # sql.Rows.Err is checked
     - sqlclosecheck # sql.Rows and statements are closed
     - unconvert     # needless type conversions
@@ -26,7 +28,7 @@ linters:
         - (net/http.ResponseWriter).Write  # fails only when the client has gone
         - (*encoding/csv.Writer).Write     # errors are checked once, after Flush
     gocyclo:
-      min-complexity: 30
+      min-complexity: 20
     gosec:
       excludes:
         - G104 # unhandled errors: errcheck covers this, with the exclusions above

@@ -16,6 +16,7 @@ import "time"
 // State is where the WAN connection stands relative to the primary ISP.
 type State string
 
+// The states, in the order a failover and failback go through them.
 const (
 	Learning        State = "learning"         // no primary ISP known yet
 	Primary         State = "primary"          // on the primary ISP
@@ -27,6 +28,7 @@ const (
 // Action is what the caller must do as a result of a transition.
 type Action string
 
+// The actions a transition can ask for.
 const (
 	NoAction        Action = ""
 	StopContainers  Action = "stop"
@@ -114,14 +116,7 @@ func (m *Machine) Step(obs Observation, primaryISP int, p Policy) Transition {
 	from := m.State
 	t := func(a Action) Transition { return Transition{From: from, To: m.State, Action: a} }
 
-	// A pending change whose evidence went stale starts over.
-	if m.IsPending() && !m.LastEvidence.IsZero() && obs.At.Sub(m.LastEvidence) > p.StaleAfter {
-		if m.State == FailoverPending {
-			m.State = Primary
-		} else {
-			m.State = Failover
-		}
-	}
+	m.expireStale(obs.At, p)
 
 	if primaryISP == 0 {
 		if obs.Conclusive {
@@ -168,6 +163,18 @@ func (m *Machine) Step(obs Observation, primaryISP int, p Policy) Transition {
 		return m.tryFailback(obs.At, p, from)
 	}
 	return t(NoAction)
+}
+
+// expireStale starts a pending change over when its evidence went stale.
+func (m *Machine) expireStale(at time.Time, p Policy) {
+	if !m.IsPending() || m.LastEvidence.IsZero() || at.Sub(m.LastEvidence) <= p.StaleAfter {
+		return
+	}
+	if m.State == FailoverPending {
+		m.State = Primary
+	} else {
+		m.State = Failover
+	}
 }
 
 func (m *Machine) begin(s State, at time.Time) {

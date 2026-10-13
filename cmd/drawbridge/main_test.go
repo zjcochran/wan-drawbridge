@@ -267,7 +267,7 @@ func TestHealthcheck(t *testing.T) {
 		t.Fatalf("healthy: %d %q", code, errOut)
 	}
 
-	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer bad.Close()
