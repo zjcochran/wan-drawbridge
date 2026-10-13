@@ -27,7 +27,7 @@ Build the image with version information:
 docker build --build-arg VERSION=v1.2.3 --build-arg SOURCE_URL=https://github.com/zjcochran/wan-drawbridge -t drawbridge .
 ```
 
-The image is `gcr.io/distroless/static-debian12` with the single static binary
+The image is `gcr.io/distroless/static-debian13` with the single static binary
 at `/drawbridge`, the `HEALTHCHECK`, `EXPOSE 8080`, volumes `/data/db` and
 `/data/cache`, and OCI labels (including `licenses=AGPL-3.0-or-later`).
 

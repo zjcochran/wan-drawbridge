@@ -11,7 +11,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
 
 # Runs as root: the mounted Docker socket is only writable by root or the
 # host's docker group, whose ID differs between hosts.
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/static-debian13
 ARG VERSION=dev
 ARG SOURCE_URL=
 LABEL org.opencontainers.image.title="WAN Drawbridge" \
