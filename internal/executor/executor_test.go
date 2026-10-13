@@ -302,3 +302,23 @@ func TestApplyDuringFailover(t *testing.T) {
 		t.Fatalf("after failback: ops=%v", f.ops)
 	}
 }
+
+func TestLabelsDecideWhatStops(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeDocker{}
+	f.add("db", "app", "db", true, "")
+	f.add("web", "app", "web", true, "db:service_started:false")
+	f.add("cache", "", "", true, "")
+	f.cs[1].Labels[docker.LabelOnFailover] = "keep" // web stays although the stack stops
+	f.cs[2].Labels[docker.LabelOnFailover] = "stop" // a standalone container that stops
+	e, st := setup(t, f)
+	if err := st.SetStackPolicy(ctx, "app", true, "test", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Stop(ctx, "auto", 64510); err != nil {
+		t.Fatal(err)
+	}
+	if f.running("db") || !f.running("web") || f.running("cache") {
+		t.Fatalf("ops = %v", f.ops)
+	}
+}

@@ -28,6 +28,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 4 | `00004_oidc.sql` | oidc_identities |
 | 5 | `00005_flapping.sql` | time-based state machine: `wan_state` gains `pending_since`, `last_evidence`, `flaps`, `last_failover`, `last_failback`; drops `pending_count` |
 | 6 | `00006_appearance.sql` | `users` gains `theme` and `mode` |
+| 7 | `00007_container_labels.sql` | `containers` gains `label_policy` |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -155,7 +156,8 @@ Audit log. See [Monitoring → event types](../user/monitoring.md#event-types).
 | `project`, `service` | TEXT | `''` for standalone containers |
 | `name` | TEXT | Latest container name |
 | `policy` | TEXT | `inherit` (default), `disable`, `keep` |
-| `needs_review` | INTEGER | New container in a stack with per-container settings |
+| `label_policy` | TEXT | From the `drawbridge.on-failover` label at the last sync: `''`, `disable` or `keep` |
+| `needs_review` | INTEGER | New container without a label in a stack with per-container settings |
 | `first_seen`, `last_seen` | INTEGER | |
 
 ### runs

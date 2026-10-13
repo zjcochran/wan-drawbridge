@@ -197,3 +197,15 @@ func TestNewRejectsBadHosts(t *testing.T) {
 		}
 	}
 }
+
+func TestOnFailover(t *testing.T) {
+	for v, want := range map[string]string{"stop": "disable", "Stop\n": "disable", "keep": "keep", "KEEP": "keep", "yes": "", "": ""} {
+		c := Container{Labels: map[string]string{LabelOnFailover: v}}
+		if got := c.OnFailover(); got != want {
+			t.Errorf("%q: %q, want %q", v, got, want)
+		}
+	}
+	if (Container{}).OnFailover() != "" {
+		t.Error("no labels")
+	}
+}

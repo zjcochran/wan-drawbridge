@@ -68,6 +68,8 @@ func (c containerRow) Source() string {
 		return "new, not configured"
 	case c.Policy != store.Inherit:
 		return "own setting"
+	case c.Label != "":
+		return "from label"
 	case c.Project == "":
 		return "default"
 	}

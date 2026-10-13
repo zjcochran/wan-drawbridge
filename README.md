@@ -12,6 +12,8 @@ them again.
 - Learns your primary ISP, or lets you pin it.
 - Confirms a failover for 45 seconds and a failback for 5 minutes, and backs
   off further when the primary keeps dropping.
+- What stops is chosen per stack or per container, in the UI or with a
+  `drawbridge.on-failover` label in your Compose files.
 - Stops dependents first and starts dependencies first, waiting for
   healthchecks; only restarts what it stopped; survives restarts mid-run.
 - Web UI with a setup wizard, live updates, phone and dark mode support, and six

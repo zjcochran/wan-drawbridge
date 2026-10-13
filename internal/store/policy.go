@@ -17,11 +17,15 @@ const (
 	Keep    = "keep"
 )
 
-// Effective resolves a container's own policy against its stack's setting.
-// Standalone containers (no stack) resolve inherit to keep.
-func Effective(policy string, stackDisabled bool) string {
+// Effective resolves a container's policy. The most specific setting wins: a
+// setting made in the UI, then the container's drawbridge.on-failover label,
+// then its stack's setting. Otherwise the container keeps running.
+func Effective(policy, label string, stackDisabled bool) string {
 	if policy != Inherit {
 		return policy
+	}
+	if label != "" {
+		return label
 	}
 	if stackDisabled {
 		return Disable
@@ -32,12 +36,14 @@ func Effective(policy string, stackDisabled bool) string {
 // InventoryItem is one container as seen in Docker.
 type InventoryItem struct {
 	Key, Project, Service, Name string
+	Label                       string // from drawbridge.on-failover: "", Disable or Keep
 }
 
 // SyncInventory records the containers currently in Docker. Rows for containers
 // that disappear are kept, so their settings survive a re-create. A new
 // container in a stack that already has per-container settings is flagged for
-// review: it keeps running until someone decides.
+// review: it keeps running until someone decides, unless its label says what
+// to do.
 func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now time.Time) (added []string, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -57,14 +63,17 @@ func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now ti
 			return nil, err
 		}
 		if exists {
-			if _, err := tx.ExecContext(ctx,
-				`UPDATE containers SET name = ?, last_seen = ? WHERE key = ?`, it.Name, now.Unix(), it.Key); err != nil {
+			// A label added later settles a pending review.
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE containers SET name = ?, last_seen = ?, label_policy = ?,
+					needs_review = needs_review AND ? = ''
+				WHERE key = ?`, it.Name, now.Unix(), it.Label, it.Label, it.Key); err != nil {
 				return nil, err
 			}
 			continue
 		}
 		var review bool
-		if it.Project != "" {
+		if it.Project != "" && it.Label == "" {
 			if err := tx.QueryRowContext(ctx,
 				`SELECT EXISTS (SELECT 1 FROM containers WHERE project = ? AND policy <> 'inherit')`,
 				it.Project).Scan(&review); err != nil {
@@ -72,9 +81,9 @@ func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now ti
 			}
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO containers (key, project, service, name, needs_review, first_seen, last_seen)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			it.Key, it.Project, it.Service, it.Name, review, now.Unix(), now.Unix()); err != nil {
+			INSERT INTO containers (key, project, service, name, label_policy, needs_review, first_seen, last_seen)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			it.Key, it.Project, it.Service, it.Name, it.Label, review, now.Unix(), now.Unix()); err != nil {
 			return nil, err
 		}
 		added = append(added, it.Key)
@@ -109,7 +118,8 @@ func (s *Store) SetStackPolicy(ctx context.Context, project string, disable bool
 // SetContainerPolicy sets one container's policy. Overriding a container that
 // inherits "disable" from its stack converts the stack rule into per-container
 // rules: the stack setting is cleared and every other container in the stack
-// keeps being disabled through its own setting. It reports whether that happened.
+// keeps being disabled through its own setting (containers with a label keep
+// following it). It reports whether that happened.
 func (s *Store) SetContainerPolicy(ctx context.Context, key, policy, actor string, now time.Time) (converted bool, err error) {
 	if policy != Inherit && policy != Disable && policy != Keep {
 		return false, fmt.Errorf("policy must be inherit, disable or keep, not %q", policy)
@@ -140,7 +150,7 @@ func (s *Store) SetContainerPolicy(ctx context.Context, key, policy, actor strin
 			return false, err
 		}
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE containers SET policy = 'disable' WHERE project = ? AND key <> ? AND policy = 'inherit'`,
+			`UPDATE containers SET policy = 'disable' WHERE project = ? AND key <> ? AND policy = 'inherit' AND label_policy = ''`,
 			project, key); err != nil {
 			return false, err
 		}
@@ -156,6 +166,7 @@ func (s *Store) SetContainerPolicy(ctx context.Context, key, policy, actor strin
 type ContainerRow struct {
 	Key, Project, Service, Name string
 	Policy                      string
+	Label                       string // from the drawbridge.on-failover label
 	StackDisabled               bool
 	Effective                   string
 	NeedsReview                 bool
@@ -165,7 +176,7 @@ type ContainerRow struct {
 // Containers returns every known container, ordered by stack then key.
 func (s *Store) Containers(ctx context.Context) ([]ContainerRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.key, c.project, c.service, c.name, c.policy, COALESCE(st.disable_on_failover, 0), c.needs_review, c.last_seen
+		SELECT c.key, c.project, c.service, c.name, c.policy, c.label_policy, COALESCE(st.disable_on_failover, 0), c.needs_review, c.last_seen
 		FROM containers c LEFT JOIN stacks st ON st.project = c.project
 		ORDER BY c.project, c.key`)
 	if err != nil {
@@ -176,10 +187,10 @@ func (s *Store) Containers(ctx context.Context) ([]ContainerRow, error) {
 	for rows.Next() {
 		var r ContainerRow
 		var seen int64
-		if err := rows.Scan(&r.Key, &r.Project, &r.Service, &r.Name, &r.Policy, &r.StackDisabled, &r.NeedsReview, &seen); err != nil {
+		if err := rows.Scan(&r.Key, &r.Project, &r.Service, &r.Name, &r.Policy, &r.Label, &r.StackDisabled, &r.NeedsReview, &seen); err != nil {
 			return nil, err
 		}
-		r.Effective = Effective(r.Policy, r.StackDisabled)
+		r.Effective = Effective(r.Policy, r.Label, r.StackDisabled)
 		r.LastSeen = time.Unix(seen, 0)
 		out = append(out, r)
 	}

@@ -72,7 +72,7 @@ func (e *Executor) list(ctx context.Context) ([]docker.Container, error) {
 			continue
 		}
 		cs = append(cs, c)
-		items = append(items, store.InventoryItem{Key: c.Key(), Project: c.Project, Service: c.Service, Name: c.Name})
+		items = append(items, store.InventoryItem{Key: c.Key(), Project: c.Project, Service: c.Service, Name: c.Name, Label: c.OnFailover()})
 		fmt.Fprintf(&print, "%s=%s:%v;", c.ID, c.Name, c.Running)
 	}
 	added, err := e.Store.SyncInventory(ctx, items, e.Now())

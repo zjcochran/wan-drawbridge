@@ -23,6 +23,9 @@ const (
 	LabelService   = "com.docker.compose.service"
 	LabelDependsOn = "com.docker.compose.depends_on"
 	LabelSelf      = "drawbridge.self"
+	// LabelOnFailover declares what happens to a container on failover:
+	// "stop" or "keep". Settings made in the UI take precedence.
+	LabelOnFailover = "drawbridge.on-failover"
 )
 
 // Container is the part of a container Drawbridge cares about.
@@ -42,6 +45,18 @@ func (c Container) Key() string {
 		return c.Project + "/" + c.Service
 	}
 	return c.Name
+}
+
+// OnFailover reads the drawbridge.on-failover label as a policy: "disable"
+// for stop, "keep" for keep, "" when absent or not understood.
+func (c Container) OnFailover() string {
+	switch strings.ToLower(strings.TrimSpace(c.Labels[LabelOnFailover])) {
+	case "stop":
+		return "disable"
+	case "keep":
+		return "keep"
+	}
+	return ""
 }
 
 // DependsOn returns the Compose services this container depends on, read from

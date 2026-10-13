@@ -496,3 +496,14 @@ func TestEveryThemeHasColours(t *testing.T) {
 		}
 	}
 }
+
+func TestContainersShowLabels(t *testing.T) {
+	e := newEnv(t)
+	e.st.SyncInventory(context.Background(), []store.InventoryItem{
+		{Key: "media/player", Project: "media", Service: "player", Name: "media-player-1", Label: store.Disable},
+	}, time.Now())
+	_, page := e.admin().get("/containers")
+	if !strings.Contains(page, "from label") || !strings.Contains(page, "Follow label (stop)") {
+		t.Fatal("the containers page does not show the label")
+	}
+}
