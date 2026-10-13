@@ -135,4 +135,5 @@ supported.
 - Single sign-on has only been tested against a fake IdP, not a real Pocket ID.
 - The reverse proxy examples in `docs/user/reverse-proxy.md` are written from
   each proxy's documentation and not yet tested against a real proxy.
-
+- Syslog has only been tested against fake UDP, TCP and TLS servers, not a real
+  rsyslog, syslog-ng or other receiver.
