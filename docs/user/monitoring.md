@@ -115,7 +115,7 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `flapping` | A failover came within an hour of a failback | `flaps`, `failback_wait` |
 | `manual_failover` | Fail over now | `from`, `to`, `by` |
 | `manual_restore` | Restore now | `from`, `to`, `by` |
-| `paused`, `resumed` | Automation paused or resumed (finishing the wizard logs `resumed`) | `by` |
+| `paused`, `resumed` | Automation paused or resumed (finishing the wizard logs `resumed`; a timed pause ending logs `resumed` with `by=timer`) | `by`; `until` (RFC 3339, UTC) on a timed pause |
 | `primary_learned` | The learner chose a primary | `isp` |
 | `primary_pinned` | A primary was pinned in the wizard or by `DRAWBRIDGE_PRIMARY_ASN` | `isp`, `asn` or `by` |
 | `primary_undecided` | Learning ended without a clear primary | `shares` |

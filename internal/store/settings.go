@@ -14,6 +14,7 @@ const (
 	SettingDetection     = "detection"      // config.Detection as JSON
 	SettingSetupComplete = "setup_complete" // true once the wizard has finished
 	SettingPaused        = "paused"         // true while automation is paused
+	SettingPausedUntil   = "paused_until"   // end of a timed pause; zero time if none
 )
 
 // GetSetting decodes a JSON setting into v. It reports false if it is unset.

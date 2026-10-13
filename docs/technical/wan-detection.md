@@ -247,6 +247,13 @@ carry `"paused": true`), but no container action is taken. Resuming runs
 `recover()`: in `failover`, stop; in `primary` or `learning`, start whatever an
 open run holds; in pending states, nothing.
 
+A timed pause (`PauseFor`) stores its end in the `paused_until` setting. The
+loop waits on a timer for it alongside commands and checks, and at the end
+resumes exactly as above, logging `resumed` with `by=timer`. An end time in
+the past (Drawbridge was down) resumes at once after start. Before setup is
+finished the end time is ignored, so a timed pause cannot turn automation on
+early.
+
 ## 7. Settings changes
 
 `ApplyDetection` validates, stores the settings and swaps the prober on the

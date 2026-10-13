@@ -292,12 +292,27 @@ func minTime(a, b time.Time) time.Time {
 	return b
 }
 
+// pauseDurations are the choices next to Pause automation; "" pauses until
+// resumed by hand.
+var pauseDurations = map[string]time.Duration{
+	"": 0, "30m": 30 * time.Minute, "1h": time.Hour, "4h": 4 * time.Hour, "12h": 12 * time.Hour, "24h": 24 * time.Hour,
+}
+
 func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 	ctx, who := r.Context(), actorName(r)
 	var err error
 	switch r.PathValue("action") {
 	case "pause":
-		err = s.Mon.SetPaused(ctx, true, who)
+		d, ok := pauseDurations[r.FormValue("for")]
+		switch {
+		case !ok:
+			http.Error(w, "unknown pause duration", http.StatusBadRequest)
+			return
+		case d == 0:
+			err = s.Mon.SetPaused(ctx, true, who)
+		default:
+			err = s.Mon.PauseFor(ctx, d, who)
+		}
 	case "resume":
 		err = s.Mon.SetPaused(ctx, false, who)
 	case "failover":

@@ -72,7 +72,7 @@ token.
 
 | Path | Auth | Form | Effect |
 | --- | --- | --- | --- |
-| `/actions/pause` | admin | | Pause automation |
+| `/actions/pause` | admin | `for`: `30m`, `1h`, `4h`, `12h`, `24h`, or empty for until resumed; anything else is 400 | Pause automation |
 | `/actions/resume` | admin | | Resume automation and reconcile |
 | `/actions/check` | admin | | Run a check now |
 | `/actions/failover` | admin | | Fail over now |

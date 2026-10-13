@@ -19,6 +19,7 @@ var funcs = template.FuncMap{
 	"isodate":    func(t time.Time) string { return zeroOr(t, t.UTC().Format(time.RFC3339)) },
 	"duration":   shortDuration,
 	"until":      until,
+	"clock":      clock,
 	"hours":      func(sec int64) string { return fmt.Sprintf("%.1f h", float64(sec)/3600) },
 	"pct":        pct,
 	"stateLabel": stateLabel,
@@ -85,6 +86,16 @@ func until(t time.Time) string {
 		return fmt.Sprintf("%dm %02ds", int(d.Minutes()), int(d.Seconds())%60)
 	}
 	return fmt.Sprintf("%dh %02dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+// clock prints a time of day, with the weekday when it is not today: "15:04",
+// "Tue 09:30".
+func clock(t time.Time) string {
+	t, now := t.Local(), time.Now().Local()
+	if t.YearDay() == now.YearDay() && t.Year() == now.Year() {
+		return t.Format("15:04")
+	}
+	return t.Format("Mon 15:04")
 }
 
 // shortDuration prints durations the way people type them: 60s, 5m, 24h, 7d.
