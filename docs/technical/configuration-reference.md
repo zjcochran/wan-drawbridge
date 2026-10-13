@@ -78,10 +78,14 @@ Settings changed in the UI live in the `settings` table (see
 | --- | --- |
 | Detection settings | Settings → WAN detection, setup wizard step 4 |
 | Single sign-on | Settings → Single sign-on, setup wizard step 2 |
-| Paused | Dashboard |
+| Paused, and the end of a timed pause | Dashboard |
+| Notification channels | Settings → Notifications |
+| Backup schedule, and the outcome of the latest scheduled backup | Settings → Backup and restore |
 | Setup complete | Setup wizard step 7 |
 
-Stack and container settings, ISP roles and users are in their own tables.
+Stack and container settings, ISP roles and users are in their own tables;
+each user's colour theme and light/dark mode are columns of `users`
+(Settings → Appearance).
 
 ## Fixed values
 
@@ -97,6 +101,10 @@ Not configurable; listed for reference.
 | ASN database refresh | when older than 7 days, checked daily |
 | Inventory sync | every 30 s, and 2 s after container create/destroy/rename |
 | Container stop timeout | 30 s |
+| Timed pause lengths | 30 min, 1 h, 4 h, 12 h, 24 h, or until resumed |
+| Failover test lengths | 2, 5, 10 or 15 min |
+| Scheduled backup check | every minute, and once at start |
+| Notification queue | 64 events; retried after 5 s and 30 s |
 | Parallel container operations per layer | 4 |
 | Health wait per dependency layer | 120 s, polled every 2 s |
 | Session lifetime | 7 days, sliding |
