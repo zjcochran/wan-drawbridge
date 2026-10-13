@@ -3,7 +3,8 @@
 The web UI is a set of server-rendered pages that update themselves live: when
 the WAN state changes or a container starts or stops, open pages refresh the
 affected part within a second, without reloading. It works on phones (the
-navigation bar scrolls sideways) and follows your system's light or dark mode.
+navigation bar scrolls sideways) and follows your system's light or dark mode,
+in the colour theme you choose (see [Appearance](#appearance)).
 
 There are two roles:
 
@@ -177,6 +178,7 @@ by type; **Export CSV** downloads up to 1,000 events of the selected type as
   Changes apply from the next check.
 - **Your sign-in**: link or unlink your single sign-on account; change your
   password (this signs you out everywhere, including this browser).
+- **Appearance**: your colour theme and mode; see [Appearance](#appearance).
 - **Single sign-on** (admins): see [Single sign-on](single-sign-on.md).
 - **Backup and restore** (admins): download an encrypted backup file, with
   history of the last 30, 60 or 90 days, all time, or none; restore one. See
@@ -199,6 +201,21 @@ Safety rules:
 - The last enabled admin cannot be disabled or turned into a viewer.
 
 Usernames are case-insensitive: `Alice` and `alice` are the same account.
+
+## Appearance
+
+**Settings → Appearance** sets the colours for your account only. It applies
+on every device you sign in on, and changes show at once.
+
+- **Theme**: Drawbridge (the default), Nord, Solarized, Gruvbox, Catppuccin or
+  Tokyo Night. Each has a light and a dark version; the cards show both.
+- **Mode**: **Automatic** (the default) follows your device's light or dark
+  setting; **Light** and **Dark** fix it.
+
+Every theme keeps text, links, buttons and status colours at a contrast of at
+least 4.5:1 (body text 7:1) in both versions. The sign-in page, before anyone is
+signed in, uses the default theme in automatic mode. Themes need a browser from
+2024 or later (Chrome and Edge 123, Firefox 120, Safari 17.5).
 
 ## Phone and dark mode
 

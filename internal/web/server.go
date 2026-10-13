@@ -164,6 +164,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /settings", s.auth(s.settingsPage))
 	mux.Handle("POST /settings/detection", s.admin(s.saveDetection))
 	mux.Handle("POST /settings/password", s.auth(s.changePassword))
+	mux.Handle("POST /settings/appearance", s.auth(s.saveAppearance))
 	mux.Handle("POST /settings/sso", s.admin(s.saveSSO))
 	mux.Handle("POST /settings/sso/test", s.admin(s.testSSO))
 	mux.Handle("POST /settings/sso/unlink", s.auth(s.unlinkSSO))

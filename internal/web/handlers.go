@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -682,6 +683,37 @@ type settingsData struct {
 	DBSize    string
 	IsAdmin   bool
 	Version   string
+	Themes    []choice
+	Modes     []choice
+}
+
+type choice struct{ ID, Name string }
+
+// Themes are the colour themes users can choose, in menu order. Their
+// colours are in static/app.css.
+var Themes = []choice{
+	{"default", "Drawbridge"}, {"nord", "Nord"}, {"solarized", "Solarized"},
+	{"gruvbox", "Gruvbox"}, {"catppuccin", "Catppuccin"}, {"tokyo-night", "Tokyo Night"},
+}
+
+// Modes choose light or dark; auto follows the device.
+var Modes = []choice{{"auto", "Automatic"}, {"light", "Light"}, {"dark", "Dark"}}
+
+func validChoice(list []choice, id string) bool {
+	return slices.ContainsFunc(list, func(c choice) bool { return c.ID == id })
+}
+
+func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
+	theme, mode := r.FormValue("theme"), r.FormValue("mode")
+	if !validChoice(Themes, theme) || !validChoice(Modes, mode) {
+		http.Error(w, "unknown theme or mode", http.StatusBadRequest)
+		return
+	}
+	if err := s.Store.SetAppearance(r.Context(), sessionFrom(r).User.ID, theme, mode); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
@@ -692,7 +724,8 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	me := sessionFrom(r).User
-	d := settingsData{Detection: formFromDetection(det), DBPath: s.DBPath, IsAdmin: me.IsAdmin(), HasLocal: me.HasLocal, Version: s.Version}
+	d := settingsData{Detection: formFromDetection(det), DBPath: s.DBPath, IsAdmin: me.IsAdmin(), HasLocal: me.HasLocal, Version: s.Version,
+		Themes: Themes, Modes: Modes}
 	o, err := s.oidcSettings(ctx)
 	if err != nil {
 		s.fail(w, r, err)

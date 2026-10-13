@@ -461,3 +461,38 @@ func TestLoginPageWhenSignedIn(t *testing.T) {
 		t.Error("minTime")
 	}
 }
+
+func TestAppearance(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	if _, page := c.get("/settings"); !strings.Contains(page, `data-theme="default" data-mode="auto"`) || !strings.Contains(page, "Tokyo Night") {
+		t.Fatal("settings page lacks the default appearance or the theme list")
+	}
+	if resp, _ := c.htmx("/settings/appearance", url.Values{"theme": {"gruvbox"}, "mode": {"dark"}}); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("save: %d", resp.StatusCode)
+	}
+	if _, page := c.get("/events"); !strings.Contains(page, `data-theme="gruvbox" data-mode="dark"`) {
+		t.Error("pages do not use the saved appearance")
+	}
+	for _, bad := range []url.Values{{"theme": {"neon"}, "mode": {"dark"}}, {"theme": {"nord"}, "mode": {"dim"}}, {}} {
+		if resp, _ := c.htmx("/settings/appearance", bad); resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("%v: %d", bad, resp.StatusCode)
+		}
+	}
+	// Each user has their own.
+	if _, page := e.viewerClient().get("/events"); !strings.Contains(page, `data-theme="default"`) {
+		t.Error("another user got the admin's theme")
+	}
+}
+
+func TestEveryThemeHasColours(t *testing.T) {
+	css, err := staticFS.ReadFile("static/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, th := range Themes {
+		if !strings.Contains(string(css), `[data-theme="`+th.ID+`"]`) {
+			t.Errorf("app.css has no colours for %s", th.ID)
+		}
+	}
+}

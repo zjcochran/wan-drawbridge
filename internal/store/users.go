@@ -38,6 +38,8 @@ type User struct {
 	HasSSO    bool // has a linked single sign-on account
 	CreatedAt time.Time
 	LastLogin time.Time
+	Theme     string // colour theme name; see web.Themes
+	Mode      string // "auto", "light" or "dark"
 }
 
 func (u User) IsAdmin() bool { return u.Role == RoleAdmin }
@@ -145,12 +147,13 @@ func (s *Store) Authenticate(ctx context.Context, username, password string, now
 }
 
 const userCols = `id, username, role, disabled, password_hash IS NOT NULL,
-	EXISTS (SELECT 1 FROM oidc_identities o WHERE o.user_id = users.id), created_at, COALESCE(last_login, 0)`
+	EXISTS (SELECT 1 FROM oidc_identities o WHERE o.user_id = users.id), created_at, COALESCE(last_login, 0),
+	theme, mode`
 
 func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 	var u User
 	var created, last int64
-	if err := sc.Scan(&u.ID, &u.Username, &u.Role, &u.Disabled, &u.HasLocal, &u.HasSSO, &created, &last); err != nil {
+	if err := sc.Scan(&u.ID, &u.Username, &u.Role, &u.Disabled, &u.HasLocal, &u.HasSSO, &created, &last, &u.Theme, &u.Mode); err != nil {
 		return User{}, err
 	}
 	u.CreatedAt = time.Unix(created, 0)
@@ -158,6 +161,18 @@ func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 		u.LastLogin = time.Unix(last, 0)
 	}
 	return u, nil
+}
+
+// SetAppearance saves a user's colour theme and mode. The caller validates them.
+func (s *Store) SetAppearance(ctx context.Context, id int, theme, mode string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE users SET theme = ?, mode = ? WHERE id = ?`, theme, mode, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s *Store) UserByID(ctx context.Context, id int) (User, error) {
