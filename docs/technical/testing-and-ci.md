@@ -109,6 +109,8 @@ Drawbridge's log.
 | `release` | release | `alpine:3` | Pushes to the default branch only: `ci/release.sh` creates the next version's tag and GitLab release. | `dotenv: release.env` |
 | `github-sync` | publish | `alpine:3` | Default branch only: copies code, tags and releases to GitHub. See [Publishing to GitHub](#publishing-to-github). | |
 | `github-image` | publish | `docker:28` + dind | Default branch only, when a release was made: multi-arch image to ghcr.io. | |
+| `deps` | test | `golang:1.26` | Scheduled pipelines only: `ci/deps.sh`. See [Weekly dependency check](#weekly-dependency-check). | `.deps/` (artifact, 30 days) |
+| `deps-fix` | test | `golang:1.26` | Scheduled pipelines only, after `deps`: `ci/deps-fix.sh` opens a merge request with the updates. | `.deps/` (artifact, 30 days) |
 
 Tool versions pinned in the `test` job: `gotest.tools/gotestsum@v1.13.0`,
 `github.com/boumenot/gocover-cobertura@v1.5.0`.
@@ -126,6 +128,56 @@ for the daemon. **The runner must allow privileged containers**
 Merge request pipelines, branch pipelines (skipped for branches with an open
 merge request, which get the MR pipeline instead). Tags start no pipeline:
 the release job creates them on a commit the merge pipeline has just tested.
+
+Scheduled pipelines run only `deps` and `deps-fix`: every other job has the
+`.not-scheduled` rules, and the workflow sets `SAST_DISABLED`,
+`SECRET_DETECTION_DISABLED` and `CONTAINER_SCANNING_DISABLED` for them.
+
+### Weekly dependency check
+
+A pipeline schedule on the default branch (Build → Pipeline schedules, once a
+week) checks the third-party code Drawbridge uses.
+
+`deps` (`ci/deps.sh`) writes `.deps/report.md`:
+
+| Check | How | Result |
+| --- | --- | --- |
+| Known vulnerabilities in Go modules and the standard library | `govulncheck` v1.9.0; only vulnerabilities in functions Drawbridge's code reaches | Fails the job (exit 1) |
+| Direct Go modules | `go list -m -u`; newer versions of modules in `go.mod` that are not `// indirect` | Warning (exit 3) |
+| Go | The `go` line in `go.mod` against go.dev's release list: a newer patch release of the same minor version. A newer minor version only when the one in use is no longer supported (Go supports the two newest), together with the `golang:X.Y` image tags | Warning |
+| Base image | A `gcr.io/distroless/static-debianN` image for the next Debian release exists | Warning |
+| Vendored HTMX | `htmx.min.js` and `htmx-sse.min.js` compared byte for byte with the latest npm releases of `htmx.org` and `htmx-ext-sse` | Warning |
+
+A check that cannot run (a registry is down) fails the job with exit 2.
+
+`deps-fix` (`ci/deps-fix.sh`) runs after `deps`, also when it failed, and
+does nothing when `deps` found nothing, or when a merge request from an
+earlier check (a `deps/` branch) is still open. Otherwise:
+
+1. It installs Claude Code and runs it non-interactively (`claude -p`, model
+   `sonnet`, at most 80 turns) with `ci/deps-fix-prompt.md` and the report.
+   Claude Code gets a clean environment holding only its own token, and its
+   tools are limited to reading and editing files, `go`, `gofmt`,
+   `golangci-lint`, `test/coverage.sh`, read-only git commands, `git checkout
+   --` and fetching files from unpkg. It updates the dependencies and the docs
+   that name them, runs the checks and fixes what the updates broke. It writes
+   the commit message and the merge request description to `.deps/`.
+2. The script runs the checks again and `ci/leak-check.sh tree .`.
+3. It commits to `deps/YYYY-MM-DD`, pushes with `ci.skip` and opens a merge
+   request labelled `patch` against the default branch, as a draft with the
+   failing output when the checks failed. The merge request pipeline then
+   runs as usual; only the user merges.
+
+It uses two CI/CD variables, both **masked** and **protected**:
+
+| Variable | Value |
+| --- | --- |
+| `CLAUDE_CODE_OAUTH_TOKEN` | The output of `claude setup-token`: a Claude subscription, no API account. Runs count towards the subscription's usage limits. |
+| `DEPS_BOT_TOKEN` | Project access token, role **Developer**, scopes **`api`** and **`write_repository`**: pushes the branch and opens the merge request (the job token can do neither). |
+
+Both expire (the Claude token after about a year); `deps-fix` then fails at
+sign-in or push. The `.deps/` artifact keeps the report, the govulncheck
+output, Claude Code's log and the checks' output for 30 days.
 
 ### What blocks a merge
 

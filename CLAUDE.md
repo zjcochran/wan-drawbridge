@@ -121,6 +121,12 @@ and `glab` is logged in to it. After pushing, watch the pipeline with
 `glab api "projects/:id/jobs/<id>/trace"`, fix the cause, and push again.
 Don't ask the user to paste logs.
 
+A weekly pipeline schedule runs only `deps` and `deps-fix`
+(`ci/deps.sh`, `ci/deps-fix.sh`, `ci/deps-fix-prompt.md`): Claude Code
+updates vulnerable or outdated dependencies and opens a `patch` merge
+request. Don't move Go to a new minor version while the one in use is still
+supported.
+
 ## Not yet verified
 
 - `test/smoke/smoke.sh` has never been run on a real Docker host.
