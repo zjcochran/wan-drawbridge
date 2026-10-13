@@ -39,6 +39,44 @@ func scheduleEnv(t *testing.T) (*env, *client) {
 	return e, e.admin()
 }
 
+// checkScheduledFile checks that a scheduled backup is private and restores
+// with the passphrase, and returns its contents.
+func checkScheduledFile(t *testing.T, e *env, name string) []byte {
+	t.Helper()
+	path := filepath.Join(e.ui.BackupDir, name)
+	f, _ := os.ReadFile(path)
+	meta, snap, err := backup.Decode(bytes.NewReader(f), schedPass)
+	if err != nil || meta.History != "30d" || len(snap.Config["users"]) == 0 {
+		t.Fatalf("decode: %+v %v", meta, err)
+	}
+	if info, _ := os.Stat(path); info.Mode().Perm() != 0o600 {
+		t.Errorf("mode %v", info.Mode())
+	}
+	return f
+}
+
+// checkBackupDownloads checks that Settings lists the backup file name and
+// that only admins can download it, and only files Drawbridge wrote.
+func checkBackupDownloads(t *testing.T, e *env, c *client, name, content string) {
+	t.Helper()
+	_, page := c.get("/settings")
+	if !strings.Contains(page, name) || !strings.Contains(page, "Last scheduled backup") {
+		t.Error("the settings page does not list the backups")
+	}
+	resp, body := c.get("/settings/backups/" + name)
+	if resp.StatusCode != http.StatusOK || body != content || !strings.Contains(resp.Header.Get("Content-Disposition"), name) {
+		t.Fatalf("download: %d", resp.StatusCode)
+	}
+	for _, bad := range []string{"notes.txt", "..%2Fdb", "drawbridge-backup-x.json"} {
+		if resp, _ := c.get("/settings/backups/" + bad); resp.StatusCode != http.StatusNotFound {
+			t.Errorf("%s: %d", bad, resp.StatusCode)
+		}
+	}
+	if resp, _ := e.viewerClient().get("/settings/backups/" + name); resp.StatusCode != http.StatusForbidden {
+		t.Errorf("viewer download: %d", resp.StatusCode)
+	}
+}
+
 func saveSchedule(t *testing.T, c *client, v url.Values) (*http.Response, string) {
 	t.Helper()
 	form := url.Values{"enabled": {"on"}, "time": {"03:00"}, "keep": {"2"}, "history": {"30"},
@@ -115,15 +153,7 @@ func TestScheduledBackups(t *testing.T) {
 		t.Error("pruning removed a file that is not a backup")
 	}
 
-	// The file restores with the passphrase.
-	f, _ := os.ReadFile(filepath.Join(e.ui.BackupDir, files[0].Name))
-	meta, snap, err := backup.Decode(bytes.NewReader(f), schedPass)
-	if err != nil || meta.History != "30d" || len(snap.Config["users"]) == 0 {
-		t.Fatalf("decode: %+v %v", meta, err)
-	}
-	if info, _ := os.Stat(filepath.Join(e.ui.BackupDir, files[0].Name)); info.Mode().Perm() != 0o600 {
-		t.Errorf("mode %v", info.Mode())
-	}
+	f := checkScheduledFile(t, e, files[0].Name)
 	evs, _ := e.st.Events(ctx, store.EventFilter{Type: "backup_created"})
 	if len(evs) != 3 || evs[0].Payload["by"] != "schedule" || evs[0].Payload["file"] != files[0].Name {
 		t.Fatalf("events: %v", evs)
@@ -131,22 +161,7 @@ func TestScheduledBackups(t *testing.T) {
 
 	// Page and download, on the real clock so the session is valid.
 	e.ui.now = time.Now
-	_, page := c.get("/settings")
-	if !strings.Contains(page, files[0].Name) || !strings.Contains(page, "Last scheduled backup") {
-		t.Error("the settings page does not list the backups")
-	}
-	resp, body = c.get("/settings/backups/" + files[0].Name)
-	if resp.StatusCode != http.StatusOK || body != string(f) || !strings.Contains(resp.Header.Get("Content-Disposition"), files[0].Name) {
-		t.Fatalf("download: %d", resp.StatusCode)
-	}
-	for _, bad := range []string{"notes.txt", "..%2Fdb", "drawbridge-backup-x.json"} {
-		if resp, _ := c.get("/settings/backups/" + bad); resp.StatusCode != http.StatusNotFound {
-			t.Errorf("%s: %d", bad, resp.StatusCode)
-		}
-	}
-	if resp, _ := e.viewerClient().get("/settings/backups/" + files[0].Name); resp.StatusCode != http.StatusForbidden {
-		t.Errorf("viewer download: %d", resp.StatusCode)
-	}
+	checkBackupDownloads(t, e, c, files[0].Name, string(f))
 
 	// Back up now ignores the schedule.
 	if _, body := c.htmx("/settings/backup/run", nil); !strings.Contains(body, "drawbridge-backup-"+time.Now().UTC().Format("20060102")) {

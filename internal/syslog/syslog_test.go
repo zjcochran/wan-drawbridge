@@ -371,7 +371,7 @@ func TestBackoffAndRecovery(t *testing.T) {
 	}), nil)))
 	w.retry = 10 * time.Millisecond
 	// The first two connection attempts fail, as if the server were down.
-	real := w.dial
+	dialReal := w.dial
 	var attempts int
 	var amu sync.Mutex
 	w.dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -382,7 +382,7 @@ func TestBackoffAndRecovery(t *testing.T) {
 		if n <= 2 {
 			return nil, errors.New("connection refused")
 		}
-		return real(ctx, network, addr)
+		return dialReal(ctx, network, addr)
 	}
 	run(t, w)
 	slog.New(w.Handler(slog.LevelInfo)).Info("after outage")

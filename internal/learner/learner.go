@@ -11,7 +11,8 @@ const (
 	// RelearnShare is the share over RelearnWindow a different ISP needs before it
 	// is suggested as the new primary. It is never switched automatically: a long
 	// primary outage looks the same as a provider change.
-	RelearnShare  = 0.80
+	RelearnShare = 0.80
+	// RelearnWindow is the window RelearnShare is measured over.
 	RelearnWindow = 3 * 24 * time.Hour
 	// relearnMinCoverage avoids relearning from a window with little data in it.
 	relearnMinCoverage = 2 * 24 * time.Hour
@@ -40,6 +41,9 @@ type Decision struct {
 	Suggest   int  // a different ISP that looks like the new primary, 0 if none
 }
 
+// Decide picks the primary ISP: the pinned one; else the learned one, with a
+// suggestion when another ISP has clearly taken over; else, once learning is
+// done, the ISP with PromoteShare of the week.
 func Decide(in Input) Decision {
 	if in.Pinned != 0 {
 		return Decision{Primary: in.Pinned, Reason: "pinned"}

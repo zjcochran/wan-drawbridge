@@ -38,6 +38,7 @@ type OIDCSettings struct {
 	SSOOnly       bool   `json:"sso_only"`
 }
 
+// Name is the sign-in button's label: DisplayName, or "SSO".
 func (o OIDCSettings) Name() string {
 	if o.DisplayName != "" {
 		return o.DisplayName

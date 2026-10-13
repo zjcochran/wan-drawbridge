@@ -24,6 +24,8 @@ type EventFilter struct {
 	Limit    int
 }
 
+// Events returns the events matching f, newest first: f.Limit of them
+// (default 100, at most 1000).
 func (s *Store) Events(ctx context.Context, f EventFilter) ([]Event, error) {
 	if f.Limit <= 0 || f.Limit > 1000 {
 		f.Limit = 100

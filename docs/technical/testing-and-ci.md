@@ -99,6 +99,7 @@ Drawbridge's log.
 | --- | --- | --- | --- | --- |
 | `test` | test | `golang:1.26` | gofmt check on tracked `.go` files, `go vet`, `gotestsum` running `go test -race -coverprofile`, total coverage line, Cobertura conversion, per-package 80% gate | `junit: report.xml`, `coverage_report: coverage.xml` (Cobertura), `coverage:` regex on `total: (statements) N%` |
 | `code-quality` | test | `golang:1.26` | `golangci-lint` v2.14.0 with `.golangci.yml`; fails on any issue | `codequality` (Code Climate JSON) |
+| `shellcheck` | test | `koalaman/shellcheck-alpine:v0.11.0` | ShellCheck on every tracked `*.sh` file; fails on any finding, style notes included | `codequality` (converted from ShellCheck's JSON with `jq`) |
 | `semgrep-sast` | test | GitLab template | SAST (Semgrep rules for Go). Not allowed to fail. | `sast` |
 | `secret_detection` | test | GitLab template | Secret scanning of the repository. Not allowed to fail. | `secret_detection` |
 | `build-image` | test | `docker:28` + dind | Builds the image and saves it as `drawbridge.tar` (artifact, 1 day) | |
@@ -189,7 +190,7 @@ Every job in a merge request pipeline must pass. Together they enforce:
 | Static checks | `test` | `go vet` reports anything |
 | Tests | `test` | Any test fails (with the race detector) |
 | Coverage | `test` | Any package is below 80% |
-| Code quality | `code-quality` | `golangci-lint` reports any issue |
+| Code quality | `code-quality`, `shellcheck` | `golangci-lint` or ShellCheck reports any issue |
 | Security | `semgrep-sast`, `secret_detection`, `container_scanning`, `security-gate` | A scanner fails, or reports a Critical/High finding or any secret |
 | Image and real Docker | `build-image`, `smoke` | The image does not build or the smoke test fails |
 | Version | `release-label` | The MR lacks exactly one of `major`, `minor`, `patch` |
@@ -206,10 +207,13 @@ to it directly.
 ### The linters
 
 `.golangci.yml` enables Go's standard set (errcheck, govet, ineffassign,
-staticcheck, unused) plus bodyclose, copyloopvar, errorlint, gocritic, gocyclo
-(complexity above 30 fails), gosec, misspell, nilerr, noctx, rowserrcheck,
-sqlclosecheck, unconvert, unparam and usestdlibvars, and the gofmt formatter.
-Deliberate exceptions:
+staticcheck, unused) plus bodyclose, copyloopvar, dupl (duplicated blocks),
+errorlint, gocritic, gocyclo (cyclomatic complexity above 20 fails), gosec,
+misspell, nilerr, noctx, revive (with its default rules: doc comments on
+exported names, naming such as `ID` not `Id`, unused parameters, shadowed
+built-ins and more), rowserrcheck, sqlclosecheck, unconvert, unparam and
+usestdlibvars, and the gofmt formatter. These apply to tests too, except as
+listed below. Deliberate exceptions:
 
 - errcheck ignores a deferred `Tx.Rollback`, writes to an HTTP response
   (they fail only when the client has gone) and per-row CSV writes (the error
@@ -226,6 +230,13 @@ Run it locally with the same version:
 ```sh
 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
 golangci-lint run ./...
+```
+
+ShellCheck checks the shell scripts in `ci/` and `test/` with its default
+rules, style notes included. Run it locally with ShellCheck 0.11.0:
+
+```sh
+git ls-files -z '*.sh' | xargs -0 shellcheck
 ```
 
 ### Where to see the results

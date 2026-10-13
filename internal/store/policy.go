@@ -216,6 +216,7 @@ func (r StackRow) Status() string {
 	return "none"
 }
 
+// Stacks returns every Compose project with its setting and container counts.
 func (s *Store) Stacks(ctx context.Context) ([]StackRow, error) {
 	cs, err := s.Containers(ctx)
 	if err != nil {

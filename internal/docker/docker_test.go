@@ -17,9 +17,10 @@ import (
 	"time"
 )
 
-func TestClient(t *testing.T) {
-	var posted []string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// fakeEngine answers the Engine API calls TestClient makes, recording the
+// stop and start requests in posted.
+func fakeEngine(posted *[]string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case r.URL.Path == "/containers/json":
 			fmt.Fprint(w, `[
@@ -30,7 +31,7 @@ func TestClient(t *testing.T) {
 		case r.URL.Path == "/containers/aaa111/json":
 			fmt.Fprint(w, `{"State":{"Running":true,"Health":{"Status":"healthy"}}}`)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/stop"):
-			posted = append(posted, r.URL.Path+"?"+r.URL.RawQuery)
+			*posted = append(*posted, r.URL.Path+"?"+r.URL.RawQuery)
 			w.WriteHeader(http.StatusNotModified) // already stopped
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/start"):
 			if strings.Contains(r.URL.Path, "missing") {
@@ -38,12 +39,17 @@ func TestClient(t *testing.T) {
 				fmt.Fprint(w, `{"message":"No such container: missing"}`)
 				return
 			}
-			posted = append(posted, r.URL.Path)
+			*posted = append(*posted, r.URL.Path)
 			w.WriteHeader(http.StatusNoContent)
 		default:
 			http.NotFound(w, r)
 		}
-	}))
+	})
+}
+
+func TestClient(t *testing.T) {
+	var posted []string
+	srv := httptest.NewServer(fakeEngine(&posted))
 	defer srv.Close()
 
 	c, err := New("tcp://" + strings.TrimPrefix(srv.URL, "http://"))
@@ -174,7 +180,7 @@ func TestUnixSocket(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"Version":"28.5.2"}`)
 	}))
 	srv.Listener = ln

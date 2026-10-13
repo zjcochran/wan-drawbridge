@@ -26,6 +26,8 @@ type Docker interface {
 	Start(ctx context.Context, id string) error
 }
 
+// Executor stops and starts containers for runs and keeps the container
+// inventory in sync with Docker.
 type Executor struct {
 	Docker      Docker
 	Store       *store.Store
@@ -42,6 +44,8 @@ type Executor struct {
 	lastPrint string // inventory fingerprint, to notify only on real changes
 }
 
+// New returns an Executor with the default timings: a 30 s stop timeout, 4
+// containers at a time, and health checks polled every 2 s for up to 120 s.
 func New(d Docker, st *store.Store, log *slog.Logger, selfID string) *Executor {
 	return &Executor{
 		Docker: d, Store: st, Log: log, Now: time.Now, SelfID: selfID,
@@ -66,14 +70,14 @@ func (e *Executor) list(ctx context.Context) ([]docker.Container, error) {
 	}
 	var cs []docker.Container
 	var items []store.InventoryItem
-	var print strings.Builder
+	var fingerprint strings.Builder
 	for _, c := range all {
 		if e.isSelf(c) {
 			continue
 		}
 		cs = append(cs, c)
 		items = append(items, store.InventoryItem{Key: c.Key(), Project: c.Project, Service: c.Service, Name: c.Name, Label: c.OnFailover()})
-		fmt.Fprintf(&print, "%s=%s:%v;", c.ID, c.Name, c.Running)
+		fmt.Fprintf(&fingerprint, "%s=%s:%v;", c.ID, c.Name, c.Running)
 	}
 	added, err := e.Store.SyncInventory(ctx, items, e.Now())
 	if err != nil {
@@ -83,8 +87,8 @@ func (e *Executor) list(ctx context.Context) ([]docker.Container, error) {
 		e.Log.Info("new containers found", "keys", added)
 	}
 	e.mu.Lock()
-	changed := print.String() != e.lastPrint
-	e.lastPrint = print.String()
+	changed := fingerprint.String() != e.lastPrint
+	e.lastPrint = fingerprint.String()
 	e.mu.Unlock()
 	if changed {
 		e.changed()

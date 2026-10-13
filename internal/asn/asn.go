@@ -25,6 +25,8 @@ import (
 	"time"
 )
 
+// Default sources: the iptoasn table, and ipinfo for single IPs the table
+// cannot answer.
 const (
 	DefaultDBURL     = "https://iptoasn.com/data/ip2asn-v4.tsv.gz"
 	DefaultOnlineURL = "https://ipinfo.io/%s/json"
@@ -91,6 +93,7 @@ func (db *DB) Lookup(ip netip.Addr) (Info, bool) {
 	return Info{ASN: s.asn, Name: s.name}, true
 }
 
+// Len returns the number of address ranges in the database.
 func (db *DB) Len() int { return len(db.spans) }
 
 func u32(ip netip.Addr) uint32 {
@@ -112,6 +115,8 @@ type Resolver struct {
 	cache  map[netip.Addr]Info
 }
 
+// NewResolver returns a Resolver that keeps the ASN database in cacheDir,
+// downloads it again when it is a week old, and falls back to ipinfo.
 func NewResolver(cacheDir string, log *slog.Logger) *Resolver {
 	return &Resolver{
 		Path:      filepath.Join(cacheDir, "ip2asn-v4.tsv.gz"),

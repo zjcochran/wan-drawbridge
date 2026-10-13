@@ -100,6 +100,7 @@ func DefaultDetection() Detection {
 	}
 }
 
+// Config is the whole configuration, read from the environment by Load.
 type Config struct {
 	Detection
 	DBDir        string   // holds only the SQLite files: mount it to back them up

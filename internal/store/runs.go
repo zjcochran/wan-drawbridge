@@ -42,6 +42,7 @@ func (s *Store) OpenRun(ctx context.Context) (*Run, error) {
 	return &r, nil
 }
 
+// CreateRun records the start of a container run.
 func (s *Store) CreateRun(ctx context.Context, trigger string, toASN int, now time.Time) (*Run, error) {
 	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO runs (started_at, trigger, to_asn) VALUES (?, ?, ?)`, now.Unix(), trigger, nullInt(toASN))
@@ -65,6 +66,7 @@ func (s *Store) AddRunAction(ctx context.Context, runID int64, a RunAction) erro
 	return err
 }
 
+// RunActions returns a run's container actions, by container key.
 func (s *Store) RunActions(ctx context.Context, runID int64) ([]RunAction, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT container_id, container_key, name, was_running, stopped_at IS NOT NULL, started_at IS NOT NULL, error

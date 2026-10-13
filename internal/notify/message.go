@@ -85,6 +85,18 @@ func Format(e store.Event, names map[int]string) Message {
 			m.Title = "Updating containers failed"
 		}
 		m.Text = str("error") + ". See the dashboard for which containers are affected."
+	default:
+		if !formatISP(&m, str, isp) {
+			formatAdmin(&m, str)
+		}
+	}
+	return m
+}
+
+// formatISP fills in the messages about ISPs and learning the primary, and
+// reports whether m.Event is one of them.
+func formatISP(m *Message, str, isp func(string) string) bool {
+	switch m.Event {
 	case "flapping":
 		m.Title = "The primary ISP is flapping"
 		m.Text = fmt.Sprintf("It failed again soon after failing back (%s times in a row), so failback now waits %s of stable connection.",
@@ -104,9 +116,9 @@ func Format(e store.Event, names map[int]string) Message {
 		m.Title = "Primary ISP not decided"
 		m.Text = "Learning ended without a clear primary ISP. Set one on the ISPs page."
 	default:
-		formatAdmin(&m, str)
+		return false
 	}
-	return m
+	return true
 }
 
 // formatAdmin covers events started by people or schedules: pausing, backups.

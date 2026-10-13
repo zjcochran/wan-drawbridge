@@ -94,7 +94,9 @@ records the decisions behind it and how to work in the repo.
 - Every test, scan and coverage result must reach GitLab in a format it reads:
   JUnit, Cobertura, Code Quality, or the security report formats.
 - Merges are blocked unless everything passes: tests, 80% coverage per package,
-  zero golangci-lint issues (v2.14.0, `.golangci.yml`), and no Critical/High
+  zero golangci-lint issues (v2.14.0, `.golangci.yml`, including doc comments on
+  exported names and a complexity limit of 20), zero ShellCheck findings on
+  `*.sh`, and no Critical/High
   SAST or container findings and no secrets (`ci/security-gate.sh`). Fix
   findings; suppress only with a `//nolint:<linter> // reason` or
   `// nosemgrep` plus a reason comment.
@@ -112,6 +114,7 @@ the code.
 
 ```sh
 gofmt -l $(git ls-files '*.go') && go vet ./... && golangci-lint run ./... && \
+  git ls-files -z '*.sh' | xargs -0 shellcheck && \
   go test -race -coverprofile=coverage.out ./... && test/coverage.sh coverage.out 80
 ```
 

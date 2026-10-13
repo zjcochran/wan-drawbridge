@@ -63,6 +63,8 @@ func (s *Store) UnlinkIdentities(ctx context.Context, userID int) error {
 	return err
 }
 
+// Identities returns the single sign-on accounts linked to a user, oldest
+// first.
 func (s *Store) Identities(ctx context.Context, userID int) ([]Identity, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT issuer, subject, email, linked_at FROM oidc_identities WHERE user_id = ? ORDER BY linked_at`, userID)
