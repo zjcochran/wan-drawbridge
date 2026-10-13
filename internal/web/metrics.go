@@ -109,6 +109,13 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "drawbridge_notifications_total{result=\"sent\"} %d\n", sent)
 	fmt.Fprintf(&b, "drawbridge_notifications_total{result=\"failed\"} %d\n", failed)
 
+	if s.Syslog != nil {
+		sent, dropped := s.Syslog.Counts()
+		metric("drawbridge_syslog_messages_total", "Log lines sent to syslog since start, and lines dropped because the queue was full.", "counter")
+		fmt.Fprintf(&b, "drawbridge_syslog_messages_total{result=\"sent\"} %d\n", sent)
+		fmt.Fprintf(&b, "drawbridge_syslog_messages_total{result=\"dropped\"} %d\n", dropped)
+	}
+
 	if _, last, err := s.backupSchedule(ctx); err == nil {
 		metric("drawbridge_backup_last_success_timestamp_seconds", "When the last scheduled backup was written; 0 if none yet.", "gauge")
 		fmt.Fprintf(&b, "drawbridge_backup_last_success_timestamp_seconds %d\n", unix(last.Success))

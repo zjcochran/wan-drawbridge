@@ -241,6 +241,12 @@ Logs contain usernames and client IPs for failed sign-ins, container names, and
 public IPs from checks. They never contain passwords, session tokens, CSRF
 tokens or the client secret.
 
+With `DRAWBRIDGE_SYSLOG` the same lines go to the syslog server. Over `udp://`
+and `tcp://` they cross the network unencrypted. `tls://` uses TLS 1.2 or
+later and verifies the server's certificate and host name against the system
+CAs plus `DRAWBRIDGE_SYSLOG_CA_FILE`; there is no option to skip verification
+and no client certificate.
+
 ## Reporting vulnerabilities
 
 Open a confidential issue in the GitLab project.

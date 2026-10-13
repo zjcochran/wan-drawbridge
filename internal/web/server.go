@@ -24,6 +24,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
+	"github.com/zjcochran/wan-drawbridge/internal/syslog"
 )
 
 //go:embed templates/*.html
@@ -74,8 +75,9 @@ type Server struct {
 	TrustedProxies []netip.Prefix
 	Secrets        *secrets.Box // seals the OIDC client secret and notification URLs and tokens
 	Notify         *notify.Notifier
-	BackupDir      string // where scheduled backups are written
-	MetricsToken   string // enables /metrics with this bearer token
+	Syslog         *syslog.Writer // nil when the log is not sent to syslog
+	BackupDir      string         // where scheduled backups are written
+	MetricsToken   string         // enables /metrics with this bearer token
 	Version        string
 	SourceURL      string // where to get this build's source (AGPL section 13)
 	ForceLocal     bool   // DRAWBRIDGE_LOCAL_LOGIN=force: passwords work even in SSO-only mode

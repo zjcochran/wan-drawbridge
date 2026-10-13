@@ -52,6 +52,7 @@ expects.
 | `drawbridge_containers_stopped` | gauge | | Containers Drawbridge stopped and has not started yet. |
 | `drawbridge_backup_last_success_timestamp_seconds` | gauge | | When the last [scheduled backup](backup-and-restore.md#scheduled-backups) was written; 0 if none yet. |
 | `drawbridge_notifications_total` | counter | `result` = `sent`, `failed` | Notification deliveries; `failed` counts those that failed after every retry. |
+| `drawbridge_syslog_messages_total` | counter | `result` = `sent`, `dropped` | Only when [syslog](#sending-the-log-to-a-syslog-server) is on: log lines sent, and lines dropped because the queue was full. |
 | `drawbridge_containers` | gauge | `on_failover` = `stop`, `keep` | Known containers by effective setting. |
 
 ### Alert rules
@@ -158,7 +159,8 @@ Events are kept indefinitely; only individual checks are pruned (see
 
 ## Logs
 
-Drawbridge logs to standard error in `key=value` form:
+Drawbridge logs to standard error in `key=value` form, and optionally to a
+[syslog server](#sending-the-log-to-a-syslog-server):
 
 ```sh
 docker compose logs -f drawbridge
@@ -178,3 +180,70 @@ check is logged with its IP, ASN, ISP and state. Useful messages:
 | `failed sign-in` | warn | With user and client IP. |
 | `cannot reach Docker; is /var/run/docker.sock mounted?` | error | At start-up. |
 | `docker event stream ended; reconnecting` | warn | Docker restarted; Drawbridge reconnects every 5 seconds. |
+
+### Sending the log to a syslog server
+
+Set `DRAWBRIDGE_SYSLOG` and Drawbridge also sends every log line to a syslog
+server; it keeps logging to standard error as before. It is off unless set.
+
+```yaml
+services:
+  drawbridge:
+    hostname: drawbridge # the HOSTNAME field of each message
+    environment:
+      DRAWBRIDGE_SYSLOG: tls://syslog.example.com:6514
+      # DRAWBRIDGE_SYSLOG_FORMAT: rfc3164
+      # DRAWBRIDGE_SYSLOG_FACILITY: local0
+      # DRAWBRIDGE_SYSLOG_CA_FILE: /data/syslog-ca.pem
+```
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `DRAWBRIDGE_SYSLOG` | off | `udp://host[:port]`, `tcp://host[:port]` or `tls://host[:port]`. Default ports: 514 for UDP and TCP, 6514 for TLS. `host` is a name, an IPv4 address or an IPv6 address in brackets. |
+| `DRAWBRIDGE_SYSLOG_FORMAT` | `rfc5424` | `rfc5424` or `rfc3164` (the older BSD format, for receivers that need it). |
+| `DRAWBRIDGE_SYSLOG_FACILITY` | `daemon` | `kern`, `user`, `mail`, `daemon`, `auth`, `syslog`, `lpr`, `news`, `uucp`, `cron`, `authpriv`, `ftp`, or `local0` to `local7`. |
+| `DRAWBRIDGE_SYSLOG_CA_FILE` | none | `tls://` only: a PEM file of CA certificates to trust besides the system ones, for a server with a private CA. Mount it into the container. |
+
+A wrong value stops start-up with the problem listed, like any other setting.
+
+**What is sent.** The same lines, at the same `LOG_LEVEL`, without the time
+and level (the syslog header carries both). Only the server sends to syslog;
+`drawbridge` commands such as `status` log to the terminal only.
+
+```text
+RFC 5424: <30>1 2026-03-04T05:06:07.890000Z drawbridge drawbridge - - - msg="state changed" from=primary to=failover_pending asn=64510 name=SKYLINK-64510 isp=SKYLINK
+RFC 3164: <30>Mar  4 05:06:07 drawbridge drawbridge: msg="state changed" from=primary to=failover_pending asn=64510 name=SKYLINK-64510 isp=SKYLINK
+```
+
+- HOSTNAME is the container's host name: set `hostname:` in the Compose
+  file, or Docker's random container ID is used. APP-NAME is `drawbridge`.
+- The RFC 5424 time is UTC with microseconds; RFC 3164 has no time zone, so it
+  is the container's local time (`TZ`).
+- Severity follows the level: `debug` → 7 (debug), `info` → 6
+  (informational), `warn` → 4 (warning), `error` → 3 (error). The priority is
+  facility × 8 + severity.
+- Framing: one message per datagram over UDP. Over TCP and TLS, RFC 5424
+  messages are octet-counted (`<length> <message>`, RFC 6587 and RFC 5425)
+  and RFC 3164 messages end with a newline.
+
+**Delivery.** Lines wait in a queue of 1024 and are sent in order on one
+connection. Logging never waits for the server:
+
+- If the server cannot be reached, Drawbridge logs `syslog: cannot connect;
+  retrying` once to standard error, and tries again after 1 second, then twice
+  as long each time up to 30 seconds. When it connects it logs `syslog:
+  connected again`. Connecting, including the TLS handshake, times out after
+  10 seconds, and so does sending one line.
+- While the queue is full, new lines are dropped and counted in
+  `drawbridge_syslog_messages_total{result="dropped"}`.
+- A line whose sending fails is sent again on the new connection. A line
+  written just as the server closes the connection can still be lost, since
+  TCP reports the broken connection only on a later write; over UDP,
+  Drawbridge cannot tell whether a datagram arrived.
+- At shutdown, lines still queued are sent for up to 2 seconds if the server
+  is connected.
+
+TLS is version 1.2 or later and checks the server's certificate and name
+against the system CAs and `DRAWBRIDGE_SYSLOG_CA_FILE`. There is no client
+certificate. UDP and TCP are not encrypted: log lines include usernames,
+client IPs and your public IP, so use TLS across a network you do not trust.

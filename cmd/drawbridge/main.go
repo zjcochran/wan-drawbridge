@@ -39,6 +39,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
+	"github.com/zjcochran/wan-drawbridge/internal/syslog"
 	"github.com/zjcochran/wan-drawbridge/internal/web"
 )
 
@@ -100,6 +101,20 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return err
 	}
 	log := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: cfg.LogLevel}))
+	var sl *syslog.Writer
+	if len(args) == 0 && cfg.Syslog.Enabled() {
+		// Only the server sends its log to syslog; commands log to the terminal.
+		if sl, err = syslog.New(cfg.Syslog, log); err != nil {
+			return err
+		}
+		sctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() { sl.Run(sctx); close(done) }()
+		// Stopped last, after the server, so its final lines are sent too.
+		defer func() { cancel(); <-done }()
+		log = slog.New(slog.NewMultiHandler(log.Handler(), sl.Handler(cfg.LogLevel)))
+		log.Info("sending the log to syslog", "url", cfg.Syslog.URL)
+	}
 
 	for _, dir := range []string{cfg.DBDir, cfg.CacheDir} {
 		if err := os.MkdirAll(dir, 0o750); err != nil {
@@ -120,12 +135,12 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	ex := executor.New(dc, st, log, self)
 
 	if len(args) == 0 {
-		return serve(ctx, cfg, st, dc, ex, log)
+		return serve(ctx, cfg, st, dc, ex, sl, log)
 	}
 	return command(ctx, args, st, ex, stdin, stdout, stderr)
 }
 
-func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.Client, ex *executor.Executor, log *slog.Logger) error {
+func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.Client, ex *executor.Executor, sl *syslog.Writer, log *slog.Logger) error {
 	// The background goroutines are stopped and waited for before returning,
 	// so none of them still uses the store when the caller closes it.
 	var bg sync.WaitGroup
@@ -161,7 +176,7 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 	ui, err := web.New(web.Server{
 		Store: st, Mon: m, Docker: dc, Sync: ex, Hub: hub, Log: log,
 		BaseURL: cfg.BaseURL, DBPath: filepath.Join(cfg.DBDir, "drawbridge.db"), TrustedProxies: proxies,
-		Secrets: box, Notify: notifier, BackupDir: cfg.BackupDir, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
+		Secrets: box, Notify: notifier, Syslog: sl, BackupDir: cfg.BackupDir, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
 		SourceURL: env("DRAWBRIDGE_SOURCE_URL", sourceURL),
 	})
 	if err != nil {

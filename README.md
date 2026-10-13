@@ -21,7 +21,8 @@ them again.
 - Web UI with a setup wizard, live updates, phone and dark mode support, and six
   colour themes per user; local accounts and single sign-on (Pocket ID or any
   OIDC provider); Prometheus metrics; a CLI for scripting and recovery.
-- Notifications to ntfy, Gotify, Discord or any webhook, chosen per channel.
+- Notifications to ntfy, Gotify, Discord or any webhook, chosen per channel,
+  and optionally the log to a syslog server over UDP, TCP or TLS.
 - Encrypted backup files of the configuration, downloaded or made daily, with
   optional history, that restore from Settings or straight from the setup
   wizard on a new host.
