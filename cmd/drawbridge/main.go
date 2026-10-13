@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 	_ "time/tzdata" // distroless has no zoneinfo; TZ still works
@@ -125,6 +126,13 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 }
 
 func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.Client, ex *executor.Executor, log *slog.Logger) error {
+	// The background goroutines are stopped and waited for before returning,
+	// so none of them still uses the store when the caller closes it.
+	var bg sync.WaitGroup
+	defer bg.Wait()
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+
 	if engine, err := dc.Ping(ctx); err != nil {
 		log.Error("cannot reach Docker; is /var/run/docker.sock mounted? Continuing without container control", "err", err)
 	} else {
@@ -148,7 +156,7 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 
 	notifier := &notify.Notifier{Store: st, Secrets: box, Log: log, Version: version}
 	st.OnEvent(notifier.Event)
-	go notifier.Run(ctx)
+	bg.Go(func() { notifier.Run(ctx) })
 
 	ui, err := web.New(web.Server{
 		Store: st, Mon: m, Docker: dc, Sync: ex, Hub: hub, Log: log,
@@ -171,9 +179,9 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 			errc <- err
 		}
 	}()
-	go ex.WatchInventory(ctx, dc, 30*time.Second)
-	go ui.RunBackupSchedule(ctx)
-	go func() { errc <- m.Run(ctx) }()
+	bg.Go(func() { ex.WatchInventory(ctx, dc, 30*time.Second) })
+	bg.Go(func() { ui.RunBackupSchedule(ctx) })
+	bg.Go(func() { errc <- m.Run(ctx) })
 
 	select {
 	case err = <-errc:
