@@ -27,6 +27,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 3 | `00003_users.sql` | users, sessions |
 | 4 | `00004_oidc.sql` | oidc_identities |
 | 5 | `00005_flapping.sql` | time-based state machine: `wan_state` gains `pending_since`, `last_evidence`, `flaps`, `last_failover`, `last_failback`; drops `pending_count` |
+| 6 | `00006_appearance.sql` | `users` gains `theme` and `mode` |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -193,6 +194,8 @@ Primary key `(run_id, container_id)`.
 | `role` | TEXT | `admin` or `viewer` |
 | `disabled` | INTEGER | |
 | `created_at`, `last_login` | INTEGER | |
+| `theme` | TEXT | Colour theme: `default`, `nord`, `solarized`, `gruvbox`, `catppuccin`, `tokyo-night`; default `default` |
+| `mode` | TEXT | `auto`, `light` or `dark`; default `auto` |
 
 ### sessions
 

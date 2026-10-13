@@ -86,6 +86,7 @@ token.
 | `/asns/{asn}/move` | admin | `to` = ISP ID or `new` | Regroup an ASN |
 | `/settings/detection` | admin | detection fields | Validate and apply |
 | `/settings/password` | auth | `current`, `new`, `confirm` | Change own password; ends all own sessions |
+| `/settings/appearance` | auth | `theme`, `mode` | Save own colour theme and mode; 204, or 400 for an unknown value |
 | `/settings/sso` | admin | SSO fields | Save single sign-on settings |
 | `/settings/sso/test` | admin | `issuer` | Try discovery |
 | `/settings/sso/unlink` | auth | | Unlink own SSO identities (refused without a password) |

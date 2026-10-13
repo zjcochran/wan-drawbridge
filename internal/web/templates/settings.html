@@ -27,6 +27,30 @@
   <p class="muted">You sign in with {{$d.SSO.Name}} only.</p>
   {{end}}
 </section>
+<section class="card" id="appearance">
+  <h2>Appearance</h2>
+  <form id="appearance-form" hx-post="/settings/appearance" hx-trigger="change" hx-swap="none">
+    <fieldset class="themes">
+      <legend class="sr-only">Colour theme</legend>
+      {{range $d.Themes}}
+      <label class="theme-choice">
+        <input type="radio" name="theme" value="{{.ID}}" {{if eq .ID $.Session.User.Theme}}checked{{end}}>
+        <span class="swatches" aria-hidden="true">
+          <span class="theme-swatch" data-theme="{{.ID}}" data-mode="light"><i></i><i></i><i></i><b></b></span>
+          <span class="theme-swatch" data-theme="{{.ID}}" data-mode="dark"><i></i><i></i><i></i><b></b></span>
+        </span>
+        {{.Name}}
+      </label>
+      {{end}}
+    </fieldset>
+    <fieldset class="segmented">
+      <legend>Mode</legend>
+      {{range $d.Modes}}<label class="check"><input type="radio" name="mode" value="{{.ID}}" {{if eq .ID $.Session.User.Mode}}checked{{end}}> {{.Name}}</label>
+      {{end}}
+    </fieldset>
+    <p class="hint">Only for you, on every device you sign in on. Automatic follows your device's light or dark setting.</p>
+  </form>
+</section>
 {{if $d.IsAdmin}}
 <section class="card">
   <h2>Single sign-on</h2>

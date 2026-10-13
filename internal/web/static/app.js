@@ -26,6 +26,14 @@
   // Servers send HX-Trigger: {"toast": "message"}.
   document.addEventListener("toast", (e) => toast(e.detail.value));
 
+  // Appearance: show a new theme or mode at once; the form saves it.
+  document.addEventListener("change", (e) => {
+    const form = e.target.closest("#appearance-form");
+    if (!form) return;
+    document.documentElement.dataset.theme = form.elements.theme.value;
+    document.documentElement.dataset.mode = form.elements.mode.value;
+  });
+
   // A select-all checkbox checks every box with the given name in its table.
   document.addEventListener("change", (e) => {
     const all = e.target.closest("[data-select-all]");

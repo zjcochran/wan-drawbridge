@@ -78,3 +78,24 @@ func TestLastAdminCannotBeDisabled(t *testing.T) {
 	}
 	_ = b
 }
+
+func TestAppearance(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u, err := s.CreateUser(ctx, "alice", "test-password-123", RoleAdmin, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Theme != "default" || u.Mode != "auto" {
+		t.Fatalf("new user: %q %q", u.Theme, u.Mode)
+	}
+	if err := s.SetAppearance(ctx, u.ID, "nord", "dark"); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ = s.UserByID(ctx, u.ID); u.Theme != "nord" || u.Mode != "dark" {
+		t.Fatalf("saved: %q %q", u.Theme, u.Mode)
+	}
+	if err := s.SetAppearance(ctx, 999, "nord", "dark"); err == nil {
+		t.Fatal("unknown user accepted")
+	}
+}
