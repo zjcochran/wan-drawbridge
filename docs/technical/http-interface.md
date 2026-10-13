@@ -77,6 +77,8 @@ token.
 | `/actions/resume` | admin | | Resume automation and reconcile |
 | `/actions/check` | admin | | Run a check now |
 | `/actions/failover` | admin | | Fail over now |
+| `/actions/drill` | admin | `for`: `2m`, `5m`, `10m`, `15m`; anything else is 400 | Start a failover test; 422 if containers are already stopped or the state is not primary or learning |
+| `/actions/drill-end` | admin | | End a failover test now |
 | `/actions/restore` | admin | | Restore now |
 | `/stacks/{project}/policy` | admin | `disable=on` or absent | Set the stack switch |
 | `/containers/policy` | admin | `key`, `policy` | Set one container (filters are echoed back) |

@@ -106,6 +106,7 @@ for {
     case <-ctx.Done():  return
     case cmd := <-cmds: cmd(ctx)
     case <-resume:      end a timed pause (only armed while one is set)
+    case <-drill:       end a failover test (only armed while one runs)
     case <-next:        Check(); next = after(interval or 15 s while pending)
     }
 }

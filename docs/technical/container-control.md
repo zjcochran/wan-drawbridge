@@ -80,7 +80,7 @@ must restore. At most one run is open (`runs_one_open` partial unique index).
 
 | Table | Purpose |
 | --- | --- |
-| `runs` | `trigger` (`auto`/`manual`), `to_asn`, `started_at`, `ended_at`, `status` (`open`, `completed`, `failed`) |
+| `runs` | `trigger` (`auto`/`manual`/`drill`), `to_asn`, `started_at`, `ended_at`, `status` (`open`, `completed`, `failed`) |
 | `run_actions` | One row per container in the run: `container_id`, `container_key`, `name`, `was_running`, `stopped_at`, `started_at`, `error` |
 
 ### Stop

@@ -33,6 +33,7 @@ type fakeMon struct {
 	det       config.Detection
 	paused    bool
 	pausedFor time.Duration
+	drill     time.Duration
 	setup     bool
 	calls     []string
 	policies  int
@@ -46,7 +47,7 @@ func (f *fakeMon) Status() monitor.Status {
 	if state == "" {
 		state = wan.Primary
 	}
-	return monitor.Status{State: state, Due: time.Now().Add(90 * time.Second), Since: time.Now().Add(-3 * time.Hour), Paused: f.paused, PausedTill: f.till(), LastCheck: time.Now(), Conclusive: true,
+	return monitor.Status{State: state, Due: time.Now().Add(90 * time.Second), Since: time.Now().Add(-3 * time.Hour), Paused: f.paused, PausedTill: f.till(), DrillTill: f.drillTill(), LastCheck: time.Now(), Conclusive: true,
 		LastIP: "203.0.113.7", ASN: 64500, ISP: 1, PrimaryISP: 1,
 		Flaps: f.flaps, Hold: (5 * time.Minute) << f.flaps}
 }
@@ -59,6 +60,27 @@ func (f *fakeMon) ApplyDetection(_ context.Context, d config.Detection) error {
 	return nil
 }
 func (f *fakeMon) SetPaused(_ context.Context, p bool, _ string) error { f.paused = p; return nil }
+func (f *fakeMon) StartDrill(_ context.Context, d time.Duration, _ string) error {
+	if f.failErr != nil {
+		return f.failErr
+	}
+	f.record("drill")
+	f.drill = d
+	return nil
+}
+func (f *fakeMon) EndDrill(context.Context, string) error {
+	f.record("drill-end")
+	f.drill = 0
+	return nil
+}
+
+func (f *fakeMon) drillTill() time.Time {
+	if f.drill == 0 {
+		return time.Time{}
+	}
+	return time.Now().Add(f.drill)
+}
+
 func (f *fakeMon) till() time.Time {
 	if f.pausedFor == 0 {
 		return time.Time{}

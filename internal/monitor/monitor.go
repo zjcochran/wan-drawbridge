@@ -36,6 +36,7 @@ type Status struct {
 	Flaps      int           // consecutive flaps behind that wait
 	Paused     bool
 	PausedTill time.Time // when a timed pause ends; zero until resumed by hand
+	DrillTill  time.Time // when a failover test ends; zero when none is running
 	LastCheck  time.Time
 	LastIP     string
 	Conclusive bool
@@ -76,6 +77,7 @@ type Monitor struct {
 	state     store.WANState
 	paused    bool
 	pausedTil time.Time // end of a timed pause
+	drillTil  time.Time // end of a failover test
 	lastCheck time.Time
 	// announced remembers learner notices already logged, so each is logged once.
 	announcedUndecided bool
@@ -154,9 +156,12 @@ func (m *Monitor) Run(ctx context.Context) error {
 
 	next := time.After(0)
 	for {
-		var resume <-chan time.Time
+		var resume, drill <-chan time.Time
 		if m.paused && !m.pausedTil.IsZero() {
 			resume = time.After(m.pausedTil.Sub(m.now()))
+		}
+		if !m.drillTil.IsZero() {
+			drill = time.After(m.drillTil.Sub(m.now()))
 		}
 		select {
 		case <-ctx.Done():
@@ -165,6 +170,10 @@ func (m *Monitor) Run(ctx context.Context) error {
 			cmd(ctx)
 		case <-resume:
 			m.resumeTimed(ctx)
+		case <-drill:
+			if !m.now().Before(m.drillTil) {
+				m.endDrill(ctx, "timer")
+			}
 		case <-next:
 			m.Check(ctx)
 			wait := m.cfg.CheckInterval
@@ -325,6 +334,60 @@ func (m *Monitor) RestoreNow(ctx context.Context, actor string) error {
 	})
 }
 
+// ErrDrill refuses a failover test while containers are already stopped or
+// the WAN is not settled on the primary.
+var ErrDrill = errors.New("a failover test needs Drawbridge on the primary ISP (or learning) with no containers stopped")
+
+// StartDrill is a failover test: it stops the containers set to stop on
+// failover, without a failover, and starts them again after d. The WAN state
+// does not change, so checks carry on as usual.
+func (m *Monitor) StartDrill(ctx context.Context, d time.Duration, actor string) error {
+	if d <= 0 {
+		return errors.New("test duration must be positive")
+	}
+	return m.do(ctx, func(ctx context.Context) error {
+		run, err := m.store.OpenRun(ctx)
+		if err != nil {
+			return err
+		}
+		st := m.state.Machine.State
+		if run != nil || !m.drillTil.IsZero() || (st != wan.Primary && st != wan.Learning) {
+			return ErrDrill
+		}
+		m.drillTil = m.now().Add(d).Truncate(time.Second)
+		m.event(ctx, "drill_started", map[string]any{"by": actor, "minutes": int(d.Minutes()),
+			"until": m.drillTil.UTC().Format(time.RFC3339)})
+		m.publish(func(s *Status) {})
+		m.post(func(ctx context.Context) {
+			m.run(ctx, "stopping", func() error { return m.actor.Stop(ctx, "drill", 0) })
+		})
+		return nil
+	})
+}
+
+// EndDrill ends a failover test early.
+func (m *Monitor) EndDrill(ctx context.Context, actor string) error {
+	return m.do(ctx, func(ctx context.Context) error { m.endDrill(ctx, actor); return nil })
+}
+
+// endDrill starts the containers again, unless a real failover has them
+// stopped by now. by is who ended it: a user, "timer", or the state change
+// that took over.
+func (m *Monitor) endDrill(ctx context.Context, by string) {
+	if m.drillTil.IsZero() {
+		return
+	}
+	m.drillTil = time.Time{}
+	payload := map[string]any{"by": by}
+	if m.state.Machine.State == wan.Failover {
+		payload["kept_stopped"] = true // the failover now owns them
+	} else {
+		m.post(func(ctx context.Context) { m.run(ctx, "starting", func() error { return m.actor.Start(ctx) }) })
+	}
+	m.event(ctx, "drill_ended", payload)
+	m.publish(func(s *Status) {})
+}
+
 // CheckNow runs a check right away and waits for it.
 func (m *Monitor) CheckNow(ctx context.Context) error {
 	return m.do(ctx, func(ctx context.Context) error { m.Check(ctx); return nil })
@@ -395,7 +458,26 @@ func (m *Monitor) transition(ctx context.Context, to wan.State, event string, pa
 	payload["from"], payload["to"] = from, to
 	m.event(ctx, event, payload)
 	m.log.Info("state changed", "from", from, "to", to, "reason", event)
+	if to == wan.Failover || event == "manual_restore" {
+		by, _ := payload["by"].(string)
+		m.drillTakenOver(ctx, by)
+	}
 	m.publish(func(s *Status) {})
+}
+
+// drillTakenOver ends a failover test because a failover or a manual restore
+// now decides about the containers it stopped: a failover keeps them
+// stopped, a restore starts them.
+func (m *Monitor) drillTakenOver(ctx context.Context, by string) {
+	if m.drillTil.IsZero() {
+		return
+	}
+	m.drillTil = time.Time{}
+	payload := map[string]any{"by": by}
+	if m.state.Machine.State == wan.Failover {
+		payload["kept_stopped"] = true
+	}
+	m.event(ctx, "drill_ended", payload)
 }
 
 // run performs a container run while showing it as busy.
@@ -511,6 +593,7 @@ func (m *Monitor) Check(ctx context.Context) {
 			m.event(ctx, "flapping", map[string]any{"flaps": m.state.Machine.Flaps, "failback_wait": hold.String()})
 		}
 		m.event(ctx, "failover", payload)
+		m.drillTakenOver(ctx, "failover")
 		if !m.paused {
 			m.run(ctx, "stopping", func() error { return m.actor.Stop(ctx, "auto", info.ASN) })
 		}
@@ -645,6 +728,7 @@ func (m *Monitor) publish(fn func(*Status)) {
 	m.status.Since = m.state.Since
 	m.status.Paused = m.paused
 	m.status.PausedTill = m.pausedTil
+	m.status.DrillTill = m.drillTil
 	m.mu.Unlock()
 	if m.notify != nil {
 		m.notify()

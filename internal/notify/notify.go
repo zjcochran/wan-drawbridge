@@ -85,7 +85,7 @@ type Topic struct {
 
 // Topics lists what can be sent, in menu order.
 var Topics = []Topic{
-	{"failover", "Failover and failback", []string{"failover", "failback", "manual_failover", "manual_restore"}, true},
+	{"failover", "Failover and failback, and failover tests", []string{"failover", "failback", "manual_failover", "manual_restore", "drill_started", "drill_ended"}, true},
 	{"errors", "Failures: containers that did not stop or start, scheduled backups", []string{"run_failed", "backup_failed"}, true},
 	{"flapping", "Flapping primary ISP", []string{"flapping"}, true},
 	{"isps", "New ISPs and primary ISP changes", []string{"isp_new", "primary_learned", "primary_suggested", "primary_undecided"}, true},

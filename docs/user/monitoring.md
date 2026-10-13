@@ -126,6 +126,8 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `isp_new` | An ASN was seen whose ISP group did not exist yet | `isp`, `name`, `asn` |
 | `manual_failover` | Fail over now | `from`, `to`, `by` |
 | `manual_restore` | Restore now | `from`, `to`, `by` |
+| `drill_started` | Test failover | `by`, `minutes`, `until` (RFC 3339, UTC) |
+| `drill_ended` | A failover test ended: time up (`by=timer`), End test now, Restore now or a failover (`by=failover` when automatic) | `by`; `kept_stopped` when a failover took over |
 | `paused`, `resumed` | Automation paused or resumed (finishing the wizard logs `resumed`; a timed pause ending logs `resumed` with `by=timer`) | `by`; `until` (RFC 3339, UTC) on a timed pause |
 | `primary_learned` | The learner chose a primary | `isp` |
 | `primary_pinned` | A primary was pinned in the wizard or by `DRAWBRIDGE_PRIMARY_ASN` | `isp`, `asn` or `by` |
