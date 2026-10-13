@@ -31,6 +31,7 @@ var funcs = template.FuncMap{
 	"query":      url.QueryEscape,
 	"list":       func(v ...string) []string { return v },
 	"dict":       dict,
+	"kb":         func(n int64) float64 { return float64(n) / 1000 },
 }
 
 // dict builds a map from key/value pairs, to pass several values to a template.

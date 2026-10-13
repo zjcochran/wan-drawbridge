@@ -258,6 +258,7 @@ tr.detail td:not(:empty) { padding: 0.25rem 0.6rem 0.75rem; border-bottom: 1px s
 .muted { color: var(--muted); }
 .warn-text { color: var(--warn); }
 .bad-text { color: var(--bad); }
+.ok-text { color: var(--ok); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Dashboard */

@@ -19,6 +19,7 @@ All variables are read once at start-up. Invalid values stop start-up with
 | --- | --- | --- |
 | `DRAWBRIDGE_DB_DIR` | `/data/db` | Folder for `drawbridge.db` and `secret.key`. Created with mode 0750 if missing. Mount it to persist and back up. |
 | `DRAWBRIDGE_CACHE_DIR` | `/data/cache` | Folder for the downloaded ASN database. Safe to lose. |
+| `DRAWBRIDGE_BACKUP_DIR` | `/data/backups` | Folder for [scheduled backups](../user/backup-and-restore.md#scheduled-backups). Created (mode 0750) when the first one is written. |
 | `DRAWBRIDGE_LISTEN` | `:8080` | Address the web server listens on (`host:port`). |
 | `DRAWBRIDGE_BASE_URL` | unset | Public URL without a path, e.g. `https://drawbridge.example.com`. A trailing `/` is removed. Used for the OIDC callback, the `Secure` cookie flag, and as a trusted origin. |
 | `DRAWBRIDGE_TRUSTED_PROXIES` | unset | Comma- or newline-separated IPs or CIDR ranges of reverse proxies whose `X-Forwarded-*` headers are trusted. An invalid entry stops start-up. |

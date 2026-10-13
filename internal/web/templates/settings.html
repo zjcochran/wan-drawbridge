@@ -81,6 +81,8 @@
     <label>Confirm passphrase <input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
     <button>Download backup</button>
   </form>
+  <h3>Scheduled backups</h3>
+  {{template "backup-schedule" $d.Schedule}}
   <h3>Restore</h3>
   <p>Restoring replaces the settings, ISPs, stack and container choices, users and single sign-on
     with the backup's, and the history too if the backup has any. Everyone is signed out.
@@ -110,6 +112,45 @@
   </fieldset>
   {{if .IsAdmin}}<button>Save detection settings</button>{{end}}
 </form>
+{{end}}
+
+{{define "backup-schedule"}}
+<div id="backup-schedule" class="stack">
+  <p>Drawbridge makes a backup every day into <code>{{.Dir}}</code> and keeps the newest ones.</p>
+  {{if .NotMounted}}<div class="banner warn">{{.Dir}} is not a mounted volume, so the files are lost when the container is re-created. Mount a folder there (see the Compose file).</div>{{end}}
+  {{with .Error}}<div class="banner bad">{{.}}</div>{{end}}
+  <form hx-post="/settings/backup/schedule" hx-target="#backup-schedule" hx-swap="outerHTML" class="stack narrow-form">
+    <label class="check"><input type="checkbox" name="enabled" {{if .Enabled}}checked{{end}}> Make a backup every day</label>
+    <label>At <input name="time" type="time" value="{{.Time}}" required>
+      <small>Server time. If Drawbridge was off at that time, the backup is made when it starts.</small></label>
+    <label>Keep <input name="keep" type="number" min="1" max="365" value="{{.Keep}}" required>
+      <small>The newest this many files; older ones are deleted.</small></label>
+    <label>History
+      <select name="history">
+        {{$h := .History}}
+        {{range list "none" "30" "60" "90" "all"}}<option value="{{.}}" {{if eq . $h}}selected{{end}}>{{if eq . "none"}}None, configuration only{{else if eq . "all"}}All time{{else}}Last {{.}} days{{end}}</option>{{end}}
+      </select></label>
+    <label>Passphrase <input name="passphrase" type="password" minlength="12" autocomplete="new-password" placeholder="{{if .HasPassphrase}}Saved. Leave blank to keep it.{{end}}">
+      <small>Stored encrypted with the server's secret key. Keep a copy elsewhere: you need it to restore.</small></label>
+    <label>Confirm passphrase <input name="confirm" type="password" minlength="12" autocomplete="new-password"></label>
+    <div class="actions">
+      <button>Save schedule</button>
+      {{if .HasPassphrase}}<button type="button" class="secondary" hx-post="/settings/backup/run" hx-target="#backup-schedule" hx-swap="outerHTML">Back up now</button>{{end}}
+    </div>
+  </form>
+  {{if not .Last.At.IsZero}}
+  <p>Last scheduled backup: <time title="{{datetime .Last.At}}">{{ago .Last.At}}</time>,
+    {{if .Last.Error}}<span class="bad-text">failed: {{.Last.Error}}</span>{{else}}<span class="ok-text">{{.Last.File}}</span>{{end}}</p>
+  {{end}}
+  {{if .Files}}
+  <table>
+    <thead><tr><th>File</th><th>Size</th><th>Made</th></tr></thead>
+    <tbody>
+    {{range .Files}}<tr><td><a href="/settings/backups/{{.Name}}" download>{{.Name}}</a></td><td>{{printf "%.1f" (kb .Size)}} kB</td><td><time title="{{datetime .Time}}">{{ago .Time}}</time></td></tr>{{end}}
+    </tbody>
+  </table>
+  {{end}}
+</div>
 {{end}}
 
 {{define "sso-form"}}{{template "sso-fields" .}}{{end}}

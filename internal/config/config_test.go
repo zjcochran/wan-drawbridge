@@ -16,7 +16,7 @@ func TestDefaultsAreValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.DBDir != "/data/db" || c.CacheDir != "/data/cache" || c.Listen != ":8080" || c.LogLevel != slog.LevelInfo {
+	if c.DBDir != "/data/db" || c.CacheDir != "/data/cache" || c.BackupDir != "/data/backups" || c.Listen != ":8080" || c.LogLevel != slog.LevelInfo {
 		t.Fatalf("unexpected defaults: %+v", c)
 	}
 	if !reflect.DeepEqual(c.Detection, DefaultDetection()) {
@@ -28,6 +28,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 	for k, v := range map[string]string{
 		"DRAWBRIDGE_DB_DIR":            "/db",
 		"DRAWBRIDGE_CACHE_DIR":         "/cache",
+		"DRAWBRIDGE_BACKUP_DIR":        "/backups",
 		"DRAWBRIDGE_LISTEN":            ":9090",
 		"DRAWBRIDGE_BASE_URL":          "https://drawbridge.example.com/",
 		"DRAWBRIDGE_TRUSTED_PROXIES":   "192.0.2.1, 192.0.2.0/24",
@@ -58,7 +59,7 @@ func TestLoadFromEnvironment(t *testing.T) {
 			FailbackMaxHold: time.Hour, Quorum: 1, Timeout: 3 * time.Second, LearningPeriod: 2 * time.Hour,
 			IPProviders: []string{"https://a.example", "https://b.example"}, Retention: 48 * time.Hour,
 		},
-		DBDir: "/db", CacheDir: "/cache", Listen: ":9090", BaseURL: "https://drawbridge.example.com",
+		DBDir: "/db", CacheDir: "/cache", BackupDir: "/backups", Listen: ":9090", BaseURL: "https://drawbridge.example.com",
 		Proxies: []string{"192.0.2.1", "192.0.2.0/24"}, SecretKey: "key", MetricsToken: "token",
 		ForceLocal: true, PrimaryASN: 64500, LogLevel: slog.LevelDebug,
 	}

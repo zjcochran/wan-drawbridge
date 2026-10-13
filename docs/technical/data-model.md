@@ -58,6 +58,8 @@ Key-value store of JSON values.
 | `paused` | `true` while automation is paused |
 | `paused_until` | end of a timed pause (RFC 3339), or the zero time `0001-01-01T00:00:00Z` when the pause has no end |
 | `oidc` | single sign-on settings (`web.OIDCSettings`); `client_secret` is sealed (`v1:…`) |
+| `backup_schedule` | `enabled`, `time` (`HH:MM`), `keep`, `history`, `passphrase` (sealed) |
+| `backup_schedule_last` | the latest scheduled backup: `at`, `file`, `error`, and `success` (the latest that worked) |
 | `notifications` | `notify.Settings`: `channels`, each with `id`, `name`, `kind` (`ntfy`, `gotify`, `discord`, `webhook`), `url` and `token` (both sealed), `topics`, `enabled` |
 
 ### isps

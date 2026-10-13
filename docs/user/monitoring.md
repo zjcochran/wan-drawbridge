@@ -50,6 +50,7 @@ expects.
 | `drawbridge_failback_hold_seconds` | gauge | | How long the primary must currently be stable before failback; grows while it flaps. |
 | `drawbridge_pending_due_timestamp_seconds` | gauge | | When a pending failover or failback completes if nothing interrupts it; 0 when none is pending. |
 | `drawbridge_containers_stopped` | gauge | | Containers Drawbridge stopped and has not started yet. |
+| `drawbridge_backup_last_success_timestamp_seconds` | gauge | | When the last [scheduled backup](backup-and-restore.md#scheduled-backups) was written; 0 if none yet. |
 | `drawbridge_notifications_total` | counter | `result` = `sent`, `failed` | Notification deliveries; `failed` counts those that failed after every retry. |
 | `drawbridge_containers` | gauge | `on_failover` = `stop`, `keep` | Known containers by effective setting. |
 
@@ -86,6 +87,11 @@ groups:
         expr: drawbridge_failback_hold_seconds > 1200
         annotations:
           summary: "The primary ISP is flapping; failback waits {{ $value | humanizeDuration }}"
+
+      - alert: DrawbridgeBackupStale
+        expr: drawbridge_backup_last_success_timestamp_seconds > 0 and time() - drawbridge_backup_last_success_timestamp_seconds > 2 * 86400
+        annotations:
+          summary: "No scheduled backup has worked for two days"
 
       - alert: DrawbridgePaused
         expr: drawbridge_paused == 1
@@ -138,7 +144,9 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `sso_settings` | Single sign-on settings saved | `enabled`, `sso_only`, `by` |
 | `sso_linked`, `sso_unlinked` | An account was linked to or unlinked from single sign-on | `user`; `sso_user` when linked |
 | `notifications_changed` | A notification channel was added, changed or deleted | `channel`, `action` (`added`, `updated`, `deleted`), `by` |
-| `backup_created` | A backup file was downloaded | `history` (`none`, `30d`, `60d`, `90d`, `all`), `by` |
+| `backup_created` | A backup file was downloaded, or a scheduled one written (`by` = `schedule`) | `history` (`none`, `30d`, `60d`, `90d`, `all`), `by`; `file` for scheduled ones |
+| `backup_failed` | A scheduled backup could not be written | `error`, `by` (`schedule`) |
+| `backup_schedule` | The backup schedule was saved | `enabled`, `time`, `keep`, `history`, `by` |
 | `backup_restored` | A backup file was restored (in Settings, or in the setup wizard with `by` = `setup`) | `created`, `app_version`, `history`, `by` |
 
 Changes made with the command line are not recorded as events.

@@ -86,11 +86,11 @@ type Topic struct {
 // Topics lists what can be sent, in menu order.
 var Topics = []Topic{
 	{"failover", "Failover and failback", []string{"failover", "failback", "manual_failover", "manual_restore"}, true},
-	{"errors", "Containers that failed to stop or start", []string{"run_failed"}, true},
+	{"errors", "Failures: containers that did not stop or start, scheduled backups", []string{"run_failed", "backup_failed"}, true},
 	{"flapping", "Flapping primary ISP", []string{"flapping"}, true},
 	{"isps", "New ISPs and primary ISP changes", []string{"isp_new", "primary_learned", "primary_suggested", "primary_undecided"}, true},
 	{"pause", "Automation paused or resumed", []string{"paused", "resumed"}, false},
-	{"backups", "Backups downloaded or restored", []string{"backup_created", "backup_restored"}, false},
+	{"backups", "Backups made or restored", []string{"backup_created", "backup_restored"}, false},
 }
 
 func topicByID(id string) *Topic {

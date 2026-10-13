@@ -72,6 +72,7 @@ type Server struct {
 	TrustedProxies []netip.Prefix
 	Secrets        *secrets.Box // seals the OIDC client secret and notification URLs and tokens
 	Notify         *notify.Notifier
+	BackupDir      string // where scheduled backups are written
 	MetricsToken   string // enables /metrics with this bearer token
 	Version        string
 	SourceURL      string // where to get this build's source (AGPL section 13)
@@ -174,6 +175,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/sso/test", s.admin(s.testSSO))
 	mux.Handle("POST /settings/sso/unlink", s.auth(s.unlinkSSO))
 	mux.Handle("POST /settings/backup", s.admin(s.downloadBackup))
+	mux.Handle("POST /settings/backup/schedule", s.admin(s.saveSchedule))
+	mux.Handle("POST /settings/backup/run", s.admin(s.runBackupNow))
+	mux.Handle("GET /settings/backups/{name}", s.admin(s.downloadStoredBackup))
 	mux.Handle("POST /settings/notifications", s.admin(s.saveChannel))
 	mux.Handle("POST /settings/notifications/delete", s.admin(s.deleteChannel))
 	mux.Handle("POST /settings/notifications/test", s.admin(s.testChannel))

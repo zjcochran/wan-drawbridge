@@ -108,6 +108,13 @@ func Format(e store.Event, names map[int]string) Message {
 	case "backup_created":
 		m.Title = "Backup downloaded"
 		m.Text = fmt.Sprintf("%s downloaded a backup (history: %s).", str("by"), str("history"))
+		if str("by") == "schedule" {
+			m.Title = "Scheduled backup saved"
+			m.Text = fmt.Sprintf("Saved %s (history: %s).", str("file"), str("history"))
+		}
+	case "backup_failed":
+		m.Title, m.Priority = "Scheduled backup failed", 4
+		m.Text = str("error") + ". Settings → Backup and restore shows the details."
 	case "backup_restored":
 		m.Title = "Backup restored"
 		made := str("created")

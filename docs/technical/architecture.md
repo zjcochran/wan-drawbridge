@@ -195,8 +195,12 @@ run is recovered on the next start (see
 
 On `SIGTERM` or `SIGINT` the root context is cancelled. The monitor finishes
 the command or check in progress and returns; the HTTP server gets 5 seconds
-to finish requests (`Shutdown`); the database is closed, which checkpoints the
-WAL into the main file. A container run in progress is abandoned at the next
+to finish requests (`Shutdown`). The notifier, the inventory watcher and the
+backup schedule are then stopped, and Drawbridge waits for them and the
+monitor to return, so none of them is still writing when the database is
+closed, which checkpoints the WAL into the main file. The same happens when
+start-up fails after they were started (the listen address is in use, for
+example). A container run in progress is abandoned at the next
 Docker call; its progress is in the database and is resumed by `recover()` on
 the next start.
 

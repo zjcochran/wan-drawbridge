@@ -470,6 +470,8 @@ func TestMetrics(t *testing.T) {
 		`drawbridge_isp_info{isp="EXAMPLENET",asn="64500",primary="true"} 1`,
 		`drawbridge_containers{on_failover="keep"} 3`,
 		`# TYPE drawbridge_checks_total counter`,
+		`drawbridge_backup_last_success_timestamp_seconds 0`,
+		`drawbridge_notifications_total{result="sent"} 0`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %q in:\n%s", want, body)

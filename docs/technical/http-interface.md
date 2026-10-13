@@ -63,6 +63,7 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/events` | auth | Query `type`, `before` (event ID cursor). 100 per page. |
 | GET | `/events.csv` | auth | Query `type`. Up to 1,000 newest events; columns `time` (RFC 3339 UTC), `type`, `actor`, `details`. Cells starting with `= + - @ TAB CR` are prefixed with `'` against spreadsheet formula injection. |
 | GET | `/settings` | auth | |
+| GET | `/settings/backups/{name}` | admin | Downloads a file from the backup folder. Only names matching `drawbridge-backup-YYYYMMDD-HHMMSS.json` are served; anything else is 404. |
 | GET | `/users` | admin | |
 
 ### Actions
@@ -87,6 +88,8 @@ token.
 | `/settings/detection` | admin | detection fields | Validate and apply |
 | `/settings/password` | auth | `current`, `new`, `confirm` | Change own password; ends all own sessions |
 | `/settings/appearance` | auth | `theme`, `mode` | Save own colour theme and mode; 204, or 400 for an unknown value |
+| `/settings/backup/schedule` | admin | `enabled`, `time` (`HH:MM`), `keep` (1–365), `history`, `passphrase`, `confirm` | Save the backup schedule; a blank passphrase keeps the saved one. Returns the schedule fragment; 422 with the reason if invalid |
+| `/settings/backup/run` | admin | | Make a scheduled backup now; returns the schedule fragment |
 | `/settings/notifications` | admin | `id` (empty to add), `name`, `kind`, `url`, `token`, `remove_token`, `topics` (repeated), `enabled` | Add or update a channel; blank `url`/`token` keep the saved ones. Returns the channel list; 422 with the reason if invalid, 404 for an unknown `id` |
 | `/settings/notifications/delete` | admin | `id` | Delete a channel; returns the channel list |
 | `/settings/notifications/test` | admin | as above | Send a test message with the form's values (saved ones for blanks); returns "✓ Sent…" or "✗ error" |

@@ -43,11 +43,11 @@ after a restart until the next message.
 | Group | Events | On for a new channel |
 | --- | --- | --- |
 | Failover and failback | `failover`, `failback`, `manual_failover`, `manual_restore` | Yes |
-| Containers that failed to stop or start | `run_failed` | Yes |
+| Failures: containers that did not stop or start, scheduled backups | `run_failed`, `backup_failed` | Yes |
 | Flapping primary ISP | `flapping` | Yes |
 | New ISPs and primary ISP changes | `isp_new`, `primary_learned`, `primary_suggested`, `primary_undecided` | Yes |
 | Automation paused or resumed | `paused`, `resumed` | No |
-| Backups downloaded or restored | `backup_created`, `backup_restored` | No |
+| Backups made or restored | `backup_created` (downloaded or scheduled), `backup_restored` | No |
 
 The events are described in [Monitoring](monitoring.md#event-types). Examples
 of the messages:
@@ -63,8 +63,9 @@ of the messages:
 If automation is paused, failover and failback messages say that no container
 was stopped or started.
 
-Priorities: container failures are 5 (urgent), failovers 4 (high), everything
-else 3 (default), on ntfy's 1 to 5 scale. Gotify gets them as 10, 8 and 5.
+Priorities: container failures are 5 (urgent), failovers and failed scheduled
+backups 4 (high), everything else 3 (default), on ntfy's 1 to 5 scale. Gotify
+gets them as 10, 8 and 5.
 
 ## Message formats
 

@@ -109,6 +109,11 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(&b, "drawbridge_notifications_total{result=\"sent\"} %d\n", sent)
 	fmt.Fprintf(&b, "drawbridge_notifications_total{result=\"failed\"} %d\n", failed)
 
+	if _, last, err := s.backupSchedule(ctx); err == nil {
+		metric("drawbridge_backup_last_success_timestamp_seconds", "When the last scheduled backup was written; 0 if none yet.", "gauge")
+		fmt.Fprintf(&b, "drawbridge_backup_last_success_timestamp_seconds %d\n", unix(last.Success))
+	}
+
 	metric("drawbridge_containers_stopped", "Containers Drawbridge has stopped and not yet started.", "gauge")
 	fmt.Fprintf(&b, "drawbridge_containers_stopped %d\n", stopped)
 	stop, keep := 0, 0
