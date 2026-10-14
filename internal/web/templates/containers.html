@@ -13,7 +13,7 @@
   </select>
   <select name="state" aria-label="State">
     <option value="">Any state</option>
-    {{range $v := (list "running" "stopped" "gone")}}<option {{if eq $v $d.Filter.State}}selected{{end}}>{{$v}}</option>{{end}}
+    {{range $v := (list "running" "stopped")}}<option {{if eq $v $d.Filter.State}}selected{{end}}>{{$v}}</option>{{end}}
   </select>
   <select name="policy" aria-label="On failover">
     <option value="">Any setting</option>

@@ -58,7 +58,7 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/sse` | auth | Server-Sent Events stream (below). |
 | GET | `/stacks` | auth | `?partial=1` with `HX-Request` returns the table only. |
 | GET | `/stacks/{project}/containers` | auth | Container list fragment for one stack. |
-| GET | `/containers` | auth | Filters: `q`, `stack` (`-` = standalone), `state` (`running`, `stopped`, `gone`), `policy` (`disable`, `keep`, `review`); `partial=1`. |
+| GET | `/containers` | auth | Filters: `q`, `stack` (`-` = standalone), `state` (`running`, `stopped`), `policy` (`disable`, `keep`, `review`); `partial=1`. |
 | GET | `/isps` | auth | |
 | GET | `/events` | auth | Query `type`, `before` (event ID cursor). 100 per page. |
 | GET | `/events.csv` | auth | Query `type`. Up to 1,000 newest events; columns `time` (RFC 3339 UTC), `type`, `actor`, `details`. Cells starting with `= + - @ TAB CR` are prefixed with `'` against spreadsheet formula injection. |

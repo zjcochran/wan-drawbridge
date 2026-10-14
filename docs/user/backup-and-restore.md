@@ -105,7 +105,8 @@ Afterwards everyone is signed out, including you; sign in with an account
 from the backup. A `backup_restored` event is recorded, and Drawbridge runs a
 check straight away with the restored settings. Container settings are matched
 by Compose project and service (or container name), so they apply to the
-same stacks on another host.
+same stacks on another host. Settings for containers that are not in Docker
+are deleted within 10 minutes, so start the stacks before restoring.
 
 A restore is refused, and nothing changes, when:
 
@@ -221,7 +222,8 @@ With the database folder:
 
 Container settings are keyed by Compose project and service (or container
 name), not by container ID, so they apply on the new host as long as the stacks
-have the same project names there.
+have the same project names there. Start the stacks before Drawbridge:
+settings for containers not in Docker are deleted within 10 minutes.
 
 ## Starting over
 

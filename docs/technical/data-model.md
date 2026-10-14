@@ -151,6 +151,8 @@ Audit log. See [Monitoring → event types](../user/monitoring.md#event-types).
 | `disable_on_failover` | INTEGER | The stack switch |
 | `updated_at`, `updated_by` | INTEGER, TEXT | |
 
+Deleted by the inventory sync once no container has its `project`.
+
 ### containers
 
 | Column | Type | Notes |
@@ -161,7 +163,7 @@ Audit log. See [Monitoring → event types](../user/monitoring.md#event-types).
 | `policy` | TEXT | `inherit` (default), `disable`, `keep` |
 | `label_policy` | TEXT | From the `drawbridge.on-failover` label at the last sync: `''`, `disable` or `keep` |
 | `needs_review` | INTEGER | New container without a label in a stack with per-container settings |
-| `first_seen`, `last_seen` | INTEGER | |
+| `first_seen`, `last_seen` | INTEGER | The inventory sync deletes rows with `last_seen` over 10 minutes old (`store.GoneAfter`) |
 
 ### runs
 

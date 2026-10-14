@@ -18,9 +18,11 @@ It uses a **key**:
 - **Standalone containers** (`docker run`): the container name, for example
   `dns`.
 
-Settings belong to the key, so they survive re-creation. A container that is
-removed stays in the list with state **gone** and keeps its setting, in case it
-comes back. Renaming a standalone container or a Compose project creates a new
+Settings belong to the key, so they survive re-creation. A container removed
+from Docker disappears from the lists at once. Its row, with its setting, is
+deleted once it has been missing for 10 minutes, long enough for a re-create
+(`docker compose up` after a pull) to bring it back. A stack is deleted, with
+its switch, when it has no containers left. Renaming a standalone container or a Compose project creates a new
 key with default settings.
 
 ## The three container settings
