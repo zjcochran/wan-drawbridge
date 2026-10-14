@@ -596,6 +596,17 @@ func (s *Server) setISPRole(w http.ResponseWriter, r *http.Request) {
 	s.ispsTable(w, r)
 }
 
+func (s *Server) setISPMetered(w http.ResponseWriter, r *http.Request) {
+	id := atoi(r.PathValue("id"), 0)
+	metered := r.PostFormValue("metered") == "on"
+	if err := s.Store.SetMetered(r.Context(), id, metered); err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(r.Context(), "isp_metered", map[string]any{"isp": id, "metered": metered, "by": actorName(r)})
+	s.ispsTable(w, r)
+}
+
 func (s *Server) renameISP(w http.ResponseWriter, r *http.Request) {
 	if err := s.Store.RenameISP(r.Context(), atoi(r.PathValue("id"), 0), r.PostFormValue("name")); err != nil {
 		invalid(w, err.Error())

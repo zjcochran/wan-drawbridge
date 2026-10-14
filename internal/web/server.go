@@ -169,6 +169,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /isps", s.auth(s.ispsPage))
 	mux.Handle("POST /isps/{id}/role", s.admin(s.setISPRole))
 	mux.Handle("POST /isps/{id}/rename", s.admin(s.renameISP))
+	mux.Handle("POST /isps/{id}/metered", s.admin(s.setISPMetered))
 	mux.Handle("POST /isps/relearn", s.admin(s.relearn))
 	mux.Handle("POST /asns/{asn}/move", s.admin(s.moveASN))
 

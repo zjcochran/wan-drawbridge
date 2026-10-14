@@ -56,6 +56,28 @@ func digits(s string) bool {
 	return true
 }
 
+// Metered reports whether an ISP group is metered; an unknown one is.
+func (s *Store) Metered(ctx context.Context, id int) (bool, error) {
+	metered := true
+	err := s.db.QueryRowContext(ctx, `SELECT metered FROM isps WHERE id = ?`, id).Scan(&metered)
+	if errors.Is(err, sql.ErrNoRows) {
+		return true, nil
+	}
+	return metered, err
+}
+
+// SetMetered marks an ISP group metered or unmetered.
+func (s *Store) SetMetered(ctx context.Context, id int, metered bool) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE isps SET metered = ? WHERE id = ?`, metered, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("unknown ISP %d", id)
+	}
+	return nil
+}
+
 // SeeASN records that asn was seen and returns its ISP group and role. A new
 // ASN joins the group its name maps to, creating the group if needed.
 func (s *Store) SeeASN(ctx context.Context, asn int, name string, now time.Time) (ispID int, role string, err error) {
@@ -264,6 +286,7 @@ type ISPRow struct {
 	GroupKey    string
 	Role        string
 	Pinned      bool
+	Metered     bool // only a metered backup triggers a failover
 	WeekSeconds int64
 	AllSeconds  int64
 	LastSeen    time.Time
@@ -280,7 +303,7 @@ type ASNRow struct {
 // ISPs lists every ISP group, primary first, then by time seen this week.
 func (s *Store) ISPs(ctx context.Context, now time.Time) ([]ISPRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT i.id, COALESCE(NULLIF(i.display_name, ''), i.name), i.group_key, i.role, i.pinned, i.last_seen,
+		SELECT i.id, COALESCE(NULLIF(i.display_name, ''), i.name), i.group_key, i.role, i.pinned, i.metered, i.last_seen,
 			COALESCE((SELECT SUM(d.observed_seconds) FROM asn_daily d JOIN asns a ON a.asn = d.asn
 				WHERE a.isp_id = i.id AND d.day >= ?), 0) AS week,
 			COALESCE((SELECT SUM(a.observed_seconds) FROM asns a WHERE a.isp_id = i.id), 0)
@@ -293,7 +316,7 @@ func (s *Store) ISPs(ctx context.Context, now time.Time) ([]ISPRow, error) {
 	for rows.Next() {
 		var r ISPRow
 		var seen int64
-		if err := rows.Scan(&r.ID, &r.Name, &r.GroupKey, &r.Role, &r.Pinned, &seen, &r.WeekSeconds, &r.AllSeconds); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.GroupKey, &r.Role, &r.Pinned, &r.Metered, &seen, &r.WeekSeconds, &r.AllSeconds); err != nil {
 			return nil, err
 		}
 		r.LastSeen = time.Unix(seen, 0)

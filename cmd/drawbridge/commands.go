@@ -158,6 +158,9 @@ func (c cmdEnv) isps([]string) error {
 		if r.Pinned {
 			role += " (pinned)"
 		}
+		if r.Role == store.RoleBackup && !r.Metered {
+			role += " (unmetered)"
+		}
 		var asns []string
 		for _, a := range r.ASNs {
 			label := fmt.Sprintf("AS%d %s", a.ASN, a.Name)
@@ -177,7 +180,13 @@ func (c cmdEnv) setISP(args []string) error {
 	if err != nil {
 		return errUsage
 	}
-	if err := c.st.SetRole(c.ctx, id, args[1], true); err != nil {
+	switch args[1] {
+	case "metered", "unmetered":
+		err = c.st.SetMetered(c.ctx, id, args[1] == "metered")
+	default:
+		err = c.st.SetRole(c.ctx, id, args[1], true)
+	}
+	if err != nil {
 		return err
 	}
 	fmt.Fprintf(c.w, "ISP %d is now %s\n", id, args[1])

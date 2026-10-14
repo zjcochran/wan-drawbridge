@@ -54,6 +54,26 @@ Use **Ignored** sparingly, for example for a VPN exit that some checks
 occasionally leak through. Ignoring your real backup would stop Drawbridge from
 ever failing over.
 
+## Metered and unmetered backups
+
+Every backup ISP also has a **Metered** switch, on the ISPs page:
+
+- **On (metered):** traffic on it triggers a failover, as described above.
+  Every newly seen ISP starts metered, and so does every ISP that existed
+  before this switch was added.
+- **Off (unmetered):** traffic on it counts as if it were on the primary. It
+  never triggers a failover; if Drawbridge is in a failover when traffic
+  moves to it, the failback wait starts, as when the primary comes back.
+  Use it for a second wired line, or any backup without a data cap.
+
+The primary and ignored ISPs have no switch: the primary is never a reason
+to fail over, and ignored ISPs never count. An ISP keeps its setting when its
+role changes, so a former primary that becomes a backup is metered again
+only if it was before. The dashboard marks the current ISP **unmetered** when
+it is an unmetered backup. Changes apply from the next check; each one is
+recorded as an `isp_metered` event. On the command line: `drawbridge set-isp
+<id> metered` or `unmetered`.
+
 ## How the primary is chosen
 
 In order of precedence:
@@ -119,7 +139,7 @@ The same operations are available on the [command line](cli.md): `isps`,
 
 ## Unknown and new networks
 
-An ISP Drawbridge has never seen is a **backup** by definition. If your primary
+An ISP Drawbridge has never seen is a metered **backup** by definition. If your primary
 provider starts using an ASN whose name does not match its group, every check
 sees a backup ISP, and Drawbridge fails over once "Fail over after" has passed;
 waiting does not help, because the IP really is on that ASN. The `failover`

@@ -76,6 +76,7 @@ unavailable; using online lookups`.
 The ASN then goes through `store.SeeASN`, which returns its ISP group and the
 group's role (see [ISP grouping and learning](isp-grouping-and-learning.md)).
 An ISP with role **ignored** turns the check into an inconclusive one.
+For a conclusive check, `store.Metered` reads the ISP's `metered` flag.
 
 ## 3. The observation
 
@@ -87,6 +88,11 @@ Each check produces one `wan.Observation`:
 | `Conclusive` | Probe conclusive, ASN resolved, ISP not ignored |
 | `Clean` | Probe clean (and conclusive) |
 | `ISP` | ISP group ID |
+
+When a primary is known and the ISP is unmetered, the observation passed to
+the state machine carries the primary's ID instead, so an unmetered backup
+counts as the primary: no failover, and failback when in failover. The
+status, events and `checks` keep the real ISP.
 
 Two more facts are recorded per check: a row in `checks` (for the timeline and
 history), and, for conclusive checks, observed time credited to the ASN (for

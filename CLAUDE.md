@@ -13,7 +13,8 @@ records the decisions behind it and how to work in the repo.
 - The app is not built for load balancing: one instance, one Docker host.
 - An ISP is a group of ASNs: names are grouped by AS handle (`EXAMPLENET-64500` → `EXAMPLENET`).
   Every comparison is ISP to ISP, never ASN to ASN.
-- An unknown ISP counts as a backup. A total outage (nothing conclusive) never triggers
+- An unknown ISP counts as a backup, and starts metered. A backup switched to
+  unmetered counts like the primary (no failover). A total outage (nothing conclusive) never triggers
   a failover. Relearning only suggests a new primary; it never switches by itself.
 - Stack and container rules:
   - Changing a stack's setting resets all of its containers to inherit it.

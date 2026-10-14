@@ -235,6 +235,32 @@ func TestSameISPOnAnotherASNIsNotAFailover(t *testing.T) {
 	}
 }
 
+func TestUnmeteredBackupIsNotAFailover(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeWAN(t)
+	actor := &countingActor{}
+	m := newMonitor(t, f, actor)
+	m.cfg.PrimaryASN = 64500
+	m.Check(ctx)
+
+	f.ip.Store("198.51.100.3")
+	m.Check(ctx) // the backup is seen, and starts metered: failover pending
+	if m.state.Machine.State != wan.FailoverPending {
+		t.Fatalf("state = %s", m.state.Machine.State)
+	}
+	isp, _ := m.store.ISPOfASN(ctx, 64510)
+	if err := m.store.SetMetered(ctx, isp, false); err != nil {
+		t.Fatal(err)
+	}
+	checks(m, 10, pending)
+	if m.state.Machine.State != wan.Primary || actor.stops != 0 {
+		t.Fatalf("an unmetered backup triggered failover: state=%s stops=%d", m.state.Machine.State, actor.stops)
+	}
+	if s := m.Status(); s.ISP != isp || !s.Unmetered {
+		t.Errorf("status = ISP %d, unmetered %v", s.ISP, s.Unmetered)
+	}
+}
+
 func TestPausedObservesButDoesNotAct(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeWAN(t)
