@@ -93,7 +93,7 @@ Drawbridge's log.
 
 ## GitLab CI
 
-`.gitlab-ci.yml` stages: `test`, `smoke`, `release`, `publish`. Versioning and releases are described in [Releases](#releases).
+`.gitlab-ci.yml` stages: `test`, `smoke`, `release`, `publish`, `deploy`. Versioning and releases are described in [Releases](#releases).
 
 | Job | Stage | Image | What it does | Reports |
 | --- | --- | --- | --- | --- |
@@ -110,6 +110,7 @@ Drawbridge's log.
 | `release` | release | `alpine:3` | Pushes to the default branch only: `ci/release.sh` creates the next version's tag and GitLab release. | `dotenv: release.env` |
 | `github-sync` | publish | `alpine:3` | Default branch only: copies code, tags and releases to GitHub. See [Publishing to GitHub](#publishing-to-github). | |
 | `github-image` | publish | `docker:28` + dind | Default branch only, when a release was made: multi-arch image to ghcr.io. | |
+| `deploy-webhook` | deploy | `alpine:3` | Default branch only, when a release was made, after `github-image`: calls the Dockhand webhook so the stack updates. See [Publishing to GitHub](#publishing-to-github). | |
 | `deps` | test | `golang:1.26` | Scheduled pipelines only: `ci/deps.sh`. See [Weekly dependency check](#weekly-dependency-check). | `.deps/` (artifact, 30 days) |
 | `deps-fix` | test | `golang:1.26` | Scheduled pipelines only, after `deps`: `ci/deps-fix.sh` opens a merge request with the updates. | `.deps/` (artifact, 30 days) |
 
@@ -261,14 +262,15 @@ findings.
 ### Publishing to GitHub
 
 After each release, the `publish` stage copies everything to the private
-GitHub repository and publishes the container image. All of it runs in GitLab
-CI; **no GitHub Actions run** (the repository has no workflows, and Actions can
-be disabled in its settings).
+GitHub repository and publishes the container image; then the `deploy` stage
+tells Dockhand to update the stack. All of it runs in GitLab CI; **no GitHub Actions run** (the
+repository has no workflows, and Actions can be disabled in its settings).
 
 | Job | What it does |
 | --- | --- |
 | `github-sync` | `ci/github-sync.sh`: publishes a **sanitized copy** of the default branch and every `vX.Y.Z` tag (see below), then creates each GitLab release that GitHub lacks (oldest first, same name, sanitized notes). Never force-pushes: if someone changed the GitHub repository, the push is rejected and the job fails. |
 | `github-image` | Builds `linux/amd64` and `linux/arm64` with buildx (QEMU via `tonistiigi/binfmt`) and pushes `ghcr.io/<repo>:X.Y.Z`, `:X.Y` and `:latest`. Built with `VERSION=vX.Y.Z` and `SOURCE_URL=https://github.com/<repo>`; the source label links the package to the repository, so it shares the repository's (private) visibility. Skipped when the pipeline released nothing. |
+| `deploy-webhook` | `ci/deploy-webhook.sh`, after `github-image` succeeded: POSTs a GitHub-style push event (`X-GitHub-Event: push`, `{"ref": "refs/heads/<default branch>", "repository": {"url": "https://github.com/<repo>.git"}}`) to `DOCKHAND_WEBHOOK`, signed with `DOCKHAND_WEBHOOK_SECRET` (`X-Hub-Signature-256: sha256=<HMAC-SHA256 of the body>`), so Dockhand updates the stack. The secret itself is never sent. Dockhand deploys only when `ref` is the stack's configured branch, so that branch must be `main`. Fails unless the answer is 2xx with `"success": true`; timeouts, refused connections, 408, 429 and 5xx are retried 3 times. Never prints the URL or the secret. Skipped when the pipeline released nothing or either variable is unset. |
 
 #### Nothing internal is published
 
@@ -310,7 +312,7 @@ The source itself contains no internal names: the Go module is
 `github.com/zjcochran/wan-drawbridge`, and docs and `CLAUDE.md` refer to "the
 GitLab project" or the `origin` remote.
 
-Both run only on pushes to the default branch, after `release` (which passes
+All three run only on pushes to the default branch, after `release` (which passes
 `RELEASE_TAG` to them through a dotenv artifact). `github-sync` uses
 `resource_group: github`, so syncs never overlap.
 
@@ -321,6 +323,8 @@ CI/CD variables (Settings → CI/CD → Variables):
 | `GHCR_REPO` | `zjcochran/wan-drawbridge` (also accepted: `ghcr.io/…` or `https://github.com/…`) | |
 | `GHCR_USER` | the GitHub user name that owns the token | |
 | `GHCR_TOKEN` | GitHub **classic** personal access token with scopes `repo` and `write:packages` | Masked, Protected |
+| `DOCKHAND_WEBHOOK` | the stack's webhook URL from Dockhand | Protected |
+| `DOCKHAND_WEBHOOK_SECRET` | the stack's webhook secret from Dockhand | Masked, Protected |
 
 A classic token is needed because ghcr.io does not accept fine-grained tokens.
 When it expires, both jobs fail with 401; create a new one and update
@@ -364,7 +368,8 @@ The default-branch pipeline runs every test and scan; if they pass, the
    commits since the previous release, and a compare link.
 
 The `publish` stage then copies the release to GitHub and pushes the image to
-ghcr.io (see [Publishing to GitHub](#publishing-to-github)).
+ghcr.io, and the `deploy` stage tells Dockhand to update the stack (see
+[Publishing to GitHub](#publishing-to-github)).
 
 The job uses `resource_group: release`, so merges in quick succession are
 released one at a time, in order. API errors fail the job instead of skipping

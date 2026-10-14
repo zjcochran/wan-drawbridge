@@ -50,6 +50,8 @@ records the decisions behind it and how to work in the repo.
   repo zjcochran/wan-drawbridge and pushes the image to ghcr.io (`publish`
   stage, `ci/github-sync.sh`; variables GHCR_REPO, GHCR_USER, GHCR_TOKEN). No
   GitHub Actions, by the user's choice; GitLab stays the source of truth.
+  Then the `deploy` stage's `deploy-webhook` (`ci/deploy-webhook.sh`) calls the Dockhand webhook
+  (DOCKHAND_WEBHOOK, DOCKHAND_WEBHOOK_SECRET) so the stack picks up the image.
 - Everything published must be fictional: no user names, people's names,
   real ISP names, ASNs or address ranges, private IP ranges, time zones or
   real-looking self-hosted app names. Use documentation values (192.0.2.0/24,
