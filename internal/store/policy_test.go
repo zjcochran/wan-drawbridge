@@ -132,13 +132,13 @@ func TestNewServiceInSplitStackNeedsReview(t *testing.T) {
 	s.SetContainerPolicy(ctx, "media/player", Keep, "test", now)
 
 	added, err := s.SyncInventory(ctx, append(media,
-		InventoryItem{Key: "media/prowlarr", Project: "media", Service: "prowlarr", Name: "media-prowlarr-1"}), now)
+		InventoryItem{Key: "media/extra", Project: "media", Service: "extra", Name: "media-extra-1"}), now)
 	if err != nil || len(added) != 1 {
 		t.Fatalf("added=%v err=%v", added, err)
 	}
 	cs, _ := s.Containers(ctx)
 	for _, c := range cs {
-		if c.Key == "media/prowlarr" && (!c.NeedsReview || c.Effective != Keep) {
+		if c.Key == "media/extra" && (!c.NeedsReview || c.Effective != Keep) {
 			t.Errorf("new service = %+v, want keep + needs review", c)
 		}
 	}
