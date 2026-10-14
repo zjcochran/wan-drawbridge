@@ -28,16 +28,10 @@ on.
 ### Published image (recommended)
 
 Every release is published as a multi-arch image (`amd64`, `arm64`) to the
-private GitHub Container Registry package `ghcr.io/zjcochran/wan-drawbridge`,
+public GitHub Container Registry package `ghcr.io/zjcochran/wan-drawbridge`,
 tagged with the version (`0.1.0`), the minor version (`0.1`) and `latest`.
-Release notes are on GitHub (**Releases**) and GitLab (**Deploy → Releases**).
-
-The package is private, so log in once on the Docker host with a GitHub
-personal access token (classic) that has the `read:packages` scope:
-
-```sh
-echo '<token>' | docker login ghcr.io -u <github-user> --password-stdin
-```
+No `docker login` is needed to pull it. Release notes are on GitHub
+(**Releases**).
 
 The [Compose file](#the-compose-file) below uses `latest`. To control when
 you upgrade, use the minor version instead:
