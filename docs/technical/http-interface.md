@@ -67,6 +67,7 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/settings/notifications`, `/settings/backup`, `/settings/users`, `/settings/sso` | admin | Settings tabs for admins. |
 | GET | `/settings/backups/{name}` | admin | Downloads a file from the backup folder. Only names matching `drawbridge-backup-YYYYMMDD-HHMMSS.json` are served; anything else is 404. |
 | GET | `/users` | admin | 301 to `/settings/users`, where Users moved. |
+| GET | `/users/{id}/picture` | auth | A user's profile picture, for that user and admins; 404 for others or without a picture. `Cache-Control: private, max-age=86400`: links carry `?v=<updated_at>`. |
 
 ### Actions
 
@@ -92,6 +93,8 @@ token.
 | `/settings/detection` | admin | detection fields | Validate and apply |
 | `/settings/password` | auth | `current`, `new`, `confirm` | Change own password; ends all own sessions |
 | `/settings/appearance` | auth | `theme`, `mode` | Save own colour theme and mode; 204, or 400 for an unknown value |
+| `/settings/picture` | auth | `picture` (multipart file) | Upload own profile picture: PNG, JPEG, GIF or WebP by sniffed content, at most 1 MiB; 422 otherwise. Redirects to `/settings/account` |
+| `/settings/picture/remove` | auth | | Remove own uploaded picture (not one from single sign-on). Redirects to `/settings/account` |
 | `/settings/backup/schedule` | admin | `enabled`, `time` (`HH:MM`), `keep` (1–365), `history`, `passphrase`, `confirm` | Save the backup schedule; a blank passphrase keeps the saved one. Returns the schedule fragment; 422 with the reason if invalid |
 | `/settings/backup/run` | admin | | Make a scheduled backup now; returns the schedule fragment |
 | `/settings/notifications` | admin | `id` (empty to add), `name`, `kind`, `url`, `token`, `remove_token`, `topics` (repeated), `enabled` | Add or update a channel; blank `url`/`token` keep the saved ones. Returns the channel list; 422 with the reason if invalid, 404 for an unknown `id` |

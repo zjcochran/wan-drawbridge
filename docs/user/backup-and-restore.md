@@ -77,9 +77,10 @@ on the new instance.
 | Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; stack switches and container settings, including containers waiting for review; users with their roles, disabled flags and password hashes; single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs and tokens; whether setup is complete and whether automation is paused |
 | History (optional) | Checks, events and daily ISP totals from the chosen period |
 
-Not included: sign-in sessions, the current WAN state (primary, failover,
-pending changes), the list of containers Drawbridge stopped, `secret.key`
-and the ASN database.
+Not included: sign-in sessions, profile pictures (an uploaded one has to be
+uploaded again; one from single sign-on comes back at the next SSO sign-in),
+the current WAN state (primary, failover, pending changes), the list of
+containers Drawbridge stopped, `secret.key` and the ASN database.
 
 Checks and daily totals are only kept for the retention period (Settings →
 WAN detection, 30 days by default), so a longer range adds older events but no

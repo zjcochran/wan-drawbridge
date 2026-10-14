@@ -44,6 +44,8 @@ type fakeIDP struct {
 	scopes []string // scopes_supported; nil leaves it out
 	algs   []string // id_token_signing_alg_values_supported
 	hsKey  []byte   // sign ID tokens with HS256 and this key instead of RS256
+
+	picture []byte // served at /picture.png to holders of the access token
 }
 
 type authReq struct{ nonce, challenge, redirect string }
@@ -67,6 +69,15 @@ func newIDP(t *testing.T) *fakeIDP {
 			doc["scopes_supported"] = p.scopes
 		}
 		json.NewEncoder(w).Encode(doc)
+	})
+	mux.HandleFunc("/picture.png", func(w http.ResponseWriter, r *http.Request) {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		if r.Header.Get("Authorization") != "Bearer at" || p.picture == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Write(p.picture)
 	})
 	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode(jose.JSONWebKeySet{Keys: []jose.JSONWebKey{{Key: &key.PublicKey, KeyID: "k1", Algorithm: "RS256", Use: "sig"}}})

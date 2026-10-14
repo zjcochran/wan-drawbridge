@@ -1,5 +1,8 @@
 {{/* Fragments shared by several pages and returned alone to HTMX requests. */}}
 
+{{/* avatar is a user's profile picture, or their initial without one. */}}
+{{define "avatar"}}{{if .Picture}}<img class="avatar" src="/users/{{.ID}}/picture?v={{.Picture}}" alt="" width="28" height="28">{{else}}<span class="avatar" aria-hidden="true">{{initial .Username}}</span>{{end}}{{end}}
+
 {{define "stacks-table"}}
 <div id="stacks-table" hx-get="/stacks?partial=1" hx-trigger="sse:inventory" hx-swap="outerHTML">
 <div class="table-wrap">

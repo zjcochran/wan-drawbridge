@@ -43,6 +43,7 @@ type User struct {
 	LastLogin time.Time
 	Theme     string // colour theme name; see web.Themes
 	Mode      string // "auto", "light" or "dark"
+	Picture   int64  // when the profile picture was stored (Unix time); 0 = none
 }
 
 // IsAdmin reports whether the user has the admin role.
@@ -153,12 +154,12 @@ func (s *Store) Authenticate(ctx context.Context, username, password string, now
 
 const userCols = `id, username, role, disabled, password_hash IS NOT NULL,
 	EXISTS (SELECT 1 FROM oidc_identities o WHERE o.user_id = users.id), created_at, COALESCE(last_login, 0),
-	theme, mode`
+	theme, mode, COALESCE((SELECT updated_at FROM user_pictures p WHERE p.user_id = users.id), 0)`
 
 func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 	var u User
 	var created, last int64
-	if err := sc.Scan(&u.ID, &u.Username, &u.Role, &u.Disabled, &u.HasLocal, &u.HasSSO, &created, &last, &u.Theme, &u.Mode); err != nil {
+	if err := sc.Scan(&u.ID, &u.Username, &u.Role, &u.Disabled, &u.HasLocal, &u.HasSSO, &created, &last, &u.Theme, &u.Mode, &u.Picture); err != nil {
 		return User{}, err
 	}
 	u.CreatedAt = time.Unix(created, 0)

@@ -99,6 +99,23 @@
   <p class="muted">You sign in with {{$d.SSO.Name}} only.</p>
   {{end}}
 </section>
+<section class="card" id="picture">
+  <h2>Profile picture</h2>
+  <div class="picture-row">
+    <span class="avatar-large">{{template "avatar" $.Session.User}}</span>
+    <div class="stack">
+      <form hx-post="/settings/picture" hx-encoding="multipart/form-data" class="stack narrow-form">
+        <label>Upload a picture <input name="picture" type="file" accept="image/png,image/jpeg,image/gif,image/webp" required>
+          <small>PNG, JPEG, GIF or WebP, up to 1 MB.{{if $d.SSO.Enabled}} It replaces the one from {{$d.SSO.Name}}.{{end}}</small></label>
+        <div class="picture-actions">
+          <button>Upload</button>
+          {{if eq $d.Picture "upload"}}<button type="button" class="secondary" hx-post="/settings/picture/remove">Remove picture</button>{{end}}
+        </div>
+      </form>
+      {{if eq $d.Picture "sso"}}<p class="hint">This picture comes from {{$d.SSO.Name}} and updates when you sign in with it.</p>{{end}}
+    </div>
+  </div>
+</section>
 <section class="card" id="appearance">
   <h2>Appearance</h2>
   <form id="appearance-form" hx-post="/settings/appearance" hx-trigger="change" hx-swap="none">
@@ -246,7 +263,7 @@
   <tbody>
   {{range .Users}}
   <tr>
-    <td><strong>{{.Username}}</strong>{{if eq .ID $.Me}} <span class="sub">(you)</span>{{end}}</td>
+    <td><span class="user-cell">{{template "avatar" .}}<span><strong>{{.Username}}</strong>{{if eq .ID $.Me}} <span class="sub">(you)</span>{{end}}</span></span></td>
     <td>
       {{if eq .ID $.Me}}{{.Role}}
       {{else if and $.GroupRoles (not .HasLocal)}}{{.Role}} <div class="sub">from the SSO admin group</div>

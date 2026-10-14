@@ -165,7 +165,32 @@ time { white-space: nowrap; }
 .topbar nav a { color: var(--muted); text-decoration: none; padding: 0.35rem 0.6rem; border-radius: 6px; }
 .topbar nav a:hover { color: var(--text); background: var(--surface-2); }
 .topbar nav a[aria-current="page"] { color: var(--text); background: var(--surface-2); font-weight: 600; }
-.whoami { display: flex; align-items: center; gap: 0.5rem; color: var(--muted); }
+.usermenu { position: relative; }
+.usermenu summary {
+  display: flex; align-items: center; gap: 0.5rem; cursor: pointer; list-style: none;
+  color: var(--muted); padding: 0.25rem 0.4rem; border-radius: 8px;
+}
+.usermenu summary::-webkit-details-marker { display: none; }
+.usermenu summary:hover, .usermenu[open] summary { color: var(--text); background: var(--surface); }
+.usermenu summary::after { content: "▾"; font-size: 0.75rem; }
+.usermenu-list {
+  position: absolute; right: 0; top: calc(100% + 0.35rem); z-index: 20; min-width: 11rem;
+  display: grid; padding: 0.35rem; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.usermenu-list a, .usermenu-list button {
+  display: block; width: 100%; text-align: left; padding: 0.5rem 0.65rem; border-radius: 6px;
+  color: var(--text); background: none; border: 0; font: inherit; font-weight: 500; text-decoration: none; cursor: pointer;
+}
+.usermenu-list a:hover, .usermenu-list button:hover { background: var(--bg); }
+.avatar {
+  display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%;
+  object-fit: cover; background: var(--accent); color: var(--bg); font-size: 0.85rem; font-weight: 650;
+}
+.avatar-large .avatar { width: 72px; height: 72px; font-size: 1.8rem; }
+.user-cell { display: inline-flex; align-items: center; gap: 0.6rem; }
+.picture-row { display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap; }
+.picture-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
 /* Settings tabs: one link per section. On a narrow screen the row scrolls
    sideways by itself rather than widening the page. */
@@ -329,7 +354,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   .brand { flex: 1; }
   .topbar nav { order: 3; flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; margin: 0 -0.5rem; }
   .topbar nav a { white-space: nowrap; }
-  .whoami span { display: none; }
+  .usermenu-name { display: none; }
   .facts { grid-template-columns: 1fr; }
   .facts dt { margin-top: 0.4rem; }
 }

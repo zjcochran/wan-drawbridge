@@ -51,6 +51,20 @@
     if (auto && auto.form) auto.form.requestSubmit();
   });
 
+  // The account menu closes on a click elsewhere or on Escape.
+  document.addEventListener("click", (e) => {
+    document.querySelectorAll("details.usermenu[open]").forEach((d) => {
+      if (!d.contains(e.target)) d.open = false;
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll("details.usermenu[open]").forEach((d) => {
+      d.open = false;
+      d.querySelector("summary").focus();
+    });
+  });
+
   // Forms marked data-reset-on-success clear after a successful HTMX post.
   document.addEventListener("htmx:afterRequest", (e) => {
     const form = e.detail.elt.closest && e.detail.elt.closest("form[data-reset-on-success]");
