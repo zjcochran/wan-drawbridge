@@ -121,14 +121,15 @@ off. Exceptions are made on the Containers page.
 
 ![Containers page](../images/containers-override.jpg)
 
-Every container Drawbridge has seen, including ones that no longer exist.
+Every container in Docker, except Drawbridge itself.
 
 **Filters** (combine freely; the URL keeps them, so you can bookmark a view):
 
 - Search by name or key.
 - Stack: all, standalone only, or one stack.
-- State: running, stopped, or gone (no longer in Docker). "unknown" is shown
-  when Docker cannot be reached.
+- State: running or stopped. "unknown" is shown when Docker cannot be
+  reached; then the list also includes containers removed in the last 10
+  minutes.
 - Setting: stops on failover, keeps running, or "New, not configured".
 
 **Columns:** container name (and its key, `project/service`, when different),

@@ -59,7 +59,7 @@ func (s *Server) liveState(ctx context.Context) map[string]string {
 
 type containerRow struct {
 	store.ContainerRow
-	State string // running, stopped, gone or unknown
+	State string // running, stopped or unknown
 }
 
 // Source explains where the effective policy comes from.
@@ -88,7 +88,7 @@ func (s *Server) containerRows(ctx context.Context) ([]containerRow, error) {
 		st := "unknown"
 		if live != nil {
 			if st = live[r.Key]; st == "" {
-				st = "gone"
+				continue // removed from Docker; its row is deleted after store.GoneAfter
 			}
 		}
 		out = append(out, containerRow{r, st})

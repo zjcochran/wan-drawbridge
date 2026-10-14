@@ -39,8 +39,14 @@ type InventoryItem struct {
 	Label                       string // from drawbridge.on-failover: "", Disable or Keep
 }
 
+// GoneAfter is how long a container can be missing from Docker before its row
+// is deleted. It covers a re-create (compose up after a pull), which removes
+// the old container before starting the new one, so settings survive that.
+const GoneAfter = 10 * time.Minute
+
 // SyncInventory records the containers currently in Docker. Rows for containers
-// that disappear are kept, so their settings survive a re-create. A new
+// missing for GoneAfter are deleted, and so are stacks left with no
+// containers. A new
 // container in a stack that already has per-container settings is flagged for
 // review: it keeps running until someone decides, unless its label says what
 // to do.
@@ -87,6 +93,13 @@ func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now ti
 			return nil, err
 		}
 		added = append(added, it.Key)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM containers WHERE last_seen < ?`, now.Add(-GoneAfter).Unix()); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM stacks WHERE project NOT IN (SELECT project FROM containers)`); err != nil {
+		return nil, err
 	}
 	return added, tx.Commit()
 }

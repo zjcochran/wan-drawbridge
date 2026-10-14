@@ -509,6 +509,24 @@ func TestContainersShowLabels(t *testing.T) {
 	}
 }
 
+func TestGoneContainersAreNotListed(t *testing.T) {
+	e := newEnv(t)
+	// In the inventory but no longer in Docker.
+	e.st.SyncInventory(context.Background(), []store.InventoryItem{
+		{Key: "runner-1-build", Name: "runner-1-build"},
+		{Key: "media/old", Project: "media", Service: "old", Name: "media-old-1"},
+	}, time.Now())
+	c := e.admin()
+	for _, path := range []string{"/containers", "/containers?state=gone", "/stacks/media/containers"} {
+		if _, page := c.get(path); strings.Contains(page, "runner-1-build") || strings.Contains(page, "media-old-1") {
+			t.Errorf("%s lists a container that is gone", path)
+		}
+	}
+	if _, page := c.get("/containers"); strings.Contains(page, ">gone<") {
+		t.Error("the state filter still offers gone")
+	}
+}
+
 func TestDrillActions(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()

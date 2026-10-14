@@ -37,8 +37,11 @@ share a key.
 - inserts unknown keys with policy `inherit` and their `label_policy`,
   flagging them `needs_review` if they have no label and their stack already
   has any container with a non-`inherit` policy;
-- never deletes rows: containers that disappear keep their settings and show
-  as "gone".
+- deletes containers whose `last_seen` is more than `store.GoneAfter`
+  (10 min) old, then stacks with no containers left. Present containers
+  were just stamped, so this removes only ones missing that long; a
+  re-create (remove, then create) keeps its row and setting. The web UI
+  never lists a container that is not in Docker.
 
 ### Self-exclusion
 

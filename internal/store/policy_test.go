@@ -125,6 +125,49 @@ func TestOverrideWithoutStackRuleDoesNotConvert(t *testing.T) {
 	}
 }
 
+func TestGoneContainersAreDeleted(t *testing.T) {
+	ctx, s, now := context.Background(), open(t), time.Unix(1_800_000_000, 0)
+	items := append(slices.Clone(media),
+		InventoryItem{Key: "runner-1-build", Name: "runner-1-build"},
+		InventoryItem{Key: "tools/cli", Project: "tools", Service: "cli", Name: "tools-cli-1"})
+	s.SyncInventory(ctx, items, now)
+	s.SetContainerPolicy(ctx, "media/player", Disable, "test", now)
+	keys := func() []string {
+		cs, err := s.Containers(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range cs {
+			out = append(out, c.Key)
+		}
+		slices.Sort(out)
+		return out
+	}
+
+	// A re-create removes media/player for a moment: it keeps its row and setting.
+	s.SyncInventory(ctx, media[1:], now.Add(GoneAfter))
+	s.SyncInventory(ctx, media, now.Add(GoneAfter+time.Second))
+	if e := effective(t, s); e["media/player"] != Disable {
+		t.Errorf("a re-created container lost its setting: %v", e)
+	}
+	if k := keys(); len(k) != len(media) {
+		t.Errorf("containers missing longer than GoneAfter were kept: %v", k)
+	}
+	stacks, err := s.Stacks(ctx)
+	if err != nil || len(stacks) != 1 || stacks[0].Project != "media" {
+		t.Errorf("stacks = %+v, %v; want only media", stacks, err)
+	}
+
+	// Once nothing is left, everything goes.
+	if _, err := s.SyncInventory(ctx, nil, now.Add(3*GoneAfter)); err != nil {
+		t.Fatal(err)
+	}
+	if k := keys(); len(k) != 0 {
+		t.Errorf("left after everything was removed: %v", k)
+	}
+}
+
 func TestNewServiceInSplitStackNeedsReview(t *testing.T) {
 	ctx, s, now := context.Background(), open(t), time.Unix(1_800_000_000, 0)
 	s.SyncInventory(ctx, media, now)
