@@ -82,6 +82,24 @@
     e.detail.elt.querySelectorAll(chooser).forEach((s) => s.form && showFields(s));
   });
 
+  // Buttons marked data-collapse load their target once, then a second click
+  // empties it again; the attribute holds the label while it is open.
+  document.addEventListener("htmx:beforeRequest", (e) => {
+    const btn = e.detail.elt;
+    if (!btn.matches || !btn.matches("[data-collapse]") || btn.getAttribute("aria-expanded") !== "true") return;
+    e.preventDefault();
+    e.detail.target.replaceChildren();
+    btn.textContent = btn.dataset.expand;
+    btn.setAttribute("aria-expanded", "false");
+  });
+  document.addEventListener("htmx:afterSwap", (e) => {
+    const btn = e.detail.requestConfig && e.detail.requestConfig.elt;
+    if (!btn || !btn.matches || !btn.matches("[data-collapse]")) return;
+    btn.dataset.expand = btn.textContent;
+    btn.textContent = btn.dataset.collapse;
+    btn.setAttribute("aria-expanded", "true");
+  });
+
   // Forms marked data-reset-on-success clear after a successful HTMX post.
   document.addEventListener("htmx:afterRequest", (e) => {
     const form = e.detail.elt.closest && e.detail.elt.closest("form[data-reset-on-success]");

@@ -114,7 +114,7 @@ One row per Docker Compose project:
 | Containers | "3 running of 5". |
 | On failover | **Stops (stack rule)**: the stack switch is on. **Partial · 4 of 5**: some containers stop through their own settings. **Not affected**: nothing in it stops. |
 | Stop whole stack | The switch (admins). |
-| Show containers | Expands the stack's containers with their state and whether each stops. |
+| Show containers | Expands the stack's containers with their state and whether each stops; it then reads Hide containers, which collapses them again. |
 
 Flipping the switch **resets every container in the stack** to follow it, on or
 off. Exceptions are made on the Containers page.

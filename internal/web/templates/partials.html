@@ -29,7 +29,8 @@
       {{else}}{{if .Disabled}}Yes{{else}}No{{end}}{{end}}
     </td>
     <td class="right">
-      <button class="link" hx-get="/stacks/{{.Project}}/containers" hx-target="#stack-{{$i}}" hx-swap="innerHTML">Show containers</button>
+      <button class="link" hx-get="/stacks/{{.Project}}/containers" hx-target="#stack-{{$i}}" hx-swap="innerHTML"
+              data-collapse="Hide containers" aria-expanded="false" aria-controls="stack-{{$i}}">Show containers</button>
     </td>
   </tr>
   <tr class="detail"><td colspan="5" id="stack-{{$i}}"></td></tr>
