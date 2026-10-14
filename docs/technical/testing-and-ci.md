@@ -93,7 +93,7 @@ Drawbridge's log.
 
 ## GitLab CI
 
-`.gitlab-ci.yml` stages: `test`, `smoke`, `release`, `publish`. Versioning and releases are described in [Releases](#releases).
+`.gitlab-ci.yml` stages: `test`, `smoke`, `release`, `publish`, `deploy`. Versioning and releases are described in [Releases](#releases).
 
 | Job | Stage | Image | What it does | Reports |
 | --- | --- | --- | --- | --- |
@@ -110,7 +110,7 @@ Drawbridge's log.
 | `release` | release | `alpine:3` | Pushes to the default branch only: `ci/release.sh` creates the next version's tag and GitLab release. | `dotenv: release.env` |
 | `github-sync` | publish | `alpine:3` | Default branch only: copies code, tags and releases to GitHub. See [Publishing to GitHub](#publishing-to-github). | |
 | `github-image` | publish | `docker:28` + dind | Default branch only, when a release was made: multi-arch image to ghcr.io. | |
-| `deploy-webhook` | publish | `alpine:3` | Default branch only, when a release was made, after `github-image`: calls the Dockhand webhook so the stack updates. See [Publishing to GitHub](#publishing-to-github). | |
+| `deploy-webhook` | deploy | `alpine:3` | Default branch only, when a release was made, after `github-image`: calls the Dockhand webhook so the stack updates. See [Publishing to GitHub](#publishing-to-github). | |
 | `deps` | test | `golang:1.26` | Scheduled pipelines only: `ci/deps.sh`. See [Weekly dependency check](#weekly-dependency-check). | `.deps/` (artifact, 30 days) |
 | `deps-fix` | test | `golang:1.26` | Scheduled pipelines only, after `deps`: `ci/deps-fix.sh` opens a merge request with the updates. | `.deps/` (artifact, 30 days) |
 
@@ -262,8 +262,8 @@ findings.
 ### Publishing to GitHub
 
 After each release, the `publish` stage copies everything to the private
-GitHub repository, publishes the container image and tells Dockhand to update
-the stack. All of it runs in GitLab CI; **no GitHub Actions run** (the
+GitHub repository and publishes the container image; then the `deploy` stage
+tells Dockhand to update the stack. All of it runs in GitLab CI; **no GitHub Actions run** (the
 repository has no workflows, and Actions can be disabled in its settings).
 
 | Job | What it does |
@@ -368,7 +368,8 @@ The default-branch pipeline runs every test and scan; if they pass, the
    commits since the previous release, and a compare link.
 
 The `publish` stage then copies the release to GitHub and pushes the image to
-ghcr.io (see [Publishing to GitHub](#publishing-to-github)).
+ghcr.io, and the `deploy` stage tells Dockhand to update the stack (see
+[Publishing to GitHub](#publishing-to-github)).
 
 The job uses `resource_group: release`, so merges in quick succession are
 released one at a time, in order. API errors fail the job instead of skipping
