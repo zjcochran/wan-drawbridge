@@ -75,8 +75,10 @@ func newNotifier(t *testing.T) *Notifier {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	return &Notifier{Store: st, Secrets: plain{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	n := &Notifier{Store: st, Secrets: plain{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Retry: []time.Duration{time.Millisecond, time.Millisecond}, Version: "test"}
+	n.init()
+	return n
 }
 
 func save(t *testing.T, n *Notifier, chans ...Channel) {

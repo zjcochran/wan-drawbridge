@@ -158,3 +158,52 @@ func TestMapSecretsNotifications(t *testing.T) {
 		t.Error("malformed channel accepted")
 	}
 }
+
+func TestNotificationChannelKinds(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	add := url.Values{"name": {"Pushover"}, "kind": {"pushover"}, "url": {"https://ignored.example"},
+		"token": {"app-token"}, "user": {"user-key"}, "topics": {"failover"}, "enabled": {"on"}}
+	resp, body := c.htmx("/settings/notifications", add)
+	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "api.pushover.net") || strings.Contains(body, "user-key") {
+		t.Fatalf("add pushover: %d %s", resp.StatusCode, body)
+	}
+	ch := e.channels(t)[0]
+	if ch.URL != "" || !strings.HasPrefix(ch.User, "v1:") {
+		t.Fatalf("stored: %+v", ch)
+	}
+	// Blank user and token keep the saved ones.
+	if resp, _ := c.htmx("/settings/notifications", url.Values{"id": {ch.ID}, "name": {"Pushover"}, "kind": {"pushover"}}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("edit: %d", resp.StatusCode)
+	}
+	if plain, _ := notify.Open(e.channels(t)[0], e.ui.Secrets); plain.User != "user-key" || plain.Token != "app-token" {
+		t.Fatalf("kept: %+v", plain)
+	}
+	if resp, _ := c.htmx("/settings/notifications", url.Values{"name": {"Pushover"}, "kind": {"pushover"}, "token": {"a"}}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("pushover without a user key: %d", resp.StatusCode)
+	}
+
+	mail := url.Values{"name": {"Mail"}, "kind": {"email"}, "url": {"smtps://mail.example.com"}, "user": {"alice"},
+		"token": {"test-password-123"}, "from": {"drawbridge@example.com"}, "to": {"alice@example.com"}, "enabled": {"on"}}
+	if resp, body := c.htmx("/settings/notifications", mail); resp.StatusCode != http.StatusOK || !strings.Contains(body, "mail.example.com") ||
+		!strings.Contains(body, `value="alice@example.com"`) {
+		t.Fatalf("add email: %d %s", resp.StatusCode, body)
+	}
+	id := e.channels(t)[1].ID
+	c.htmx("/settings/notifications", url.Values{"id": {id}, "name": {"Mail"}, "kind": {"email"}, "from": {"drawbridge@example.com"},
+		"to": {"alice@example.com"}, "remove_user": {"on"}})
+	if e.channels(t)[1].User != "" {
+		t.Error("the username was not removed")
+	}
+
+	tg := url.Values{"name": {"Chat"}, "kind": {"telegram"}, "url": {"https://bot.example"}, "token": {"1:x"}, "to": {"42"}}
+	c.htmx("/settings/notifications", tg)
+	id = e.channels(t)[2].ID
+	c.htmx("/settings/notifications", url.Values{"id": {id}, "name": {"Chat"}, "kind": {"telegram"}, "to": {"42"}, "remove_url": {"on"}})
+	if ch := e.channels(t)[2]; ch.URL != "" {
+		t.Errorf("the Telegram URL was not removed: %+v", ch)
+	}
+	if _, page := c.get("/settings/notifications"); !strings.Contains(page, "api.telegram.org") {
+		t.Error("a Telegram channel without a URL should show the default host")
+	}
+}

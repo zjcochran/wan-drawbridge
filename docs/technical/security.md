@@ -223,9 +223,13 @@ only such names, so no other path can be read.
 
 ## Notifications
 
-Notification requests go only to the URLs admins configure. They carry the
-event's title, message and fields (ISP names, ASNs, usernames in `by`), never
-secrets. Test messages use the URL from the form, so only admins can send
+Notification requests go only to the URLs admins configure (Pushover's and
+Telegram's own APIs for those kinds). They carry the event's title, message
+and fields (ISP names, ASNs, usernames in `by`), never secrets. Email is only
+sent encrypted: STARTTLS is required on `smtp://`, `smtps://` uses TLS from the
+start, certificates are verified (TLS 1.2 or newer), and the password is sent
+only after that. Errors show only the scheme and host of a URL, never a path
+that may hold a token. Test messages use the URL from the form, so only admins can send
 them. Answers are read only for the status code and the first 300 bytes of an
 error.
 

@@ -13,7 +13,7 @@
 
 {{else if eq $d.Tab "notifications"}}
 <section class="card" id="notifications">
-  <p>Send events to <a href="https://ntfy.sh">ntfy</a>, Gotify, Discord or any webhook. Each channel chooses what it gets.</p>
+  <p>Send events to <a href="https://ntfy.sh">ntfy</a>, Gotify, Pushover, Telegram, Discord, email or any webhook. Each channel chooses what it gets.</p>
   {{template "notify-list" $d.Notify}}
 </section>
 
@@ -234,14 +234,37 @@
     <label>Name <input name="name" value="{{.C.Name}}" placeholder="Phone" required></label>
     <label>Kind
       <select name="kind">{{range .Kinds}}<option value="{{.ID}}" {{if eq .ID $.C.Kind}}selected{{end}}>{{.Name}}</option>{{end}}</select></label>
-    <label class="wide">URL
-      <input name="url" type="url" autocomplete="off" {{if .C.ID}}placeholder="Saved. Leave blank to keep it."{{else}}placeholder="https://ntfy.sh/my-topic" required{{end}}>
-      <small>ntfy: the topic URL. Gotify: the server address. Discord: the channel's webhook URL. Webhook: any URL; Drawbridge POSTs JSON to it.</small></label>
-    <label class="wide">Token
+    <label class="wide" data-kinds="ntfy gotify telegram discord email webhook">URL
+      <input name="url" autocomplete="off" placeholder="{{if .C.HasURL}}Saved. Leave blank to keep it.{{else}}Where to send{{end}}">
+      <small data-kinds="ntfy">The topic URL, for example <code>https://ntfy.sh/my-topic</code>.</small>
+      <small data-kinds="gotify">The server address, for example <code>https://gotify.example.com</code>.</small>
+      <small data-kinds="telegram">Only for your own Bot API server. Leave blank to use api.telegram.org.</small>
+      <small data-kinds="discord">The channel's webhook URL (Edit Channel → Integrations → Webhooks).</small>
+      <small data-kinds="email"><code>smtp://host:587</code> (STARTTLS) or <code>smtps://host:465</code> (TLS). Mail is never sent unencrypted.</small>
+      <small data-kinds="webhook">Any URL. Drawbridge POSTs the message to it as JSON.</small></label>
+    <label class="wide" data-kinds="ntfy gotify pushover telegram email webhook">Token or password
       <input name="token" type="password" autocomplete="new-password" placeholder="{{if .C.HasToken}}Saved. Leave blank to keep it.{{else}}Optional{{end}}">
-      <small>ntfy: an access token for a protected topic. Gotify: the application token (required). Webhook: sent as a bearer token. Stored encrypted.</small></label>
+      <small data-kinds="ntfy">Optional: an access token for a protected topic. Stored encrypted.</small>
+      <small data-kinds="gotify">The application token (required). Stored encrypted.</small>
+      <small data-kinds="pushover">The application's API token (required). Stored encrypted.</small>
+      <small data-kinds="telegram">The bot token from @BotFather (required). Stored encrypted.</small>
+      <small data-kinds="email">The SMTP password. Stored encrypted.</small>
+      <small data-kinds="webhook">Optional: sent as a bearer token. Stored encrypted.</small></label>
+    <label data-kinds="pushover email">User
+      <input name="user" type="password" autocomplete="off" placeholder="{{if .C.HasUser}}Saved. Leave blank to keep it.{{end}}">
+      <small data-kinds="pushover">Your user key (required). Stored encrypted.</small>
+      <small data-kinds="email">The SMTP username. Leave blank to send without signing in. Stored encrypted.</small></label>
+    <label data-kinds="telegram email">Send to
+      <input name="to" value="{{.C.To}}" autocomplete="off">
+      <small data-kinds="telegram">The chat ID. A group's starts with <code>-</code>.</small>
+      <small data-kinds="email">One or more addresses, separated by commas.</small></label>
+    <label data-kinds="email">From
+      <input name="from" value="{{.C.From}}" autocomplete="off" placeholder="drawbridge@example.com">
+      <small>The sender address.</small></label>
   </div>
+  {{if .C.HasURL}}<label class="check" data-kinds="telegram"><input type="checkbox" name="remove_url"> Remove the saved URL (use api.telegram.org)</label>{{end}}
   {{if .C.HasToken}}<label class="check"><input type="checkbox" name="remove_token"> Remove the saved token</label>{{end}}
+  {{if .C.HasUser}}<label class="check" data-kinds="email"><input type="checkbox" name="remove_user"> Remove the saved username</label>{{end}}
   <fieldset class="stack">
     <legend>Send</legend>
     {{range .Topics}}<label class="check"><input type="checkbox" name="topics" value="{{.ID}}" {{if index $.C.Topics .ID}}checked{{end}}> {{.Name}}</label>

@@ -22,7 +22,7 @@ Start here if you run Drawbridge.
 | [Single sign-on](user/single-sign-on.md) | Pocket ID or any OIDC provider: setup, groups, linking, SSO-only, lock-out recovery |
 | [Behind a reverse proxy](user/reverse-proxy.md) | Traefik, Caddy, nginx, Nginx Proxy Manager, HAProxy and Apache examples, trusted proxies, HTTPS |
 | [Backup and restore](user/backup-and-restore.md) | Encrypted backup files with optional history, daily scheduled backups, folder backups, restoring, moving hosts |
-| [Notifications](user/notifications.md) | Sending failovers, container errors and more to ntfy, Gotify, Discord or a webhook |
+| [Notifications](user/notifications.md) | Sending failovers, container errors and more to ntfy, Gotify, Pushover, Telegram, Discord, email or a webhook |
 | [Monitoring](user/monitoring.md) | Prometheus metrics, alert rules, the JSON status API and its tokens, the health check, logs, sending the log to syslog |
 | [Command line](user/cli.md) | Every `drawbridge` subcommand, with examples |
 | [Troubleshooting](user/troubleshooting.md) | Symptoms, causes and fixes |

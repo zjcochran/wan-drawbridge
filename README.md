@@ -24,8 +24,9 @@ them again.
   colour themes per user; local accounts and single sign-on (Pocket ID or any
   OIDC provider); Prometheus metrics; a JSON status API for Home Assistant
   and scripts, with revocable tokens; a CLI for scripting and recovery.
-- Notifications to ntfy, Gotify, Discord or any webhook, chosen per channel,
-  and optionally the log to a syslog server over UDP, TCP or TLS.
+- Notifications to ntfy, Gotify, Pushover, Telegram, Discord, email or any
+  webhook, chosen per channel, and optionally the log to a syslog server over
+  UDP, TCP or TLS.
 - Encrypted backup files of the configuration, downloaded or made daily, with
   optional history, that restore from Settings or straight from the setup
   wizard on a new host.
