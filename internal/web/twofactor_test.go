@@ -26,15 +26,17 @@ var (
 const password = "test-password-123"
 
 // turnOnTwoFactor sets up two-factor sign-in for the signed-in client and
-// returns the secret and the recovery codes.
-func turnOnTwoFactor(t *testing.T, c *client) (string, []string) {
+// returns the secret, the time step of the code it used, and the recovery
+// codes.
+func turnOnTwoFactor(t *testing.T, c *client) (string, int64, []string) {
 	t.Helper()
 	resp, body := c.htmx("/settings/2fa/start", url.Values{})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(body, `src="data:image/png;base64,`) {
 		t.Fatalf("start: %d %s", resp.StatusCode, body)
 	}
 	sealed, secret := html.UnescapeString(sealedRe.FindStringSubmatch(body)[1]), secretRe.FindStringSubmatch(body)[1]
-	code, _ := totp.Code(secret, totp.Step(time.Now()))
+	step := totp.Step(time.Now())
+	code, _ := totp.Code(secret, step)
 	if resp, _ := c.htmx("/settings/2fa/enable", url.Values{"sealed": {sealed}, "code": {code}, "password": {"wrong-password-1"}}); resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Errorf("wrong password: %d", resp.StatusCode)
 	}
@@ -49,7 +51,7 @@ func turnOnTwoFactor(t *testing.T, c *client) (string, []string) {
 	if resp.StatusCode != http.StatusOK || len(codes) != store.RecoveryCodeCount {
 		t.Fatalf("enable: %d, %d codes", resp.StatusCode, len(codes))
 	}
-	return secret, codes
+	return secret, step, codes
 }
 
 // signIn posts the password and returns the response page.
@@ -60,7 +62,7 @@ func signIn(c *client) (*http.Response, string) {
 func TestTwoFactorSignIn(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
-	secret, codes := turnOnTwoFactor(t, c)
+	secret, step, codes := turnOnTwoFactor(t, c)
 	if _, page := c.get("/settings/account"); !strings.Contains(page, "10 recovery codes left") {
 		t.Error("the account tab does not say two-factor is on")
 	}
@@ -77,11 +79,11 @@ func TestTwoFactorSignIn(t *testing.T) {
 		t.Errorf("wrong code: %d", resp.StatusCode)
 	}
 	// The code used to turn it on cannot be used again; the next one works.
-	used, _ := totp.Code(secret, totp.Step(time.Now()))
+	used, _ := totp.Code(secret, step)
 	if resp, _ := b.do("POST", "/login/code", url.Values{"code": {used}}); resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("a used code: %d", resp.StatusCode)
 	}
-	next, _ := totp.Code(secret, totp.Step(time.Now())+1)
+	next, _ := totp.Code(secret, step+1)
 	resp, _ = b.do("POST", "/login/code", url.Values{"code": {next}})
 	if resp.StatusCode != http.StatusSeeOther || resp.Header.Get("Location") != "/reports" {
 		t.Fatalf("right code: %d %s", resp.StatusCode, resp.Header.Get("Location"))
