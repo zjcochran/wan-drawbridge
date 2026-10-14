@@ -54,21 +54,28 @@ func (s *Server) refreshSSOPicture(ctx context.Context, userID int, l ssoLogin) 
 }
 
 func (s *Server) fetchSSOPicture(ctx context.Context, userID int, l ssoLogin) error {
+	u, err := s.Store.UserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !u.SSOPicture {
+		return nil // the user removed it
+	}
 	if l.claims.Picture == "" {
 		return s.Store.DeleteUserPicture(ctx, userID, store.PictureSSO)
 	}
-	u, err := url.Parse(l.claims.Picture)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+	pu, err := url.Parse(l.claims.Picture)
+	if err != nil || (pu.Scheme != "https" && pu.Scheme != "http") || pu.Host == "" {
 		return errors.New("the picture claim is not an http(s) URL")
 	}
 	ctx, cancel := context.WithTimeout(ctx, pictureFetchTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pu.String(), nil)
 	if err != nil {
 		return err
 	}
 	// The provider's own picture URLs may need the access token; never send it elsewhere.
-	if iss, err := url.Parse(l.issuer); err == nil && iss.Scheme == u.Scheme && iss.Host == u.Host && l.accessToken != "" {
+	if iss, err := url.Parse(l.issuer); err == nil && iss.Scheme == pu.Scheme && iss.Host == pu.Host && l.accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+l.accessToken)
 	}
 	resp, err := http.DefaultClient.Do(req) //nolint:gosec // G704: the URL is from the provider's signed ID token
@@ -131,12 +138,22 @@ func (s *Server) uploadPicture(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/settings/account?flash="+url.QueryEscape("Picture saved."))
 }
 
-// removePicture removes the signed-in user's uploaded picture. A picture
-// from single sign-on comes back at the next SSO sign-in.
+// removePicture removes the signed-in user's picture. Removing one from
+// single sign-on also stops single sign-on from setting it again.
 func (s *Server) removePicture(w http.ResponseWriter, r *http.Request) {
-	if err := s.Store.DeleteUserPicture(r.Context(), sessionFrom(r).User.ID, store.PictureUpload); err != nil {
+	if err := s.Store.RemoveUserPicture(r.Context(), sessionFrom(r).User.ID); err != nil {
 		s.fail(w, r, err)
 		return
 	}
 	redirect(w, r, "/settings/account?flash="+url.QueryEscape("Picture removed."))
+}
+
+// useSSOPicture lets single sign-on set the signed-in user's picture again,
+// from their next SSO sign-in.
+func (s *Server) useSSOPicture(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.SetSSOPicture(r.Context(), sessionFrom(r).User.ID, true); err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	redirect(w, r, "/settings/account?flash="+url.QueryEscape("Your picture will come from single sign-on from your next SSO sign-in."))
 }

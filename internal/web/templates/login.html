@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="auth-card card">
-  <h1><img src="/static/icon.svg" alt="" width="28" height="28"> WAN Drawbridge</h1>
+  <h1><img src="{{static "icon.svg"}}" alt="" width="28" height="28"> WAN Drawbridge</h1>
   {{with .Data.Error}}<div class="banner bad">{{.}}</div>{{end}}
   {{if .Data.SSO}}
   <a class="button block" href="/auth/oidc/login?next={{query .Data.Next}}">Sign in with {{.Data.SSOName}}</a>

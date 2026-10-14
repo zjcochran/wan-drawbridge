@@ -6,7 +6,9 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
@@ -186,6 +188,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/appearance", s.auth(s.saveAppearance))
 	mux.Handle("POST /settings/picture", limitBody(MaxPictureBytes+64<<10, s.auth(s.uploadPicture)))
 	mux.Handle("POST /settings/picture/remove", s.auth(s.removePicture))
+	mux.Handle("POST /settings/picture/sso", s.auth(s.useSSOPicture))
 	mux.Handle("GET /users/{id}/picture", s.auth(s.userPicture))
 	mux.Handle("POST /settings/sso", s.admin(s.saveSSO))
 	mux.Handle("POST /settings/sso/test", s.admin(s.testSSO))
@@ -219,12 +222,37 @@ func (s *Server) Handler() http.Handler {
 	return securityHeaders(h)
 }
 
+// cacheStatic lets browsers keep static files. Pages link them with
+// ?v=<staticVersion>, which changes with their content, so those are kept
+// for a year; a plain link is rechecked after an hour.
 func cacheStatic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		if r.URL.Query().Get("v") != "" {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+		}
 		h.ServeHTTP(w, r)
 	})
 }
+
+// staticVersion is a hash of every static file, so an upgrade that changes
+// any of them gives them new URLs and browsers drop their cached copies.
+var staticVersion = sync.OnceValue(func() string {
+	h := sha256.New()
+	fs.WalkDir(staticFS, "static", func(p string, d fs.DirEntry, err error) error { //nolint:errcheck // embedded: cannot fail
+		if err == nil && !d.IsDir() {
+			b, _ := staticFS.ReadFile(p)
+			fmt.Fprintf(h, "%s\x00%d\x00", p, len(b))
+			h.Write(b)
+		}
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))[:12]
+})
+
+// staticURL is the versioned link to a static file.
+func staticURL(name string) string { return "/static/" + name + "?v=" + staticVersion() }
 
 func securityHeaders(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

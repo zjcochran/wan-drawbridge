@@ -203,6 +203,7 @@ Primary key `(run_id, container_id)`.
 | `created_at`, `last_login` | INTEGER | |
 | `theme` | TEXT | Colour theme: `default`, `nord`, `solarized`, `gruvbox`, `catppuccin`, `tokyo-night`; default `default` |
 | `mode` | TEXT | `auto`, `light` or `dark`; default `auto` |
+| `sso_picture` | INTEGER | Whether single sign-on may set the profile picture; default 1. Turned off when the user removes a picture that came from it |
 
 ### sessions
 

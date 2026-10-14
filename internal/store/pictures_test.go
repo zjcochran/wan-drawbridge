@@ -50,3 +50,29 @@ func TestUserPictures(t *testing.T) {
 		t.Error("the picture outlived its user")
 	}
 }
+
+func TestRemoveUserPicture(t *testing.T) {
+	ctx, s := context.Background(), open(t)
+	a, _ := s.CreateUser(ctx, "admin", "test-password-123", RoleAdmin, t0)
+	s.SetUserPicture(ctx, a.ID, "image/png", []byte("mine"), PictureUpload, t0)
+
+	// Removing an upload keeps SSO pictures allowed; removing one from SSO
+	// turns them off until SetSSOPicture.
+	if err := s.RemoveUserPicture(ctx, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := s.UserByID(ctx, a.ID); u.Picture != 0 || !u.SSOPicture {
+		t.Fatalf("after removing an upload: %+v", u)
+	}
+	s.SetUserPicture(ctx, a.ID, "image/png", []byte("sso"), PictureSSO, t0)
+	s.RemoveUserPicture(ctx, a.ID)
+	if u, _ := s.UserByID(ctx, a.ID); u.Picture != 0 || u.SSOPicture {
+		t.Fatalf("after removing an SSO picture: %+v", u)
+	}
+	if err := s.SetSSOPicture(ctx, a.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if u, _ := s.UserByID(ctx, a.ID); !u.SSOPicture {
+		t.Fatal("SetSSOPicture(true) did not stick")
+	}
+}

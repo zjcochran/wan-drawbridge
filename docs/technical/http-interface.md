@@ -29,7 +29,7 @@ Non-admins get 403 "admins only" on admin routes.
 | --- | --- | --- |
 | GET | `/healthz` | `200 ok`. No auth. |
 | GET | `/metrics` | Prometheus text. 404 unless `DRAWBRIDGE_METRICS_TOKEN` is set; then `Authorization: Bearer` required (401). |
-| GET | `/static/…` | Embedded assets, `Cache-Control: public, max-age=3600`. |
+| GET | `/static/…` | Embedded assets. Pages link them as `/static/<file>?v=<hash>`, where the hash covers every static file, so an upgrade that changes one gives new URLs; those get `Cache-Control: public, max-age=31536000, immutable`, a link without `v` gets `public, max-age=3600`. |
 | GET | `/login` | Sign-in page; redirects to `/` if already signed in. Query `next`. |
 | POST | `/login` | Form `username`, `password`, `next`. 401 on wrong credentials, 429 when rate-limited, 403 when password sign-in is off. Sets the session cookie and redirects to `next` (local paths only). |
 | POST | `/logout` | Deletes the session, clears the cookie, redirects to `/login`. |
@@ -94,7 +94,8 @@ token.
 | `/settings/password` | auth | `current`, `new`, `confirm` | Change own password; ends all own sessions |
 | `/settings/appearance` | auth | `theme`, `mode` | Save own colour theme and mode; 204, or 400 for an unknown value |
 | `/settings/picture` | auth | `picture` (multipart file) | Upload own profile picture: PNG, JPEG, GIF or WebP by sniffed content, at most 1 MiB; 422 otherwise. Redirects to `/settings/account` |
-| `/settings/picture/remove` | auth | | Remove own uploaded picture (not one from single sign-on). Redirects to `/settings/account` |
+| `/settings/picture/remove` | auth | | Remove own picture. If it came from single sign-on, `users.sso_picture` is turned off so sign-ins stop setting it. Redirects to `/settings/account` |
+| `/settings/picture/sso` | auth | | Turn `users.sso_picture` back on; the picture comes at the next SSO sign-in. Redirects to `/settings/account` |
 | `/settings/backup/schedule` | admin | `enabled`, `time` (`HH:MM`), `keep` (1–365), `history`, `passphrase`, `confirm` | Save the backup schedule; a blank passphrase keeps the saved one. Returns the schedule fragment; 422 with the reason if invalid |
 | `/settings/backup/run` | admin | | Make a scheduled backup now; returns the schedule fragment |
 | `/settings/notifications` | admin | `id` (empty to add), `name`, `kind`, `url`, `token`, `remove_token`, `topics` (repeated), `enabled` | Add or update a channel; blank `url`/`token` keep the saved ones. Returns the channel list; 422 with the reason if invalid, 404 for an unknown `id` |
