@@ -261,10 +261,11 @@ findings.
 
 ### Publishing to GitHub
 
-After each release, the `publish` stage copies everything to the private
+After each release, the `publish` stage copies everything to the public
 GitHub repository and publishes the container image; then the `deploy` stage
-tells Dockhand to update the stack. All of it runs in GitLab CI; **no GitHub Actions run** (the
-repository has no workflows, and Actions can be disabled in its settings).
+tells Dockhand to update the stack. All of it runs in GitLab CI; **no GitHub
+Actions run** (the repository has no workflows, and Actions can be disabled in
+its settings).
 
 | Job | What it does |
 | --- | --- |

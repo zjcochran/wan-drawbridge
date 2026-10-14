@@ -46,7 +46,7 @@ records the decisions behind it and how to work in the repo.
   to "the GitLab project" or the `origin` remote; in CI use the predefined
   variables (CI_SERVER_HOST, CI_PROJECT_URL). The publish jobs fail if the
   domain appears anywhere in the published history.
-- After each release, CI copies main, tags and releases to the private GitHub
+- After each release, CI copies main, tags and releases to the public GitHub
   repo zjcochran/wan-drawbridge and pushes the image to ghcr.io (`publish`
   stage, `ci/github-sync.sh`; variables GHCR_REPO, GHCR_USER, GHCR_TOKEN). No
   GitHub Actions, by the user's choice; GitLab stays the source of truth.
