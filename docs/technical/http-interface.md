@@ -62,6 +62,8 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/isps` | auth | |
 | GET | `/events` | auth | Query `type`, `before` (event ID cursor). 100 per page. |
 | GET | `/events.csv` | auth | Query `type`. Up to 1,000 newest events; columns `time` (RFC 3339 UTC), `type`, `actor`, `details`. Cells starting with `= + - @ TAB CR` are prefixed with `'` against spreadsheet formula injection. |
+| GET | `/reports` | auth | Query `before` (outage ID cursor). 50 outages per page. |
+| GET | `/reports/outages/{id}` | auth | One outage and its data used per container; 404 if there is no such outage. |
 | GET | `/settings` | auth | The first Settings tab, WAN detection. Query `flash` shows a message. |
 | GET | `/settings/detection`, `/settings/account`, `/settings/system` | auth | Settings tabs. |
 | GET | `/settings/notifications`, `/settings/backup`, `/settings/users`, `/settings/sso` | admin | Settings tabs for admins. |

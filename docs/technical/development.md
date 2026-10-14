@@ -17,7 +17,7 @@ DRAWBRIDGE_DB_DIR=./db DRAWBRIDGE_CACHE_DIR=./cache LOG_LEVEL=debug ./drawbridge
 
 Without Docker on the machine, Drawbridge logs that it cannot reach Docker and
 continues. To exercise container control without real containers, point
-`DOCKER_HOST` at a fake Engine API (any HTTP server implementing the six calls
+`DOCKER_HOST` at a fake Engine API (any HTTP server implementing the seven calls
 in [Container control](container-control.md#docker-client)), and point
 `DRAWBRIDGE_IP_PROVIDERS` at a server returning the IP you want to simulate.
 

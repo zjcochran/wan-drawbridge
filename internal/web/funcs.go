@@ -34,6 +34,10 @@ var funcs = template.FuncMap{
 	"kb":         func(n int64) float64 { return float64(n) / 1000 },
 	"initial":    initial,
 	"static":     staticURL,
+	"span":       span,
+	"add64":      func(a, b int64) int64 { return a + b },
+	"bytes":      humanBytes,
+	"month":      func(t time.Time) string { return t.Local().Format("Jan 2006") },
 }
 
 // dict builds a map from key/value pairs, to pass several values to a template.
@@ -192,4 +196,36 @@ func initial(name string) string {
 		return strings.ToUpper(string(r))
 	}
 	return "?"
+}
+
+// span prints how long something lasted, to the second under a minute and
+// rounded down to the minute above: "45s", "12m", "3h 20m", "2d 4h".
+func span(d time.Duration) string {
+	d = d.Round(time.Second)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh %02dm", int(d.Hours()), int(d.Minutes())%60)
+	}
+	return fmt.Sprintf("%dd %dh", int(d.Hours())/24, int(d.Hours())%24)
+}
+
+// humanBytes prints a byte count in decimal units: "980 B", "1.2 MB", "3.4 GB".
+func humanBytes(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d B", n)
+	}
+	f, units := float64(n)/1000, "kMGTP"
+	i := 0
+	for f >= 1000 && i < len(units)-1 {
+		f /= 1000
+		i++
+	}
+	if f >= 100 {
+		return fmt.Sprintf("%.0f %cB", f, units[i])
+	}
+	return fmt.Sprintf("%.1f %cB", f, units[i])
 }

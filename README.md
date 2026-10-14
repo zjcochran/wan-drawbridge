@@ -18,6 +18,8 @@ them again.
   healthchecks; only restarts what it stopped; survives restarts mid-run.
 - A failover test stops and restarts the chosen containers on demand, and
   automation can be paused for a set time or until resumed.
+- Reports of every outage: how often and how long, which backup ISP, and how
+  much data each container used on it.
 - Web UI with a setup wizard, live updates, phone and dark mode support, and six
   colour themes per user; local accounts and single sign-on (Pocket ID or any
   OIDC provider); Prometheus metrics; a CLI for scripting and recovery.

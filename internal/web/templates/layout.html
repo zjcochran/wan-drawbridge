@@ -20,6 +20,7 @@
     <a href="/containers" {{if eq .Nav "containers"}}aria-current="page"{{end}}>Containers</a>
     <a href="/isps" {{if eq .Nav "isps"}}aria-current="page"{{end}}>ISPs</a>
     <a href="/events" {{if eq .Nav "events"}}aria-current="page"{{end}}>Events</a>
+    <a href="/reports" {{if or (eq .Nav "reports") (eq .Nav "outage")}}aria-current="page"{{end}}>Reports</a>
     <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a>
   </nav>
   <details class="usermenu">

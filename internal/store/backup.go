@@ -33,6 +33,8 @@ var historyTables = []struct{ name, column string }{
 	{"checks", "ts"},
 	{"events", "ts"},
 	{"asn_daily", "day"},
+	{"outages", "started"},
+	{"outage_usage", "ts"},
 }
 
 // ErrNoAdmin rejects a backup that would leave nobody able to manage Drawbridge.
@@ -150,6 +152,12 @@ func (s *Store) Import(ctx context.Context, snap Snapshot) error {
 	}
 	for _, h := range historyTables {
 		if err := loadRows(ctx, tx, h.name, snap.History[h.name]); err != nil {
+			return err
+		}
+	}
+	if _, ok := snap.History["outages"]; snap.History != nil && !ok {
+		// A backup from before outages were recorded: recreate them from its events.
+		if err := rebuildOutages(ctx, tx); err != nil {
 			return err
 		}
 	}

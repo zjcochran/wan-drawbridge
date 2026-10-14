@@ -54,6 +54,17 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	var n int
+	// A fixed query: the rule follows the handle opened from the path, not SQL text.
+	// nosemgrep
+	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM outages`).Scan(&n)
+	if err == nil && n == 0 {
+		err = rebuildOutages(ctx, db)
+	}
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("outages: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 
@@ -95,10 +106,16 @@ func (s *Store) LoadState(ctx context.Context, now time.Time) (WANState, error) 
 	return st, nil
 }
 
-// SaveState writes the WAN state, replacing the previous one.
+// SaveState writes the WAN state, replacing the previous one, and opens or
+// closes the outage to match it.
 func (s *Store) SaveState(ctx context.Context, st WANState) error {
 	m := st.Machine
-	_, err := s.db.ExecContext(ctx, `
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
+	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO wan_state (id, state, since, current_asn, learning_started_at,
 			pending_since, last_evidence, flaps, last_failover, last_failback)
 		VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -107,8 +124,13 @@ func (s *Store) SaveState(ctx context.Context, st WANState) error {
 			pending_since = excluded.pending_since, last_evidence = excluded.last_evidence, flaps = excluded.flaps,
 			last_failover = excluded.last_failover, last_failback = excluded.last_failback`,
 		string(m.State), st.Since.Unix(), nullInt(st.CurrentASN), st.LearningStartedAt.Unix(),
-		toUnix(m.PendingSince), toUnix(m.LastEvidence), m.Flaps, toUnix(m.LastFailover), toUnix(m.LastFailback))
-	return err
+		toUnix(m.PendingSince), toUnix(m.LastEvidence), m.Flaps, toUnix(m.LastFailover), toUnix(m.LastFailback)); err != nil {
+		return err
+	}
+	if err := syncOutage(ctx, tx, st); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // toUnix and fromUnix store the zero time as 0.

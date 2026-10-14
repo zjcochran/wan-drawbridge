@@ -29,6 +29,9 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 5 | `00005_flapping.sql` | time-based state machine: `wan_state` gains `pending_since`, `last_evidence`, `flaps`, `last_failover`, `last_failback`; drops `pending_count` |
 | 6 | `00006_appearance.sql` | `users` gains `theme` and `mode` |
 | 7 | `00007_container_labels.sql` | `containers` gains `label_policy` |
+| 8 | `00008_user_pictures.sql` | user_pictures |
+| 9 | `00009_sso_picture.sql` | `users` gains `sso_picture` |
+| 10 | `00010_outages.sql` | outages, outage_usage. At the first start with an empty `outages` table, past outages are recreated from the event log |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -37,7 +40,8 @@ Backup files (`internal/backup`) carry tables row by row with their column
 names, and record the schema version they were made at. A restore accepts
 backups from the same or an older schema: columns added since then take their
 defaults. A migration that renames or drops a column of a backed-up table
-(`store.ConfigTables`, `checks`, `events`, `asn_daily`) must also teach
+(`store.ConfigTables`, `checks`, `events`, `asn_daily`, `outages`,
+`outage_usage`) must also teach
 `store.Import` to translate older backups.
 
 ## Tables
@@ -142,6 +146,43 @@ Audit log. See [Monitoring → event types](../user/monitoring.md#event-types).
 | `type` | TEXT | |
 | `actor` | TEXT | Always `system` at present; the acting user is in the payload's `by` |
 | `payload` | TEXT | JSON object |
+
+### outages
+
+One row per outage: from a failover until the failback. `store.SaveState`
+keeps it in step with `wan_state`, in the same transaction: entering
+`failover` or `failback_pending` with no open outage opens one, and any other
+state closes it, both at `wan_state.since`. The [Reports
+page](../user/web-ui.md#reports) reads it.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | INTEGER PK | Paging cursor |
+| `started` | INTEGER | Indexed |
+| `ended` | INTEGER | NULL while it lasts. A unique partial index allows one open outage |
+| `isp_id` | INTEGER | The first ISP that is not the primary seen during it (from `wan_state.current_asn`); NULL until one is. No foreign key: the report shows the ISP's current name, or nothing if it is gone |
+| `started_by` | TEXT | User of Fail over now; `''` when automatic |
+| `ended_by` | TEXT | User of Restore now; `''` when automatic |
+
+When the table is empty at start-up, and when a backup without `outages` is
+restored with history, outages are recreated from `events`: a
+`state_changed` or `manual_failover` event to `failover` from any other state
+than `failover` or `failback_pending` starts one, and the next such event (or
+`manual_restore`) from one of those two to another state ends it.
+
+### outage_usage
+
+Network traffic per container and outage, written by
+`executor.WatchUsage` (see [How data is measured](../user/web-ui.md#how-data-is-measured)).
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `outage_id` | INTEGER | PK with `container`. No foreign key |
+| `container` | TEXT | Container key: `project/service` or the name |
+| `container_id` | TEXT | Docker ID at the last reading; a new one counts in full |
+| `rx`, `tx` | INTEGER | Bytes received and sent during the outage |
+| `last_rx`, `last_tx` | INTEGER | Docker's counters at the last reading |
+| `ts` | INTEGER | Last reading |
 
 ### stacks
 

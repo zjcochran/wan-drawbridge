@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package docker is a minimal Docker Engine API client: the five calls
+// Package docker is a minimal Docker Engine API client: the calls
 // Drawbridge needs, over the mounted socket.
 package docker
 
@@ -167,6 +167,26 @@ func (c *Client) Stop(ctx context.Context, id string, timeout time.Duration) err
 // Start starts a container. Starting a running container is not an error.
 func (c *Client) Start(ctx context.Context, id string) error {
 	return c.post(ctx, "/containers/"+url.PathEscape(id)+"/start")
+}
+
+// Stats returns the network bytes a container has received and sent since it
+// started, summed over its interfaces. ok is false when it has none of its
+// own (host networking, or another container's network).
+func (c *Client) Stats(ctx context.Context, id string) (rx, tx int64, ok bool, err error) {
+	var raw struct {
+		Networks map[string]struct {
+			RxBytes int64 `json:"rx_bytes"`
+			TxBytes int64 `json:"tx_bytes"`
+		} `json:"networks"`
+	}
+	if err := c.getJSON(ctx, "/containers/"+url.PathEscape(id)+"/stats?stream=false&one-shot=true", &raw); err != nil {
+		return 0, 0, false, err
+	}
+	for _, n := range raw.Networks {
+		rx += n.RxBytes
+		tx += n.TxBytes
+	}
+	return rx, tx, len(raw.Networks) > 0, nil
 }
 
 // Events calls fn for every container event until ctx is done or the stream breaks.

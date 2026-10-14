@@ -75,7 +75,7 @@ on the new instance.
 | Part | Contents |
 | --- | --- |
 | Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; stack switches and container settings, including containers waiting for review; users with their roles, disabled flags and password hashes; single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs and tokens; whether setup is complete and whether automation is paused |
-| History (optional) | Checks, events and daily ISP totals from the chosen period |
+| History (optional) | Checks, events, daily ISP totals, outages and data used from the chosen period (outages that started in it) |
 
 Not included: sign-in sessions, profile pictures (an uploaded one has to be
 uploaded again; one from single sign-on comes back at the next SSO sign-in),
