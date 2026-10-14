@@ -724,6 +724,7 @@ type settingsData struct {
 	Schedule  scheduleView
 	API       apiTokensData
 	TwoFactor twoFactorView
+	Test      testScheduleView
 }
 
 type choice struct{ ID, Name string }
@@ -796,7 +797,9 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 	var err error
 	switch d.Tab {
 	case "detection":
-		err = s.loadDetection(ctx, d)
+		if err = s.loadDetection(ctx, d); err == nil {
+			d.Test, err = s.testScheduleView(r)
+		}
 	case "notifications":
 		d.Notify, err = s.notifyData(ctx)
 	case "backup":

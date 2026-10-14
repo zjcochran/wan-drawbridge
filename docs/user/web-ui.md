@@ -238,7 +238,7 @@ bookmarked. `/settings` opens the first one.
 
 | Tab | Address | Who | Contents |
 | --- | --- | --- | --- |
-| WAN detection | `/settings/detection` | everyone | The detection settings described in the [setup wizard](setup-wizard.md#4-wan-detection). Viewers see them read-only. Changes apply from the next check. |
+| WAN detection | `/settings/detection` | everyone | The detection settings described in the [setup wizard](setup-wizard.md#4-wan-detection), and the [scheduled failover test](during-an-outage.md#scheduled-tests). Viewers see them read-only. Changes apply from the next check. |
 | Notifications | `/settings/notifications` | admins | Channels that get events; see [Notifications](notifications.md). |
 | Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
 | Users | `/settings/users` | admins | Accounts; see [Users](#users). |

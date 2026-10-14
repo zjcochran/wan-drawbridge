@@ -85,6 +85,7 @@ flowchart TB
     loop --> hk[monitor.housekeeping<br/>daily]
     main --> nt[notify.Run<br/>delivers notifications]
     main --> bs[web.RunBackupSchedule<br/>checks every minute]
+    main --> ts[web.RunTestSchedule<br/>checks every minute]
     main -. DRAWBRIDGE_SYSLOG .-> sl[syslog.Writer.Run<br/>sends the log]
     http -. "do(): wait for result" .-> loop
     http -. "post(): fire and forget" .-> loop
@@ -142,6 +143,11 @@ writing only `outage_usage`.
 `Notifier.Event`, which queues it (64 at most, never blocking the caller) if
 some channel could want it. `notify.Run` delivers the queue in order, to all
 matching channels of an event in parallel.
+
+**Scheduled failover tests** are started by `web.RunTestSchedule`, which
+checks once at start and then every minute whether a scheduled time has
+passed (at most an hour ago) without being handled, and then calls
+`StartDrill` on the monitor like the dashboard button.
 
 **Scheduled backups** are made by `web.RunBackupSchedule`, which checks
 once at start and then every minute whether the day's backup time has passed

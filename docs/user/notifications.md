@@ -54,7 +54,7 @@ after a restart until the next message.
 
 | Group | Events | On for a new channel |
 | --- | --- | --- |
-| Failover and failback, and failover tests | `failover`, `failback`, `manual_failover`, `manual_restore`, `drill_started`, `drill_ended` | Yes |
+| Failover and failback, and failover tests | `failover`, `failback`, `manual_failover`, `manual_restore`, `drill_started`, `drill_ended`, `drill_skipped` | Yes |
 | Failures: containers that did not stop or start, scheduled backups | `run_failed`, `backup_failed` | Yes |
 | Flapping primary ISP | `flapping` | Yes |
 | New ISPs and primary ISP changes | `isp_new`, `primary_learned`, `primary_suggested`, `primary_undecided` | Yes |

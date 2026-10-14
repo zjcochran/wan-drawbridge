@@ -10,6 +10,10 @@
 <section class="card">
   {{template "detection-form" $d}}
 </section>
+<section class="card">
+  <h2>Scheduled failover test</h2>
+  {{template "test-schedule" $d.Test}}
+</section>
 
 {{else if eq $d.Tab "notifications"}}
 <section class="card" id="notifications">
@@ -244,7 +248,7 @@
       <small data-kinds="email"><code>smtp://host:587</code> (STARTTLS) or <code>smtps://host:465</code> (TLS). Mail is never sent unencrypted.</small>
       <small data-kinds="webhook">Any URL. Drawbridge POSTs the message to it as JSON.</small></label>
     <label class="wide" data-kinds="ntfy gotify pushover telegram email webhook">Token or password
-      <input name="token" type="password" autocomplete="new-password" placeholder="{{if .C.HasToken}}Saved. Leave blank to keep it.{{else}}Optional{{end}}">
+      <input name="token" type="password" autocomplete="new-password" placeholder="{{if .C.HasToken}}Saved. Leave blank to keep it.{{end}}">
       <small data-kinds="ntfy">Optional: an access token for a protected topic. Stored encrypted.</small>
       <small data-kinds="gotify">The application token (required). Stored encrypted.</small>
       <small data-kinds="pushover">The application's API token (required). Stored encrypted.</small>
@@ -398,4 +402,36 @@
     <button class="secondary" hx-post="/settings/2fa/start" hx-target="#two-factor" hx-swap="outerHTML">Set up</button>
   {{end}}
 </section>
+{{end}}
+
+{{define "test-schedule"}}
+<div id="test-schedule" class="stack">
+  <p>Runs the dashboard's <strong>Test failover</strong> on a schedule: the containers set to stop on failover stop, then start again,
+    so you find out early if one does not come back. Failures reach your notification channels like any other.</p>
+  {{if .IsAdmin}}
+  <form hx-post="/settings/test-schedule" hx-target="#test-schedule" hx-swap="outerHTML" class="stack narrow-form">
+    <label class="check"><input type="checkbox" name="enabled" {{if .Enabled}}checked{{end}}> Run a failover test on a schedule</label>
+    <label>Every
+      <select name="every">
+        <option value="month" {{if eq .Every "month"}}selected{{end}}>Month</option>
+        <option value="week" {{if eq .Every "week"}}selected{{end}}>Week</option>
+      </select></label>
+    <label data-every="month">Day of the month
+      <input name="day" type="number" min="1" max="28" value="{{.Day}}" required>
+      <small>1 to 28, so every month has it.</small></label>
+    <label data-every="week">Day of the week
+      <select name="weekday">{{$w := .Weekday}}{{range $i, $n := .Weekdays}}<option value="{{$i}}" {{if eq $i $w}}selected{{end}}>{{$n}}</option>{{end}}</select></label>
+    <label>At <input name="time" type="time" value="{{.Time}}" required>
+      <small>Server time. A test that cannot start within an hour of it is skipped.</small></label>
+    <label>For
+      <select name="minutes">{{$m := .Minutes}}{{range .Durations}}<option value="{{.}}" {{if eq . $m}}selected{{end}}>{{.}} minutes</option>{{end}}</select></label>
+    <div class="actions"><button>Save schedule</button></div>
+  </form>
+  {{else}}
+  <p>{{if .Enabled}}On: every {{.Every}} at {{.Time}}, for {{.Minutes}} minutes.{{else}}Off.{{end}}</p>
+  {{end}}
+  {{if not .Next.IsZero}}<p>Next test: <time title="{{isodate .Next}}">{{datetime .Next}}</time>.</p>{{end}}
+  {{if not .Last.At.IsZero}}<p>Last scheduled test, <time title="{{isodate .Last.At}}">{{datetime .Last.At}}</time>:
+    {{if eq .Last.Result "started"}}<span class="ok-text">started</span>{{else}}<span class="warn-text">{{.Last.Result}}</span>{{end}}.</p>{{end}}
+</div>
 {{end}}

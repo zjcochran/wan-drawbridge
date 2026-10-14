@@ -67,6 +67,8 @@ Key-value store of JSON values.
 | `oidc` | single sign-on settings (`web.OIDCSettings`); `client_secret` is sealed (`v1:…`) |
 | `backup_schedule` | `enabled`, `time` (`HH:MM`), `keep`, `history`, `passphrase` (sealed) |
 | `backup_schedule_last` | the latest scheduled backup: `at`, `file`, `error`, and `success` (the latest that worked) |
+| `test_schedule` | `enabled`, `every` (`week` or `month`), `weekday` (0–6), `day` (1–28), `time` (`HH:MM`), `minutes` |
+| `test_schedule_last` | `slot` (the scheduled time handled last), `at`, `result` (`started`, or why not) |
 | `notifications` | `notify.Settings`: `channels`, each with `id`, `name`, `kind` (`ntfy`, `gotify`, `pushover`, `telegram`, `discord`, `email`, `webhook`), `url`, `token` and `user` (all sealed), `to`, `from`, `topics`, `enabled` |
 
 ### isps
