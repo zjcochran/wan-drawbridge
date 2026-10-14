@@ -360,11 +360,18 @@ func (s *Server) verifyCallback(r *http.Request, o OIDCSettings) (ssoLogin, stri
 			}
 		}
 	}
-	if o.AllowedGroup != "" && !slices.Contains(c.Groups, o.AllowedGroup) {
+	s.Log.Info("sso sign-in", "user", c.username(), "groups", c.Groups)
+	if o.AllowedGroup != "" && !inGroup(c.Groups, o.AllowedGroup) {
 		s.Log.Warn("sso sign-in refused: not in allowed group", "user", c.username(), "group", o.AllowedGroup)
 		return ssoLogin{}, fmt.Sprintf("Your %s account is not in the %q group.", o.Name(), o.AllowedGroup)
 	}
 	return ssoLogin{pending: p, claims: c, issuer: idt.Issuer, subject: idt.Subject}, ""
+}
+
+// inGroup reports whether group is in groups, ignoring case: providers may
+// send a group's lower-case name while people type its display name.
+func inGroup(groups []string, group string) bool {
+	return slices.ContainsFunc(groups, func(g string) bool { return strings.EqualFold(g, group) })
 }
 
 // linkAccount links a verified identity to the signed-in user who started it.
@@ -383,20 +390,13 @@ func (s *Server) linkAccount(w http.ResponseWriter, r *http.Request, o OIDCSetti
 }
 
 // ssoAccount finds the account for a verified identity, applying the admin
-// group. An identity not linked yet is linked to the unlinked account whose
-// username is its preferred_username or email; failing that, an account is
-// created when auto-provisioning is on. A non-empty message means the sign-in
-// is refused.
+// group, or creates one when auto-provisioning is on. A non-empty message
+// means the sign-in is refused.
 func (s *Server) ssoAccount(ctx context.Context, o OIDCSettings, l ssoLogin) (store.User, string, error) {
-	inAdmin := o.AdminGroup != "" && slices.Contains(l.claims.Groups, o.AdminGroup)
+	inAdmin := o.AdminGroup != "" && inGroup(l.claims.Groups, o.AdminGroup)
 	u, found, err := s.Store.UserByIdentity(ctx, l.issuer, l.subject)
 	if err != nil {
 		return store.User{}, "", err
-	}
-	if !found {
-		if u, found, err = s.matchAccount(ctx, l); err != nil {
-			return store.User{}, "", err
-		}
 	}
 	switch {
 	case found && u.Disabled:
@@ -424,21 +424,6 @@ func (s *Server) ssoAccount(ctx context.Context, o OIDCSettings, l ssoLogin) (st
 		return u, "", nil
 	}
 	return store.User{}, fmt.Sprintf("No Drawbridge account is linked to your %s account. Ask an admin to add you.", o.Name()), nil
-}
-
-// matchAccount links a new identity to the existing account with its
-// username, if there is one that has no identity linked yet.
-func (s *Server) matchAccount(ctx context.Context, l ssoLogin) (store.User, bool, error) {
-	u, found, err := s.Store.UnlinkedUserByName(ctx, l.claims.PreferredUsername, l.claims.Email)
-	if err != nil || !found || u.Disabled {
-		return u, found, err
-	}
-	if err := s.Store.LinkIdentity(ctx, u.ID, l.issuer, l.subject, l.claims.Email, s.now()); err != nil {
-		return store.User{}, false, err
-	}
-	s.event(ctx, "sso_linked", map[string]any{"user": u.Username, "sso_user": l.claims.username(), "by": "username match"})
-	u.HasSSO = true
-	return u, true, nil
 }
 
 func (s *Server) loginError(w http.ResponseWriter, r *http.Request, o OIDCSettings, msg string) {

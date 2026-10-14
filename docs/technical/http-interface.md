@@ -104,6 +104,7 @@ token.
 | `/settings/users` | admin | `username`, `password`, `role` | Create user |
 | `/settings/users/{id}/disable` | admin | | Not yourself; not the last admin |
 | `/settings/users/{id}/enable` | admin | | |
+| `/settings/users/{id}/role` | admin | `role` (`viewer`, `admin`) | Not yourself; not the last enabled admin; not an account without a password while an SSO admin group is set |
 | `/settings/users/{id}/delete` | admin | | Not yourself; not the last enabled admin. Their sessions and SSO links go too. |
 | `/settings/users/{id}/password` | admin | `password` | Reset; ends their sessions. Refused for accounts without a password (SSO only). |
 

@@ -154,6 +154,7 @@ newer Drawbridge (upgrade first), or containers stopped for a failover
 | "That sign-in link expired or was already used." | More than 10 minutes passed, the page was reloaded, or Drawbridge restarted during the sign-in. Try again. |
 | `redirect_uri` error at the provider | The callback URL shown in Settings does not match what is registered. Set `DRAWBRIDGE_BASE_URL` behind a proxy. |
 | "cannot decrypt stored secret" | `secret.key` or `DRAWBRIDGE_SECRET_KEY` changed. Enter the client secret again. |
+| The admin group or allowed group has no effect | The log line `msg="sso sign-in"` lists the `groups` the provider sent. An empty list means the provider sent none: check that the client may read groups. Otherwise use a name from that list (case does not matter). |
 
 ## Web UI problems
 

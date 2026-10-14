@@ -112,27 +112,6 @@ func TestDeleteUser(t *testing.T) {
 	}
 }
 
-func TestUnlinkedUserByName(t *testing.T) {
-	ctx, s, now := context.Background(), open(t), time.Unix(1_800_000_000, 0)
-	alice, _ := s.CreateUser(ctx, "Alice", "test-password-123", RoleAdmin, now)
-	s.CreateUser(ctx, "bob@example.com", "test-password-123", RoleViewer, now)
-	if u, ok, err := s.UnlinkedUserByName(ctx, "", "alice"); err != nil || !ok || u.ID != alice.ID {
-		t.Fatalf("by username: %+v %v %v", u, ok, err)
-	}
-	if u, ok, _ := s.UnlinkedUserByName(ctx, "bob", "bob@example.com"); !ok || u.Username != "bob@example.com" {
-		t.Fatalf("by email: %+v %v", u, ok)
-	}
-	if err := s.LinkIdentity(ctx, alice.ID, "https://id.example.com", "alice-sub", "", now); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok, _ := s.UnlinkedUserByName(ctx, "alice"); ok {
-		t.Error("matched an account that is already linked")
-	}
-	if _, ok, _ := s.UnlinkedUserByName(ctx, "nobody"); ok {
-		t.Error("matched an unknown name")
-	}
-}
-
 func TestAppearance(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)

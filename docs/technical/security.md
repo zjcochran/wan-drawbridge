@@ -151,14 +151,11 @@ entry is the one the trusted proxy saw.
   (algorithm confusion). Public clients cannot use HS256.
 - Scopes: `openid profile email`, plus `groups` when `scopes_supported` lists
   it or is absent.
-- Accounts are linked by `(issuer, subject)`. An identity not linked yet is
-  linked to the account, if any, that has no identity and whose username is
-  the `preferred_username` or `email` claim (`UnlinkedUserByName`). This
-  trusts the provider's usernames and email addresses: someone who can set
-  their own username at the provider to `admin` gets the unlinked `admin`
-  account. Use a provider that does not let users edit them, or link
-  accounts by hand first; a linked account is never matched again.
-- Allowed group and admin group come from the `groups` claim (ID token, or
+- Accounts are matched by `(issuer, subject)`. Username and email are never
+  used to match, so an attacker who controls an account named like a local
+  user at the provider gets a separate, provisioned account at most.
+- Allowed group and admin group are compared with the `groups` claim
+  ignoring case (`strings.EqualFold`). Groups come from the claim (ID token, or
   userinfo if absent).
 - Linking requires being signed in already, and the callback checks that the
   same user is still signed in.

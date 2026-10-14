@@ -166,6 +166,41 @@ func TestUserOperations(t *testing.T) {
 	if resp, _ := c.htmx(id(amy)+"/promote", url.Values{}); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown operation: %d", resp.StatusCode)
 	}
+}
+
+func TestUserRoleAndDelete(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	c.htmx("/settings/users", url.Values{"username": {"amy"}, "password": {"test-password-123"}, "role": {"viewer"}})
+	users, _ := e.st.Users(context.Background())
+	var amy, me int
+	for _, u := range users {
+		if u.Username == "amy" {
+			amy = u.ID
+		} else {
+			me = u.ID
+		}
+	}
+	id := func(n int) string { return "/settings/users/" + strconv.Itoa(n) }
+
+	if resp, _ := c.htmx(id(amy)+"/role", url.Values{"role": {"admin"}}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("make admin: %d", resp.StatusCode)
+	}
+	if u, _ := e.st.UserByID(context.Background(), amy); u.Role != store.RoleAdmin {
+		t.Fatalf("role = %s", u.Role)
+	}
+	if resp, _ := c.htmx(id(amy)+"/role", url.Values{"role": {"owner"}}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("unknown role: %d", resp.StatusCode)
+	}
+	if resp, _ := c.htmx(id(me)+"/role", url.Values{"role": {"viewer"}}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("changing your own role: %d", resp.StatusCode)
+	}
+	if resp, _ := c.htmx(id(999)+"/role", url.Values{"role": {"viewer"}}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("role of an unknown user: %d", resp.StatusCode)
+	}
+	if _, page := c.get("/settings/users"); !strings.Contains(page, `aria-label="Role for amy"`) || strings.Contains(page, `aria-label="Role for admin"`) {
+		t.Error("role controls: want one for amy, none for yourself")
+	}
 
 	if resp, _ := c.htmx(id(me)+"/delete", url.Values{}); resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Errorf("deleting yourself: %d", resp.StatusCode)

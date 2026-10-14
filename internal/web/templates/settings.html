@@ -247,7 +247,15 @@
   {{range .Users}}
   <tr>
     <td><strong>{{.Username}}</strong>{{if eq .ID $.Me}} <span class="sub">(you)</span>{{end}}</td>
-    <td>{{.Role}}</td>
+    <td>
+      {{if eq .ID $.Me}}{{.Role}}
+      {{else if and $.GroupRoles (not .HasLocal)}}{{.Role}} <div class="sub">from the SSO admin group</div>
+      {{else}}<select name="role" aria-label="Role for {{.Username}}" hx-post="/settings/users/{{.ID}}/role" hx-trigger="change"
+        hx-target="#users-table" hx-swap="outerHTML">
+        <option value="viewer" {{if eq .Role "viewer"}}selected{{end}}>viewer</option>
+        <option value="admin" {{if eq .Role "admin"}}selected{{end}}>admin</option>
+      </select>{{end}}
+    </td>
     <td>{{if .HasLocal}}password{{end}}{{if and .HasLocal .HasSSO}} and {{end}}{{if .HasSSO}}single sign-on{{end}}</td>
     <td>{{if .LastLogin.IsZero}}never{{else}}<time title="{{datetime .LastLogin}}">{{ago .LastLogin}}</time>{{end}}</td>
     <td>{{if .Disabled}}<span class="badge muted">Disabled</span>{{else}}<span class="badge ok">Active</span>{{end}}</td>

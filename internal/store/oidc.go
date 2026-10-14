@@ -32,29 +32,6 @@ func (s *Store) UserByIdentity(ctx context.Context, issuer, subject string) (Use
 	return u, err == nil, err
 }
 
-// UnlinkedUserByName returns the first of names that is the username of a user
-// with no single sign-on account linked yet (case-insensitive).
-func (s *Store) UnlinkedUserByName(ctx context.Context, names ...string) (User, bool, error) {
-	for _, name := range names {
-		if strings.TrimSpace(name) == "" {
-			continue
-		}
-		var id int
-		err := s.db.QueryRowContext(ctx, `
-			SELECT id FROM users WHERE username = ?
-			AND NOT EXISTS (SELECT 1 FROM oidc_identities WHERE user_id = users.id)`, strings.TrimSpace(name)).Scan(&id)
-		if errors.Is(err, sql.ErrNoRows) {
-			continue
-		}
-		if err != nil {
-			return User{}, false, err
-		}
-		u, err := s.UserByID(ctx, id)
-		return u, err == nil, err
-	}
-	return User{}, false, nil
-}
-
 // LinkIdentity links an OIDC account to a user. An account already linked to
 // someone else is refused.
 func (s *Store) LinkIdentity(ctx context.Context, userID int, issuer, subject, email string, now time.Time) error {

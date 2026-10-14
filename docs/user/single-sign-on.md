@@ -9,11 +9,9 @@ any other OpenID Connect (OIDC) provider, alongside or instead of passwords.
   configurable, for example "Sign in with Pocket ID".
 - Drawbridge uses the authorization code flow with PKCE, and checks the ID
   token's signature, audience, issuer and nonce.
-- Accounts are linked to the provider's **issuer and subject** (the stable
-  user ID). The first time someone signs in, an existing account with their
-  username or email is linked to them, so an SSO user `alice` becomes the
-  local user `alice`. Only do this with a provider where users cannot choose
-  their own username or email: see [Matching by name](#matching-by-name).
+- Accounts are matched on the provider's **issuer and subject** (the stable
+  user ID), never on username or email. An SSO user called `alice` is not
+  the same account as a local user `alice` until you link them.
 - Drawbridge requests the scopes `openid profile email`, plus `groups` unless
   the provider lists its scopes without it (see [Other providers](#other-providers)).
 
@@ -42,6 +40,10 @@ ID (for example `drawbridge-users` and `drawbridge-admins`), add users, and
 make sure group membership is released to the client. Pocket ID includes a
 `groups` claim when the `groups` scope is requested. Drawbridge reads groups
 from the ID token, or from the userinfo endpoint if the token has none.
+Group names are compared ignoring case, so `Drawbridge-Admins` matches
+`drawbridge-admins`. Each SSO sign-in logs the groups the provider sent
+(`msg="sso sign-in"` with `user` and `groups`): if a group option does not
+work, compare the name there with the one in Drawbridge.
 
 ## 2. Configure Drawbridge
 
@@ -70,18 +72,12 @@ Save. The sign-in page now offers the button:
 
 1. If an account is already linked to their SSO identity, they are signed
    in. If that account is disabled, they are refused.
-2. Otherwise, if an account that is not linked to any SSO identity has their
-   `preferred_username` or, failing that, their email address as its username
-   (case-insensitive), it is linked to them and they are signed in as it. It
-   keeps its role and password. A `sso_linked` event is recorded with `by` =
-   `username match`. If that account is disabled, they are refused and nothing
-   is linked.
-3. Otherwise, if account creation is on, Drawbridge creates an account:
+2. Otherwise, if account creation is on, Drawbridge creates an account:
    - **Username:** `preferred_username`, else the email address, else the
      subject. If the name is taken, a number is added: `alice-2`, `alice-3`, ….
    - **Role:** admin if they are in the admin group, otherwise viewer.
    - The account has no password; it signs in only through single sign-on.
-4. Otherwise they see "No Drawbridge account is linked to your SSO
+3. Otherwise they see "No Drawbridge account is linked to your SSO
    account. Ask an admin to add you."
 
 ### Admin group, precisely
@@ -91,9 +87,11 @@ Save. The sign-in page now offers the button:
 - **Existing accounts created by single sign-on** (no password) follow the
   group at every sign-in: added to the group, they become admin; removed, they
   become viewer. The change is logged as a `user_role` event. The last admin is
-  never demoted.
+  never demoted. While an admin group is set, Settings → Users shows their role
+  as "from the SSO admin group" and offers no control to change it.
 - **Accounts with a password** (local accounts, including linked ones) keep the
-  role an admin gave them; the group does not change them.
+  role an admin gave them in Settings → Users; the group does not change them.
+- Without an admin group, an admin sets every role in Settings → Users.
 
 ## Linking an existing account
 
@@ -109,20 +107,6 @@ The account can now sign in either way. **Unlink** removes the link (only
 offered when the account also has a password, so you cannot lock yourself out).
 
 One SSO identity can be linked to only one Drawbridge account.
-
-### Matching by name
-
-An account whose username matches is linked automatically at the first SSO
-sign-in (step 2 above), so you need not link it by hand. Anyone who can sign
-in at the provider as `admin`, or with the email address that is an account's
-username, gets that account if it is not linked yet. Use this only if the
-provider decides usernames and email addresses, not the users themselves:
-check whether your provider lets users edit their own profile. To keep an
-account out of matching, link it yourself first.
-
-If single sign-on already created a second account (`alice-2`) before this
-matching existed, delete it in **Settings → Users**; the next SSO sign-in then
-links to `alice`.
 
 ## SSO only
 
