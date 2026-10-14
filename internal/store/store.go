@@ -55,6 +55,8 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	var n int
+	// A fixed query: the rule follows the handle opened from the path, not SQL text.
+	// nosemgrep
 	err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM outages`).Scan(&n)
 	if err == nil && n == 0 {
 		err = rebuildOutages(ctx, db)
