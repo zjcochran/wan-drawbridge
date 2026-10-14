@@ -154,7 +154,8 @@ entry is the one the trusted proxy saw.
 - Accounts are matched by `(issuer, subject)`. Username and email are never
   used to match, so an attacker who controls an account named like a local
   user at the provider gets a separate, provisioned account at most.
-- Allowed group and admin group come from the `groups` claim (ID token, or
+- Allowed group and admin group are compared with the `groups` claim
+  ignoring case (`strings.EqualFold`). Groups come from the claim (ID token, or
   userinfo if absent).
 - Linking requires being signed in already, and the callback checks that the
   same user is still signed in.

@@ -40,6 +40,10 @@ ID (for example `drawbridge-users` and `drawbridge-admins`), add users, and
 make sure group membership is released to the client. Pocket ID includes a
 `groups` claim when the `groups` scope is requested. Drawbridge reads groups
 from the ID token, or from the userinfo endpoint if the token has none.
+Group names are compared ignoring case, so `Drawbridge-Admins` matches
+`drawbridge-admins`. Each SSO sign-in logs the groups the provider sent
+(`msg="sso sign-in"` with `user` and `groups`): if a group option does not
+work, compare the name there with the one in Drawbridge.
 
 ## 2. Configure Drawbridge
 
@@ -83,9 +87,11 @@ Save. The sign-in page now offers the button:
 - **Existing accounts created by single sign-on** (no password) follow the
   group at every sign-in: added to the group, they become admin; removed, they
   become viewer. The change is logged as a `user_role` event. The last admin is
-  never demoted.
+  never demoted. While an admin group is set, Settings → Users shows their role
+  as "from the SSO admin group" and offers no control to change it.
 - **Accounts with a password** (local accounts, including linked ones) keep the
-  role an admin gave them; the group does not change them.
+  role an admin gave them in Settings → Users; the group does not change them.
+- Without an admin group, an admin sets every role in Settings → Users.
 
 ## Linking an existing account
 

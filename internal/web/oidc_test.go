@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -165,7 +166,8 @@ func TestSSOAutoProvisionAndGroups(t *testing.T) {
 	e := newEnv(t)
 	idp := newIDP(t)
 	admin := e.admin()
-	configureSSO(t, admin, idp, url.Values{"admin_group": {"drawbridge-admins"}})
+	// The provider sends the group's lower-case name; case does not matter.
+	configureSSO(t, admin, idp, url.Values{"admin_group": {"Drawbridge-Admins"}})
 
 	// The secret is stored sealed, never in clear text.
 	var raw map[string]any
@@ -193,6 +195,15 @@ func TestSSOAutoProvisionAndGroups(t *testing.T) {
 	e.client().ssoLogin("/auth/oidc/login")
 	if u, _, _ := e.st.UserByIdentity(context.Background(), idp.srv.URL, "user-1"); u.Role != store.RoleAdmin {
 		t.Fatalf("role after joining admin group = %s", u.Role)
+	}
+
+	// The admin group sets the role, so the Users tab offers no role control.
+	u, _, _ = e.st.UserByIdentity(context.Background(), idp.srv.URL, "user-1")
+	if _, page := admin.get("/settings/users"); strings.Contains(page, `aria-label="Role for alice"`) || !strings.Contains(page, "from the SSO admin group") {
+		t.Error("the Users tab offers a role control for an account the admin group manages")
+	}
+	if resp, _ := admin.htmx("/settings/users/"+strconv.Itoa(u.ID)+"/role", url.Values{"role": {"viewer"}}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("role change against the admin group: %d", resp.StatusCode)
 	}
 }
 

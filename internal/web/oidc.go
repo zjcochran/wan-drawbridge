@@ -360,11 +360,18 @@ func (s *Server) verifyCallback(r *http.Request, o OIDCSettings) (ssoLogin, stri
 			}
 		}
 	}
-	if o.AllowedGroup != "" && !slices.Contains(c.Groups, o.AllowedGroup) {
+	s.Log.Info("sso sign-in", "user", c.username(), "groups", c.Groups)
+	if o.AllowedGroup != "" && !inGroup(c.Groups, o.AllowedGroup) {
 		s.Log.Warn("sso sign-in refused: not in allowed group", "user", c.username(), "group", o.AllowedGroup)
 		return ssoLogin{}, fmt.Sprintf("Your %s account is not in the %q group.", o.Name(), o.AllowedGroup)
 	}
 	return ssoLogin{pending: p, claims: c, issuer: idt.Issuer, subject: idt.Subject}, ""
+}
+
+// inGroup reports whether group is in groups, ignoring case: providers may
+// send a group's lower-case name while people type its display name.
+func inGroup(groups []string, group string) bool {
+	return slices.ContainsFunc(groups, func(g string) bool { return strings.EqualFold(g, group) })
 }
 
 // linkAccount links a verified identity to the signed-in user who started it.
@@ -386,7 +393,7 @@ func (s *Server) linkAccount(w http.ResponseWriter, r *http.Request, o OIDCSetti
 // group, or creates one when auto-provisioning is on. A non-empty message
 // means the sign-in is refused.
 func (s *Server) ssoAccount(ctx context.Context, o OIDCSettings, l ssoLogin) (store.User, string, error) {
-	inAdmin := o.AdminGroup != "" && slices.Contains(l.claims.Groups, o.AdminGroup)
+	inAdmin := o.AdminGroup != "" && inGroup(l.claims.Groups, o.AdminGroup)
 	u, found, err := s.Store.UserByIdentity(ctx, l.issuer, l.subject)
 	if err != nil {
 		return store.User{}, "", err

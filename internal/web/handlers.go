@@ -789,8 +789,7 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 			d.Schedule, err = s.scheduleView(ctx)
 		}
 	case "users":
-		d.Users.Me = sessionFrom(r).User.ID
-		d.Users.Users, err = s.Store.Users(ctx)
+		d.Users, err = s.usersData(r)
 	case "sso":
 		err = s.loadSSO(r, d)
 	case "account":
@@ -875,18 +874,30 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 // ---- users ----
 
 type usersData struct {
-	Users []store.User
-	Me    int
-	Error string
+	Users      []store.User
+	Me         int
+	Error      string
+	GroupRoles bool // the SSO admin group sets the role of accounts without a password
+}
+
+func (s *Server) usersData(r *http.Request) (usersData, error) {
+	d := usersData{Me: sessionFrom(r).User.ID}
+	o, err := s.oidcSettings(r.Context())
+	if err != nil {
+		return d, err
+	}
+	d.GroupRoles = o.Enabled && o.AdminGroup != ""
+	d.Users, err = s.Store.Users(r.Context())
+	return d, err
 }
 
 func (s *Server) usersTable(w http.ResponseWriter, r *http.Request) {
-	users, err := s.Store.Users(r.Context())
+	d, err := s.usersData(r)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.partial(w, r, "settings", "users-table", usersData{Users: users, Me: sessionFrom(r).User.ID})
+	s.partial(w, r, "settings", "users-table", d)
 }
 
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
@@ -897,6 +908,37 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.event(r.Context(), "user_created", map[string]any{"user": u.Username, "role": u.Role, "by": actorName(r)})
+	s.usersTable(w, r)
+}
+
+// setUserRole changes another user's role. Accounts whose role the SSO admin
+// group sets are refused: their next sign-in would change it back.
+func (s *Server) setUserRole(w http.ResponseWriter, r *http.Request, id int) {
+	ctx := r.Context()
+	if id == sessionFrom(r).User.ID {
+		invalid(w, "You cannot change your own role.")
+		return
+	}
+	d, err := s.usersData(r)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	u, err := s.Store.UserByID(ctx, id)
+	if err != nil {
+		invalid(w, "no such user")
+		return
+	}
+	if d.GroupRoles && !u.HasLocal {
+		invalid(w, u.Username+"'s role comes from the single sign-on admin group.")
+		return
+	}
+	role := r.PostFormValue("role")
+	if err := s.Store.SetUserRole(ctx, id, role); err != nil {
+		invalid(w, err.Error())
+		return
+	}
+	s.event(ctx, "user_role", map[string]any{"user": u.Username, "role": role, "by": actorName(r)})
 	s.usersTable(w, r)
 }
 
@@ -914,8 +956,24 @@ func (s *Server) userOp(w http.ResponseWriter, r *http.Request) {
 		err = s.Store.SetUserDisabled(ctx, id, true)
 	case "enable":
 		err = s.Store.SetUserDisabled(ctx, id, false)
+	case "delete":
+		if id == sessionFrom(r).User.ID {
+			invalid(w, "You cannot delete yourself.")
+			return
+		}
+		err = s.Store.DeleteUser(ctx, id)
+	case "role":
+		s.setUserRole(w, r, id)
+		return
 	case "password":
-		err = s.Store.SetPassword(ctx, id, r.PostFormValue("password"))
+		var u store.User
+		if u, err = s.Store.UserByID(ctx, id); err == nil && !u.HasLocal {
+			invalid(w, u.Username+" signs in with single sign-on only and has no password.")
+			return
+		}
+		if err == nil {
+			err = s.Store.SetPassword(ctx, id, r.PostFormValue("password"))
+		}
 	default:
 		http.NotFound(w, r)
 		return

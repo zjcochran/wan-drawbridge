@@ -198,14 +198,19 @@ Viewers do not see the admin tabs; opening one's address gives 403.
 ![Settings, Users tab](../images/users.jpg)
 
 **Settings → Users** (admins) lists every account with its role, how it signs in (password, single sign-on,
-or both), last sign-in and status. For other users you can **Disable** (signs
-them out everywhere), **Enable** and **Reset password**. **Add a user** creates
-a viewer or admin with a password.
+or both), last sign-in and status. For other users you can change the **Role**
+(viewer or admin; not for accounts without a password while an SSO admin group
+is set, since the group decides theirs), **Disable** (signs them out
+everywhere), **Enable**, **Delete** (also removes their sessions and
+single sign-on links; it asks first and cannot be undone) and **Reset
+password**. Reset password is shown only for accounts that have a password, not
+for ones that sign in with single sign-on only. **Add a user** creates a viewer
+or admin with a password.
 
 Safety rules:
 
-- You cannot disable yourself.
-- The last enabled admin cannot be disabled or turned into a viewer.
+- You cannot disable, delete or change the role of yourself.
+- The last enabled admin cannot be disabled, deleted or turned into a viewer.
 
 Usernames are case-insensitive: `Alice` and `alice` are the same account.
 

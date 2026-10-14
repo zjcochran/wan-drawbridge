@@ -247,6 +247,37 @@ func (s *Store) SetUserDisabled(ctx context.Context, id int, disabled bool) erro
 	return tx.Commit()
 }
 
+// DeleteUser deletes a user with their sessions and single sign-on links.
+// The last enabled admin cannot be deleted.
+func (s *Store) DeleteUser(ctx context.Context, id int) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var role string
+	var disabled bool
+	if err := tx.QueryRowContext(ctx, `SELECT role, disabled FROM users WHERE id = ?`, id).Scan(&role, &disabled); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return errors.New("no such user")
+		}
+		return err
+	}
+	var others int
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM users WHERE role = 'admin' AND disabled = 0 AND id <> ?`, id).Scan(&others); err != nil {
+		return err
+	}
+	if role == RoleAdmin && !disabled && others == 0 {
+		return errors.New("cannot delete the last admin")
+	}
+	// Sessions and identities go with it (ON DELETE CASCADE).
+	if _, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 // Session is a logged-in browser.
 type Session struct {
 	User User
