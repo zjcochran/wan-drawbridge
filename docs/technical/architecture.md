@@ -60,7 +60,7 @@ flowchart LR
 | `internal/wan` | Pure failover state machine: observation in, transition and action out. |
 | `internal/monitor` | The check loop. Owns the state machine, runs the learner, persists state, calls the executor. |
 | `internal/executor` | Stops and starts containers for runs; keeps the container inventory in sync with Docker. |
-| `internal/docker` | Minimal Docker Engine API client (list, inspect, stop, start, events, version). |
+| `internal/docker` | Minimal Docker Engine API client (list, inspect, stop, start, events, stats, version). |
 | `internal/store` | All persistence: SQLite, migrations, users, sessions, ISPs, policies, runs, events. |
 | `internal/secrets` | AES-GCM sealing of stored secrets. |
 | `internal/notify` | Notification channels: formats events into messages and delivers them in the background, with retries. |
@@ -80,6 +80,7 @@ flowchart TB
     main --> loop[monitor.Run<br/>check loop]
     main --> inv[executor.WatchInventory<br/>sync every 30 s]
     inv --> ev[Docker event stream reader]
+    main --> use[executor.WatchUsage<br/>every minute in an outage]
     loop --> hk[monitor.housekeeping<br/>daily]
     main --> nt[notify.Run<br/>delivers notifications]
     main --> bs[web.RunBackupSchedule<br/>checks every minute]
@@ -130,6 +131,11 @@ seconds after Docker reports a container `create`, `destroy` or `rename`
 event. It writes only the `stacks` and `containers` tables. It publishes the
 `inventory` topic when the set of containers or their running state changes
 (a fingerprint of ID, name and running flag), not on every sync.
+
+**The usage watcher** (`executor.WatchUsage`) runs every minute. When an
+outage is open (`outages.ended IS NULL`), it lists the containers and reads
+each running one's network counters (`GET /containers/{id}/stats?stream=false&one-shot=true`),
+writing only `outage_usage`.
 
 **Notifications** are fed by the store: every recorded event is passed to
 `Notifier.Event`, which queues it (64 at most, never blocking the caller) if

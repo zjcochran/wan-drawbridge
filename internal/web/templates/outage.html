@@ -1,0 +1,28 @@
+{{define "content"}}
+{{$d := .Data}}{{$o := $d.Outage}}
+<p><a href="/reports">← Reports</a></p>
+<h1>Outage {{datetime $o.Started}}</h1>
+<section class="card">
+  <dl class="facts">
+    <dt>Started</dt><dd><time title="{{isodate $o.Started}}">{{datetime $o.Started}}</time>{{with $o.StartedBy}} <span class="sub">Fail over now by {{.}}</span>{{end}}</dd>
+    <dt>Ended</dt><dd>{{if $o.Open}}<span class="badge bad">ongoing</span>{{else}}<time title="{{isodate $o.Ended}}">{{datetime $o.Ended}}</time>{{with $o.EndedBy}} <span class="sub">Restore now by {{.}}</span>{{end}}{{end}}</dd>
+    <dt>Lasted</dt><dd>{{span ($o.Duration $d.Now)}}</dd>
+    <dt>Backup ISP</dt><dd>{{or $o.ISPName "–"}}</dd>
+    <dt>Data used</dt><dd>{{if $o.Measured}}{{bytes (add64 $o.RX $o.TX)}}{{else}}–{{end}}</dd>
+  </dl>
+</section>
+<section class="card">
+  <h2>Data used by container</h2>
+  {{if $d.Usage}}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Container</th><th>Received</th><th>Sent</th><th>Total</th></tr></thead>
+    <tbody>
+    {{range $d.Usage}}<tr><td>{{.Container}}</td><td>{{bytes .RX}}</td><td>{{bytes .TX}}</td><td><strong>{{bytes (add64 .RX .TX)}}</strong></td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  <p class="sub">Docker's counters include traffic on the local network and between containers, not only the internet.</p>
+  {{else}}<p class="muted">Nothing was measured during this outage.</p>{{end}}
+</section>
+{{end}}

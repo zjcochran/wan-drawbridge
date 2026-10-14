@@ -178,6 +178,56 @@ by type; **Export CSV** downloads up to 1,000 events of the selected type as
 `drawbridge-events.csv`. The list of event types is in
 [Monitoring → events](monitoring.md#event-types).
 
+## Reports
+
+![Reports page](../images/reports.jpg)
+
+How often and how long Drawbridge failed over, and how much data the
+containers used meanwhile. Everyone sees it. An **outage** lasts from a failover
+(automatic, or **Fail over now**) until the failback (automatic, or **Restore
+now**), including the failback pending wait. Failover tests are not outages.
+
+- **Last 7 days, Last 30 days, Last 12 months:** the outages that lasted at
+  some point in the period; **On the backup** counts only the part inside the
+  period; **Longest** and **Data used** count those outages in full.
+- **By month:** the last 12 calendar months in Drawbridge's time zone (`TZ`),
+  newest first. An outage that crosses a month boundary counts in both months,
+  with its time split between them; its data counts in the month it started.
+  The bar compares each month's time on the backup with the busiest month's.
+- **Data used on the backup, last 30 days:** the 10 containers that used the
+  most, over the outages that lasted at some point in the last 30 days.
+- **Outages:** newest first, 50 per page (**Older** for the next page), with
+  start, end (or *ongoing*), how long it lasted, the backup ISP and the data
+  used. Who used **Fail over now** or **Restore now** is shown under the time.
+  Click a start time for the outage's page, `/reports/outages/{id}`, with the
+  data used by each container.
+
+### How data is measured
+
+While an outage lasts, Drawbridge reads Docker's network counters (bytes
+received and sent) of every running container once a minute, and adds the
+difference since the previous reading:
+
+- The first reading of a container in an outage only sets the starting
+  point, so traffic in the minute before it (and from a container created
+  during the outage until its first reading) is not counted; neither is the
+  traffic after the last reading before the failback, up to a minute.
+- A container that restarts or is re-created starts its counters at zero;
+  Drawbridge notices (lower counters, or a new container ID) and counts the new
+  counters in full.
+- The counters include all of a container's traffic: the internet, but also
+  your local network and other containers. They are an upper bound for what
+  went over the backup line.
+- Containers on the host network (`network_mode: host`) have no counters and
+  are not listed. Containers on another container's network
+  (`network_mode: service:...`) show no traffic of their own: it is counted
+  under the container whose network they share.
+- Outages from before this version have no data; their times come from the
+  event log.
+
+**Received** is what the container downloaded, **Sent** what it uploaded;
+sizes are in decimal units (1 MB = 1,000,000 bytes).
+
 ## Settings
 
 ![Settings, WAN detection tab](../images/settings.jpg)

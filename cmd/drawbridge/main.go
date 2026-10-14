@@ -195,6 +195,7 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 		}
 	}()
 	bg.Go(func() { ex.WatchInventory(ctx, dc, 30*time.Second) })
+	bg.Go(func() { ex.WatchUsage(ctx, dc, time.Minute) })
 	bg.Go(func() { ui.RunBackupSchedule(ctx) })
 	bg.Go(func() { errc <- m.Run(ctx) })
 

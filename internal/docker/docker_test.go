@@ -28,6 +28,10 @@ func fakeEngine(posted *[]string) http.Handler {
 					"com.docker.compose.project":"media","com.docker.compose.service":"player",
 					"com.docker.compose.depends_on":"db:service_healthy:false, redis:service_started:true"}},
 				{"Id":"bbb222","Names":["/standalone"],"State":"exited","Labels":{}}]`)
+		case r.URL.Path == "/containers/aaa111/stats":
+			fmt.Fprint(w, `{"networks":{"eth0":{"rx_bytes":1000,"tx_bytes":200},"eth1":{"rx_bytes":5,"tx_bytes":7}}}`)
+		case r.URL.Path == "/containers/bbb222/stats":
+			fmt.Fprint(w, `{"read":"0001-01-01T00:00:00Z"}`)
 		case r.URL.Path == "/containers/aaa111/json":
 			fmt.Fprint(w, `{"State":{"Running":true,"Health":{"Status":"healthy"}}}`)
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/stop"):
@@ -86,6 +90,25 @@ func TestClient(t *testing.T) {
 	want := []string{"/containers/aaa111/stop?t=30", "/containers/aaa111/start"}
 	if !slices.Equal(posted, want) {
 		t.Errorf("posted %v, want %v", posted, want)
+	}
+}
+
+func TestStats(t *testing.T) {
+	srv := httptest.NewServer(fakeEngine(new([]string)))
+	defer srv.Close()
+	c, err := New("tcp://" + strings.TrimPrefix(srv.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if rx, tx, ok, err := c.Stats(ctx, "aaa111"); err != nil || !ok || rx != 1005 || tx != 207 {
+		t.Errorf("Stats = %d %d %v %v", rx, tx, ok, err)
+	}
+	if _, _, ok, err := c.Stats(ctx, "bbb222"); err != nil || ok {
+		t.Errorf("Stats without networks = %v %v", ok, err)
+	}
+	if _, _, _, err := c.Stats(ctx, "missing"); err == nil {
+		t.Error("Stats(missing) did not fail")
 	}
 }
 

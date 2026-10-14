@@ -17,6 +17,7 @@ applies. Calls:
 | `Stop` | `POST /containers/{id}/stop?t=30` | 204 and 304 (already stopped) are success. |
 | `Start` | `POST /containers/{id}/start` | 204 and 304 (already running) are success. |
 | `Events` | `GET /events?filters={"type":["container"]}` | Streamed JSON lines; `Action` and `Actor.ID` are used. |
+| `Stats` | `GET /containers/{id}/stats?stream=false&one-shot=true` | `rx_bytes` and `tx_bytes` summed over `networks`; none when the container has no networks of its own. Read every minute during an outage for the [Reports page](../user/web-ui.md#how-data-is-measured). |
 
 Errors carry Docker's `message` field, for example `docker: 404 Not Found: No
 such container: …`.

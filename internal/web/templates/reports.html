@@ -1,0 +1,72 @@
+{{define "content"}}
+{{$d := .Data}}
+<h1>Reports</h1>
+<p class="lead">An outage lasts from a failover until the failback. Data used is the network traffic of the containers that kept running, read from Docker every minute while an outage lasts; it includes traffic on the local network.</p>
+
+<div class="grid three">
+  {{range $d.Periods}}
+  <section class="card">
+    <h2>{{.Label}}</h2>
+    <dl class="facts">
+      <dt>Outages</dt><dd>{{.Count}}</dd>
+      <dt>On the backup</dt><dd>{{if .Count}}{{span .Total}}{{else}}–{{end}}</dd>
+      <dt>Longest</dt><dd>{{if .Count}}{{span .Longest}}{{else}}–{{end}}</dd>
+      <dt>Data used</dt><dd>{{if .Count}}{{bytes .Bytes}}{{else}}–{{end}}</dd>
+    </dl>
+  </section>
+  {{end}}
+</div>
+
+<section class="card">
+  <h2>By month</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Month</th><th>Outages</th><th>On the backup</th><th class="bar-col"></th><th>Data used</th></tr></thead>
+    <tbody>
+    {{range $d.Months}}
+    <tr><td class="nowrap">{{month .Start}}</td><td>{{.Count}}</td><td>{{if .Count}}{{span .Total}}{{else}}–{{end}}</td>
+      <td class="bar-col"><span class="bar" style="width: {{printf "%.1f" .Bar}}%"></span></td>
+      <td>{{if .Bytes}}{{bytes .Bytes}}{{else}}–{{end}}</td></tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Data used on the backup, last 30 days</h2>
+  {{if $d.Top}}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Container</th><th>Received</th><th>Sent</th><th>Total</th></tr></thead>
+    <tbody>
+    {{range $d.Top}}<tr><td>{{.Container}}</td><td>{{bytes .RX}}</td><td>{{bytes .TX}}</td><td><strong>{{bytes (add64 .RX .TX)}}</strong></td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}<p class="muted">Nothing measured in the last 30 days.</p>{{end}}
+</section>
+
+<section class="card">
+  <h2>Outages</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Started</th><th>Ended</th><th>Lasted</th><th>Backup ISP</th><th>Data used</th></tr></thead>
+    <tbody>
+    {{range $d.Outages}}
+    <tr>
+      <td><a href="/reports/outages/{{.ID}}"><time title="{{isodate .Started}}">{{datetime .Started}}</time></a>
+        {{with .StartedBy}}<div class="sub">Fail over now by {{.}}</div>{{end}}</td>
+      <td>{{if .Open}}<span class="badge bad">ongoing</span>{{else}}<time title="{{isodate .Ended}}">{{datetime .Ended}}</time>
+        {{with .EndedBy}}<div class="sub">Restore now by {{.}}</div>{{end}}{{end}}</td>
+      <td>{{span (.Duration $d.Now)}}</td>
+      <td>{{or .ISPName "–"}}</td>
+      <td>{{if .Measured}}{{bytes (add64 .RX .TX)}}{{else}}–{{end}}</td>
+    </tr>
+    {{else}}<tr><td colspan="5" class="empty">No outages yet.</td></tr>{{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if $d.Next}}<a class="button secondary" href="/reports?before={{$d.Next}}">Older</a>{{end}}
+</section>
+{{end}}

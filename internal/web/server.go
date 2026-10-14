@@ -175,6 +175,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /events", s.auth(s.eventsPage))
 	mux.Handle("GET /events.csv", s.auth(s.eventsCSV))
 
+	mux.Handle("GET /reports", s.auth(s.reportsPage))
+	mux.Handle("GET /reports/outages/{id}", s.auth(s.outagePage))
+
 	mux.Handle("GET /settings", s.auth(s.settingsPage(settingsTabs[0])))
 	for _, t := range settingsTabs {
 		if t.Admin {

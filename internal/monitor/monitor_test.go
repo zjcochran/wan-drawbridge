@@ -309,6 +309,10 @@ func TestManualFailoverRestoreAndResume(t *testing.T) {
 	if m.Status().State != wan.Primary {
 		t.Fatalf("state = %s", m.Status().State)
 	}
+	if os, err := m.store.Outages(ctx, store.OutageFilter{}); err != nil || len(os) != 1 || os[0].Open() ||
+		os[0].StartedBy != "test" || os[0].EndedBy != "test" {
+		t.Fatalf("outages = %+v, %v", os, err)
+	}
 
 	if err := m.SetPaused(ctx, true, "test"); err != nil || !m.Status().Paused {
 		t.Fatalf("pause: %v", err)

@@ -460,6 +460,9 @@ func (m *Monitor) transition(ctx context.Context, to wan.State, event string, pa
 	m.report(m.store.SaveState(ctx, m.state))
 	payload["from"], payload["to"] = from, to
 	m.event(ctx, event, payload)
+	if by, _ := payload["by"].(string); outage(from) != outage(to) {
+		m.report(m.store.SetOutageBy(ctx, outage(to), by))
+	}
 	m.log.Info("state changed", "from", from, "to", to, "reason", event)
 	if to == wan.Failover || event == "manual_restore" {
 		by, _ := payload["by"].(string)
@@ -762,3 +765,7 @@ func (m *Monitor) report(err error) {
 		m.log.Error("monitor error", "err", err)
 	}
 }
+
+// outage reports whether s is part of an outage, which lasts from the
+// failover until the failback.
+func outage(s wan.State) bool { return s == wan.Failover || s == wan.FailbackPending }

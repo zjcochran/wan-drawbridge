@@ -15,7 +15,7 @@ Start here if you run Drawbridge.
 | --- | --- |
 | [Installation](user/installation.md) | Requirements, the Compose file, first start, upgrading, uninstalling |
 | [Setup wizard](user/setup-wizard.md) | The seven first-run steps, with screenshots |
-| [Using the web UI](user/web-ui.md) | Every page: dashboard, stacks, containers, ISPs, events, settings, users; colour themes |
+| [Using the web UI](user/web-ui.md) | Every page: dashboard, stacks, containers, ISPs, events, reports of outages and data used, settings, users; colour themes |
 | [Choosing what to stop](user/stacks-and-containers.md) | Stack rules, container overrides, the `drawbridge.on-failover` label, new containers, examples |
 | [ISPs and the primary ISP](user/isps.md) | How ISPs are recognised and grouped, pinning, learning, fixing a wrong grouping |
 | [What happens during an outage](user/during-an-outage.md) | A minute-by-minute walk-through of a failover and failback, flapping, manual controls, timed pauses, failover tests |
