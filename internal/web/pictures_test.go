@@ -182,6 +182,64 @@ func TestSSOPicture(t *testing.T) {
 	}
 }
 
+func TestRemovingTheSSOPictureSticks(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t)
+	idp := newIDP(t)
+	configureSSO(t, e.admin(), idp, nil)
+	idp.picture = testPNG(t, color.RGBA{40, 120, 200, 255})
+	idp.as(map[string]any{"sub": "user-1", "preferred_username": "alice", "picture": idp.srv.URL + "/picture.png"})
+	c := e.client()
+	c.ssoLogin("/auth/oidc/login")
+	id := e.userID("alice")
+
+	if _, page := c.get("/settings/account"); !strings.Contains(page, "Remove picture") {
+		t.Fatal("no Remove picture for a picture from SSO")
+	}
+	if resp, _ := c.htmx("/settings/picture/remove", url.Values{}); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("remove: %d", resp.StatusCode)
+	}
+	e.client().ssoLogin("/auth/oidc/login")
+	if u, _ := e.st.UserByID(ctx, id); u.Picture != 0 || u.SSOPicture {
+		t.Fatalf("the SSO picture came back: picture=%d sso=%v", u.Picture, u.SSOPicture)
+	}
+	_, page := c.get("/settings/account")
+	if !strings.Contains(page, "Use it again") || strings.Contains(page, "Remove picture") {
+		t.Fatal("the account page does not offer the SSO picture back")
+	}
+
+	if resp, _ := c.htmx("/settings/picture/sso", url.Values{}); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("use again: %d", resp.StatusCode)
+	}
+	e.client().ssoLogin("/auth/oidc/login")
+	if u, _ := e.st.UserByID(ctx, id); u.Picture == 0 || !u.SSOPicture {
+		t.Fatal("the SSO picture did not come back after Use it again")
+	}
+}
+
+func TestStaticFilesAreVersioned(t *testing.T) {
+	e := newEnv(t)
+	admin := e.admin()
+	_, page := e.client().get("/login")
+	v := staticVersion()
+	if len(v) != 12 || !strings.Contains(page, `/static/icon.svg?v=`+v) {
+		t.Fatalf("the sign-in page does not link versioned static files (v=%s)", v)
+	}
+	_, page = admin.get("/settings")
+	for _, f := range []string{"app.css", "app.js", "htmx.min.js"} {
+		if !strings.Contains(page, `/static/`+f+`?v=`+v) {
+			t.Errorf("%s is not linked with ?v=", f)
+		}
+	}
+	resp, _ := e.client().get("/static/app.css?v=" + v)
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Cache-Control") != "public, max-age=31536000, immutable" {
+		t.Errorf("versioned: %d %q", resp.StatusCode, resp.Header.Get("Cache-Control"))
+	}
+	if resp, _ := e.client().get("/static/app.css"); resp.Header.Get("Cache-Control") != "public, max-age=3600" {
+		t.Errorf("unversioned: %q", resp.Header.Get("Cache-Control"))
+	}
+}
+
 func TestSSOPictureTokenStaysWithTheProvider(t *testing.T) {
 	var auth string
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

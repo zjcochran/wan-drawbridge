@@ -4,16 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} · WAN Drawbridge</title>
-<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/app.css">
-<script src="/static/htmx.min.js" defer></script>
-<script src="/static/htmx-sse.min.js" defer></script>
-<script src="/static/app.js" defer></script>
+<link rel="icon" href="{{static "icon.svg"}}" type="image/svg+xml">
+<link rel="stylesheet" href="{{static "app.css"}}">
+<script src="{{static "htmx.min.js"}}" defer></script>
+<script src="{{static "htmx-sse.min.js"}}" defer></script>
+<script src="{{static "app.js"}}" defer></script>
 </head>
 <body{{with .Session}} hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}' hx-ext="sse" sse-connect="/sse"{{end}}>
 {{if .Session}}
 <header class="topbar">
-  <a class="brand" href="/"><img src="/static/icon.svg" alt="" width="22" height="22"> WAN Drawbridge</a>
+  <a class="brand" href="/"><img src="{{static "icon.svg"}}" alt="" width="22" height="22"> WAN Drawbridge</a>
   <nav>
     <a href="/" {{if eq .Nav "dashboard"}}aria-current="page"{{end}}>Dashboard</a>
     <a href="/stacks" {{if eq .Nav "stacks"}}aria-current="page"{{end}}>Stacks</a>

@@ -33,6 +33,7 @@ var funcs = template.FuncMap{
 	"dict":       dict,
 	"kb":         func(n int64) float64 { return float64(n) / 1000 },
 	"initial":    initial,
+	"static":     staticURL,
 }
 
 // dict builds a map from key/value pairs, to pass several values to a template.

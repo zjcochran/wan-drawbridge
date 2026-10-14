@@ -225,13 +225,15 @@ Usernames are case-insensitive: `Alice` and `alice` are the same account.
 **Settings → Your account → Profile picture** uploads a PNG, JPEG, GIF or WebP
 image of up to 1 MB (other types, SVG included, are refused). It shows in the
 top-right menu and, for admins, in Settings → Users. **Remove picture** deletes
-an uploaded one.
+the current picture, uploaded or from single sign-on.
 
 Accounts linked to single sign-on also get the picture from the provider's
 `picture` claim at each SSO sign-in (see
 [Single sign-on](single-sign-on.md#profile-pictures)). An uploaded picture
-always wins; remove it to go back to the provider's. Without any picture, the
-first letter of the username is shown instead.
+always wins; remove it to go back to the provider's. Removing the provider's
+picture keeps it away: later SSO sign-ins no longer set one, until you click
+**Use it again** (it then returns at your next SSO sign-in). Without any
+picture, the first letter of the username is shown instead.
 
 Pictures are not in backup files; see
 [Backup and restore](backup-and-restore.md#backup-files).

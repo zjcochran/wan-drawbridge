@@ -109,10 +109,12 @@
           <small>PNG, JPEG, GIF or WebP, up to 1 MB.{{if $d.SSO.Enabled}} It replaces the one from {{$d.SSO.Name}}.{{end}}</small></label>
         <div class="picture-actions">
           <button>Upload</button>
-          {{if eq $d.Picture "upload"}}<button type="button" class="secondary" hx-post="/settings/picture/remove">Remove picture</button>{{end}}
+          {{if $d.Picture}}<button type="button" class="secondary" hx-post="/settings/picture/remove">Remove picture</button>{{end}}
         </div>
       </form>
-      {{if eq $d.Picture "sso"}}<p class="hint">This picture comes from {{$d.SSO.Name}} and updates when you sign in with it.</p>{{end}}
+      {{if eq $d.Picture "sso"}}<p class="hint">This picture comes from {{$d.SSO.Name}} and updates when you sign in with it.</p>
+      {{else if and $d.Linked (not $.Session.User.SSOPicture)}}<p class="hint">Your {{$d.SSO.Name}} picture is not used.
+        <button type="button" class="link" hx-post="/settings/picture/sso">Use it again</button></p>{{end}}
     </div>
   </div>
 </section>

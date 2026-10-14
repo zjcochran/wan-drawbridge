@@ -65,3 +65,28 @@ func (s *Store) UserPicture(ctx context.Context, userID int) (p Picture, ok bool
 	p.UpdatedAt = time.Unix(at, 0)
 	return p, true, nil
 }
+
+// RemoveUserPicture deletes a user's picture, whatever its source. If it came
+// from single sign-on, single sign-on may no longer set one.
+func (s *Store) RemoveUserPicture(ctx context.Context, userID int) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE users SET sso_picture = 0
+		WHERE id = ? AND EXISTS (SELECT 1 FROM user_pictures WHERE user_id = ? AND source = 'sso')`, userID, userID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM user_pictures WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// SetSSOPicture sets whether single sign-on may set a user's picture.
+func (s *Store) SetSSOPicture(ctx context.Context, userID int, on bool) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE users SET sso_picture = ? WHERE id = ?`, on, userID)
+	return err
+}
