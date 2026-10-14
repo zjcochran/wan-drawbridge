@@ -59,7 +59,7 @@ func checkScheduledFile(t *testing.T, e *env, name string) []byte {
 // that only admins can download it, and only files Drawbridge wrote.
 func checkBackupDownloads(t *testing.T, e *env, c *client, name, content string) {
 	t.Helper()
-	_, page := c.get("/settings")
+	_, page := c.get("/settings/backup")
 	if !strings.Contains(page, name) || !strings.Contains(page, "Last scheduled backup") {
 		t.Error("the settings page does not list the backups")
 	}
@@ -182,7 +182,7 @@ func TestScheduledBackupFailure(t *testing.T) {
 	if len(evs) != 1 || evs[0].Payload["by"] != "schedule" {
 		t.Fatalf("events: %v", evs)
 	}
-	if _, body := c.get("/settings"); !strings.Contains(body, "failed: ") || !strings.Contains(body, "Cannot list") {
+	if _, body := c.get("/settings/backup"); !strings.Contains(body, "failed: ") || !strings.Contains(body, "Cannot list") {
 		t.Error("the failure is not shown")
 	}
 	// A failed run is not retried every minute.

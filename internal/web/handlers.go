@@ -693,6 +693,9 @@ func csvSafe(s string) string {
 // ---- settings ----
 
 type settingsData struct {
+	Tab       string        // the tab shown
+	Tabs      []settingsTab // the tabs this user can open
+	Users     usersData
 	SSO       ssoForm
 	Linked    []store.Identity
 	HasLocal  bool
@@ -738,26 +741,84 @@ func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
+// settingsTab is one tab of the Settings page, at /settings/{ID}.
+type settingsTab struct {
+	ID, Name string
+	Admin    bool // only admins see and open it
+}
+
+// settingsTabs are the Settings tabs in order. The first is also /settings.
+var settingsTabs = []settingsTab{
+	{ID: "detection", Name: "WAN detection"},
+	{ID: "notifications", Name: "Notifications", Admin: true},
+	{ID: "backup", Name: "Backup and restore", Admin: true},
+	{ID: "users", Name: "Users", Admin: true},
+	{ID: "sso", Name: "Single sign-on", Admin: true},
+	{ID: "account", Name: "Your account"},
+	{ID: "system", Name: "System"},
+}
+
+// settingsPage shows one tab of Settings, loading only what that tab needs.
+func (s *Server) settingsPage(tab settingsTab) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		me := sessionFrom(r).User
+		d := settingsData{Tab: tab.ID, IsAdmin: me.IsAdmin(), HasLocal: me.HasLocal}
+		for _, t := range settingsTabs {
+			if !t.Admin || d.IsAdmin {
+				d.Tabs = append(d.Tabs, t)
+			}
+		}
+		if err := s.loadSettingsTab(r, &d); err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.page(w, r, "settings", tab.Name+" · Settings", d)
+	}
+}
+
+func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 	ctx := r.Context()
+	var err error
+	switch d.Tab {
+	case "detection":
+		err = s.loadDetection(ctx, d)
+	case "notifications":
+		d.Notify, err = s.notifyData(ctx)
+	case "backup":
+		if err = s.loadDetection(ctx, d); err == nil { // for the retention hint
+			d.Schedule, err = s.scheduleView(ctx)
+		}
+	case "users":
+		d.Users.Me = sessionFrom(r).User.ID
+		d.Users.Users, err = s.Store.Users(ctx)
+	case "sso":
+		err = s.loadSSO(r, d)
+	case "account":
+		d.Themes, d.Modes = Themes, Modes
+		if err = s.loadSSO(r, d); err == nil {
+			d.Linked, err = s.Store.Identities(ctx, sessionFrom(r).User.ID)
+		}
+	case "system":
+		s.loadSystem(ctx, d)
+	}
+	return err
+}
+
+func (s *Server) loadDetection(ctx context.Context, d *settingsData) error {
 	det, err := s.Mon.Detection(ctx)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	me := sessionFrom(r).User
-	d := settingsData{Detection: formFromDetection(det), DBPath: s.DBPath, IsAdmin: me.IsAdmin(), HasLocal: me.HasLocal, Version: s.Version,
-		Themes: Themes, Modes: Modes}
-	o, err := s.oidcSettings(ctx)
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
+	d.Detection = formFromDetection(det)
+	return err
+}
+
+func (s *Server) loadSSO(r *http.Request, d *settingsData) error {
+	o, err := s.oidcSettings(r.Context())
 	d.SSO = s.ssoForm(r, o)
-	if d.Linked, err = s.Store.Identities(ctx, me.ID); err != nil {
-		s.fail(w, r, err)
-		return
-	}
+	return err
+}
+
+func (s *Server) loadSystem(ctx context.Context, d *settingsData) {
+	d.Version, d.DBPath = s.Version, s.DBPath
+	var err error
 	d.Docker, err = s.Docker.Ping(ctx)
 	d.DockerOK = err == nil
 	if err != nil {
@@ -770,17 +831,6 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.DBSize = fmt.Sprintf("%.1f MB", float64(size)/1e6)
-	if d.IsAdmin {
-		if d.Notify, err = s.notifyData(ctx); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-		if d.Schedule, err = s.scheduleView(ctx); err != nil {
-			s.fail(w, r, err)
-			return
-		}
-	}
-	s.page(w, r, "settings", "Settings", d)
 }
 
 func (s *Server) saveDetection(w http.ResponseWriter, r *http.Request) {
@@ -819,7 +869,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	s.event(ctx, "password_changed", map[string]any{"user": u.Username})
 	// SetPassword ended every session, this one included: sign in again.
-	redirect(w, r, "/login?next=/settings")
+	redirect(w, r, "/login?next=/settings/account")
 }
 
 // ---- users ----
@@ -830,22 +880,13 @@ type usersData struct {
 	Error string
 }
 
-func (s *Server) usersPage(w http.ResponseWriter, r *http.Request) {
-	users, err := s.Store.Users(r.Context())
-	if err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	s.page(w, r, "users", "Users", usersData{Users: users, Me: sessionFrom(r).User.ID})
-}
-
 func (s *Server) usersTable(w http.ResponseWriter, r *http.Request) {
 	users, err := s.Store.Users(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.partial(w, r, "users", "users-table", usersData{Users: users, Me: sessionFrom(r).User.ID})
+	s.partial(w, r, "settings", "users-table", usersData{Users: users, Me: sessionFrom(r).User.ID})
 }
 
 func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {

@@ -33,7 +33,7 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/login` | Sign-in page; redirects to `/` if already signed in. Query `next`. |
 | POST | `/login` | Form `username`, `password`, `next`. 401 on wrong credentials, 429 when rate-limited, 403 when password sign-in is off. Sets the session cookie and redirects to `next` (local paths only). |
 | POST | `/logout` | Deletes the session, clears the cookie, redirects to `/login`. |
-| GET | `/auth/oidc/login` | Starts single sign-on. Query `next`; `link=1` links to the signed-in account. 404 when SSO is off. |
+| GET | `/auth/oidc/login` | Starts single sign-on. Query `next`; `link=1` links to the signed-in account and returns to `/settings/account`. 404 when SSO is off. |
 | GET | `/auth/oidc/callback` | Completes single sign-on. Query `code`, `state` (or `error`). |
 
 ### Setup
@@ -62,9 +62,11 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/isps` | auth | |
 | GET | `/events` | auth | Query `type`, `before` (event ID cursor). 100 per page. |
 | GET | `/events.csv` | auth | Query `type`. Up to 1,000 newest events; columns `time` (RFC 3339 UTC), `type`, `actor`, `details`. Cells starting with `= + - @ TAB CR` are prefixed with `'` against spreadsheet formula injection. |
-| GET | `/settings` | auth | |
+| GET | `/settings` | auth | The first Settings tab, WAN detection. Query `flash` shows a message. |
+| GET | `/settings/detection`, `/settings/account`, `/settings/system` | auth | Settings tabs. |
+| GET | `/settings/notifications`, `/settings/backup`, `/settings/users`, `/settings/sso` | admin | Settings tabs for admins. |
 | GET | `/settings/backups/{name}` | admin | Downloads a file from the backup folder. Only names matching `drawbridge-backup-YYYYMMDD-HHMMSS.json` are served; anything else is 404. |
-| GET | `/users` | admin | |
+| GET | `/users` | admin | 301 to `/settings/users`, where Users moved. |
 
 ### Actions
 
@@ -97,12 +99,12 @@ token.
 | `/settings/notifications/test` | admin | as above | Send a test message with the form's values (saved ones for blanks); returns "✓ Sent…" or "✗ error" |
 | `/settings/sso` | admin | SSO fields | Save single sign-on settings |
 | `/settings/sso/test` | admin | `issuer` | Try discovery |
-| `/settings/sso/unlink` | auth | | Unlink own SSO identities (refused without a password) |
+| `/settings/sso/unlink` | auth | | Unlink own SSO identities (refused without a password); redirects to `/settings/account` |
 | `/settings/restore` | admin | Multipart: `file`, `passphrase`; body at most 128 MB | Restore a backup file; ends every session; `HX-Redirect: /login` |
-| `/users` | admin | `username`, `password`, `role` | Create user |
-| `/users/{id}/disable` | admin | | Not yourself; not the last admin |
-| `/users/{id}/enable` | admin | | |
-| `/users/{id}/password` | admin | `password` | Reset; ends their sessions |
+| `/settings/users` | admin | `username`, `password`, `role` | Create user |
+| `/settings/users/{id}/disable` | admin | | Not yourself; not the last admin |
+| `/settings/users/{id}/enable` | admin | | |
+| `/settings/users/{id}/password` | admin | `password` | Reset; ends their sessions |
 
 Validation errors return **422** with a plain-text message; unexpected errors
 return **500** "something went wrong: …" and are logged.
@@ -112,7 +114,7 @@ saves the response. Form: `_csrf`, `history` (`none`, `30`, `60`, `90`,
 `all`), `passphrase`, `confirm`. It answers with the backup file
 (`Content-Type: application/json`, `Content-Disposition: attachment`,
 `Cache-Control: no-store`), or, if the form is invalid, 303 to
-`/settings?flash=<reason>`.
+`/settings/backup?flash=<reason>`.
 
 ### Detection form fields
 

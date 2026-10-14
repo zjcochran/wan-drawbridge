@@ -89,7 +89,7 @@ Settings changed in the UI live in the `settings` table (see
 
 Stack and container settings, ISP roles and users are in their own tables;
 each user's colour theme and light/dark mode are columns of `users`
-(Settings → Appearance).
+(Settings → Your account → Appearance).
 
 ## Fixed values
 

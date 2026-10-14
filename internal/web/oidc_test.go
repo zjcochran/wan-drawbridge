@@ -228,7 +228,7 @@ func TestSSOLinkThenSSOOnly(t *testing.T) {
 
 	idp.as(map[string]any{"sub": "alice-sub", "preferred_username": "alice"})
 	resp, _ = admin.ssoLogin("/auth/oidc/login?link=1")
-	if !strings.HasPrefix(resp.Header.Get("Location"), "/settings?flash=") {
+	if !strings.HasPrefix(resp.Header.Get("Location"), "/settings/account?flash=") {
 		t.Fatalf("link: %d %s", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	u, ok, _ := e.st.UserByIdentity(context.Background(), idp.srv.URL, "alice-sub")

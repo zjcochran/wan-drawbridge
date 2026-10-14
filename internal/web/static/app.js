@@ -34,6 +34,12 @@
     document.documentElement.dataset.mode = form.elements.mode.value;
   });
 
+  // Settings tabs scroll sideways on a narrow screen: bring the open one into view.
+  document.addEventListener("DOMContentLoaded", () => {
+    const tab = document.querySelector('.tabs [aria-current="page"]');
+    if (tab) tab.parentElement.scrollLeft = tab.offsetLeft - (tab.parentElement.clientWidth - tab.offsetWidth) / 2;
+  });
+
   // A select-all checkbox checks every box with the given name in its table.
   document.addEventListener("change", (e) => {
     const all = e.target.closest("[data-select-all]");

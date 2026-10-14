@@ -125,10 +125,10 @@ func TestChangePassword(t *testing.T) {
 func TestUserOperations(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
-	if resp, body := c.htmx("/users", url.Values{"username": {"amy"}, "password": {"test-password-123"}, "role": {"viewer"}}); resp.StatusCode != http.StatusOK || !strings.Contains(body, "amy") {
+	if resp, body := c.htmx("/settings/users", url.Values{"username": {"amy"}, "password": {"test-password-123"}, "role": {"viewer"}}); resp.StatusCode != http.StatusOK || !strings.Contains(body, "amy") {
 		t.Fatalf("create: %d", resp.StatusCode)
 	}
-	if resp, _ := c.htmx("/users", url.Values{"username": {"amy"}, "password": {"test-password-123"}, "role": {"viewer"}}); resp.StatusCode != http.StatusUnprocessableEntity {
+	if resp, _ := c.htmx("/settings/users", url.Values{"username": {"amy"}, "password": {"test-password-123"}, "role": {"viewer"}}); resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Errorf("duplicate user: %d", resp.StatusCode)
 	}
 	users, _ := e.st.Users(context.Background())
@@ -140,7 +140,7 @@ func TestUserOperations(t *testing.T) {
 			me = u.ID
 		}
 	}
-	id := func(n int) string { return "/users/" + strconv.Itoa(n) }
+	id := func(n int) string { return "/settings/users/" + strconv.Itoa(n) }
 
 	if resp, _ := c.htmx(id(amy)+"/disable", url.Values{}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("disable: %d", resp.StatusCode)
@@ -292,11 +292,11 @@ func TestDatabaseFailureShowsError(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
 	e.st.SetSetting(context.Background(), store.SettingSetupComplete, true)
-	c.get("/users")
+	c.get("/settings/users")
 	csrf := c.csrf
 	e.st.Close()
 	// The session lookup itself fails, so every page reports the error.
-	for _, path := range []string{"/", "/stacks", "/containers", "/isps", "/events", "/users", "/settings"} {
+	for _, path := range []string{"/", "/stacks", "/containers", "/isps", "/events", "/settings", "/settings/users", "/settings/system"} {
 		if resp, _ := c.do("GET", path, nil); resp.StatusCode != http.StatusInternalServerError {
 			t.Errorf("%s with the database gone: %d", path, resp.StatusCode)
 		}
@@ -466,7 +466,7 @@ func TestLoginPageWhenSignedIn(t *testing.T) {
 func TestAppearance(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
-	if _, page := c.get("/settings"); !strings.Contains(page, `data-theme="default" data-mode="auto"`) || !strings.Contains(page, "Tokyo Night") {
+	if _, page := c.get("/settings/account"); !strings.Contains(page, `data-theme="default" data-mode="auto"`) || !strings.Contains(page, "Tokyo Night") {
 		t.Fatal("settings page lacks the default appearance or the theme list")
 	}
 	if resp, _ := c.htmx("/settings/appearance", url.Values{"theme": {"gruvbox"}, "mode": {"dark"}}); resp.StatusCode != http.StatusNoContent {

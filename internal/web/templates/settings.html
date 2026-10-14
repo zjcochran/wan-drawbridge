@@ -1,10 +1,82 @@
 {{define "content"}}
 {{$d := .Data}}
 <h1>Settings</h1>
+<nav class="tabs" aria-label="Settings sections">
+  {{range $d.Tabs}}<a href="/settings/{{.ID}}" {{if eq .ID $d.Tab}}aria-current="page"{{end}}>{{.Name}}</a>
+  {{end}}
+</nav>
+
+{{if eq $d.Tab "detection"}}
 <section class="card">
-  <h2>WAN detection</h2>
   {{template "detection-form" $d}}
 </section>
+
+{{else if eq $d.Tab "notifications"}}
+<section class="card" id="notifications">
+  <p>Send events to <a href="https://ntfy.sh">ntfy</a>, Gotify, Discord or any webhook. Each channel chooses what it gets.</p>
+  {{template "notify-list" $d.Notify}}
+</section>
+
+{{else if eq $d.Tab "backup"}}
+<section class="card">
+  <h2>Download a backup</h2>
+  <p>A backup holds the settings, ISPs, stack and container choices, users and single sign-on,
+    encrypted with a passphrase. Keep the passphrase: without it the backup cannot be restored.</p>
+  <form method="post" action="/settings/backup" class="stack narrow-form">
+    <input type="hidden" name="_csrf" value="{{$.Session.CSRF}}">
+    <label>History
+      <select name="history">
+        <option value="none">None, configuration only</option>
+        <option value="30">Last 30 days</option>
+        <option value="60">Last 60 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="all">All time</option>
+      </select>
+      <small>Checks, events and daily ISP totals. Checks are kept for {{$d.Detection.Retention}}; events are kept indefinitely.</small></label>
+    <label>Passphrase <input name="passphrase" type="password" minlength="12" autocomplete="new-password" required>
+      <small>At least 12 characters.</small></label>
+    <label>Confirm passphrase <input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
+    <button>Download backup</button>
+  </form>
+</section>
+<section class="card">
+  <h2>Scheduled backups</h2>
+  {{template "backup-schedule" $d.Schedule}}
+</section>
+<section class="card">
+  <h2>Restore</h2>
+  <p>Restoring replaces the settings, ISPs, stack and container choices, users and single sign-on
+    with the backup's, and the history too if the backup has any. Everyone is signed out.
+    It is not possible while containers are stopped for a failover.</p>
+  <form hx-post="/settings/restore" hx-encoding="multipart/form-data"
+        hx-confirm="Replace the current configuration with the backup? Everyone will be signed out." class="stack narrow-form">
+    <label>Backup file <input name="file" type="file" accept=".json,application/json" required></label>
+    <label>Passphrase <input name="passphrase" type="password" autocomplete="off" required></label>
+    <button class="danger">Restore backup</button>
+  </form>
+</section>
+
+{{else if eq $d.Tab "users"}}
+<section class="card">{{template "users-table" $d.Users}}</section>
+<section class="card">
+  <h2>Add a user</h2>
+  <form hx-post="/settings/users" hx-target="#users-table" hx-swap="outerHTML" class="form-grid" data-reset-on-success>
+    <label>Username <input name="username" autocomplete="off" required></label>
+    <label>Password <input name="password" type="password" minlength="12" autocomplete="new-password" required>
+      <small>At least 12 characters.</small></label>
+    <label>Role
+      <select name="role"><option value="viewer">Viewer (read-only)</option><option value="admin">Admin</option></select>
+    </label>
+    <div class="form-actions"><button>Add user</button></div>
+  </form>
+</section>
+
+{{else if eq $d.Tab "sso"}}
+<section class="card">
+  {{template "sso-fields" $d.SSO}}
+</section>
+
+{{else if eq $d.Tab "account"}}
 <section class="card">
   <h2>Your sign-in</h2>
   {{if $d.SSO.Enabled}}
@@ -51,52 +123,9 @@
     <p class="hint">Only for you, on every device you sign in on. Automatic follows your device's light or dark setting.</p>
   </form>
 </section>
-{{if $d.IsAdmin}}
+
+{{else if eq $d.Tab "system"}}
 <section class="card">
-  <h2>Single sign-on</h2>
-  {{template "sso-fields" $d.SSO}}
-</section>
-<section class="card" id="notifications">
-  <h2>Notifications</h2>
-  <p>Send events to <a href="https://ntfy.sh">ntfy</a>, Gotify, Discord or any webhook. Each channel chooses what it gets.</p>
-  {{template "notify-list" $d.Notify}}
-</section>
-<section class="card" id="backup">
-  <h2>Backup and restore</h2>
-  <p>A backup holds the settings, ISPs, stack and container choices, users and single sign-on,
-    encrypted with a passphrase. Keep the passphrase: without it the backup cannot be restored.</p>
-  <form method="post" action="/settings/backup" class="stack narrow-form">
-    <input type="hidden" name="_csrf" value="{{$.Session.CSRF}}">
-    <label>History
-      <select name="history">
-        <option value="none">None, configuration only</option>
-        <option value="30">Last 30 days</option>
-        <option value="60">Last 60 days</option>
-        <option value="90">Last 90 days</option>
-        <option value="all">All time</option>
-      </select>
-      <small>Checks, events and daily ISP totals. Checks are kept for {{$d.Detection.Retention}}; events are kept indefinitely.</small></label>
-    <label>Passphrase <input name="passphrase" type="password" minlength="12" autocomplete="new-password" required>
-      <small>At least 12 characters.</small></label>
-    <label>Confirm passphrase <input name="confirm" type="password" minlength="12" autocomplete="new-password" required></label>
-    <button>Download backup</button>
-  </form>
-  <h3>Scheduled backups</h3>
-  {{template "backup-schedule" $d.Schedule}}
-  <h3>Restore</h3>
-  <p>Restoring replaces the settings, ISPs, stack and container choices, users and single sign-on
-    with the backup's, and the history too if the backup has any. Everyone is signed out.
-    It is not possible while containers are stopped for a failover.</p>
-  <form hx-post="/settings/restore" hx-encoding="multipart/form-data"
-        hx-confirm="Replace the current configuration with the backup? Everyone will be signed out." class="stack narrow-form">
-    <label>Backup file <input name="file" type="file" accept=".json,application/json" required></label>
-    <label>Passphrase <input name="passphrase" type="password" autocomplete="off" required></label>
-    <button class="danger">Restore backup</button>
-  </form>
-</section>
-{{end}}
-<section class="card">
-  <h2>System</h2>
   <dl class="facts">
     <dt>Drawbridge</dt><dd>{{or $d.Version "dev"}}</dd>
     <dt>Docker</dt><dd>{{if $d.DockerOK}}<span class="dot running"></span>connected, version {{$d.Docker}}{{else}}<span class="dot stopped"></span>{{$d.Docker}}{{end}}</dd>
@@ -104,6 +133,8 @@
   </dl>
 </section>
 {{end}}
+{{end}}
+
 
 {{define "detection-form"}}
 <form id="detection-form" hx-post="/settings/detection" hx-target="#detection-form" hx-swap="outerHTML" class="stack">
@@ -207,3 +238,33 @@
 {{define "notify-test"}}<div class="notify-test hint" role="status">{{.}}</div>{{end}}
 
 {{define "sso-test"}}<div id="sso-test" class="hint">{{.}}</div>{{end}}
+
+{{define "users-table"}}
+<div id="users-table" class="table-wrap">
+<table>
+  <thead><tr><th>User</th><th>Role</th><th>Signs in with</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {{range .Users}}
+  <tr>
+    <td><strong>{{.Username}}</strong>{{if eq .ID $.Me}} <span class="sub">(you)</span>{{end}}</td>
+    <td>{{.Role}}</td>
+    <td>{{if .HasLocal}}password{{end}}{{if and .HasLocal .HasSSO}} and {{end}}{{if .HasSSO}}single sign-on{{end}}</td>
+    <td>{{if .LastLogin.IsZero}}never{{else}}<time title="{{datetime .LastLogin}}">{{ago .LastLogin}}</time>{{end}}</td>
+    <td>{{if .Disabled}}<span class="badge muted">Disabled</span>{{else}}<span class="badge ok">Active</span>{{end}}</td>
+    <td class="right">
+      {{if ne .ID $.Me}}
+        {{if .Disabled}}<button class="link" hx-post="/settings/users/{{.ID}}/enable" hx-target="#users-table" hx-swap="outerHTML">Enable</button>
+        {{else}}<button class="link" hx-post="/settings/users/{{.ID}}/disable" hx-target="#users-table" hx-swap="outerHTML"
+          hx-confirm="Disable {{.Username}}? They are signed out everywhere.">Disable</button>{{end}}
+        <form class="inline" hx-post="/settings/users/{{.ID}}/password" hx-target="#users-table" hx-swap="outerHTML">
+          <input name="password" type="password" minlength="12" placeholder="New password" aria-label="New password for {{.Username}}" autocomplete="new-password" required>
+          <button class="link">Reset password</button>
+        </form>
+      {{end}}
+    </td>
+  </tr>
+  {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}

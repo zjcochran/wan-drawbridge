@@ -34,7 +34,7 @@ func limitBody(n int64, h http.Handler) http.Handler {
 // the browser saves the response; problems go back to Settings as a message.
 func (s *Server) downloadBackup(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	back := func(msg string) { redirect(w, r, "/settings?flash="+url.QueryEscape(msg)) }
+	back := func(msg string) { redirect(w, r, "/settings/backup?flash="+url.QueryEscape(msg)) }
 	pass := r.PostFormValue("passphrase")
 	if pass != r.PostFormValue("confirm") {
 		back("The passphrases do not match. No backup was made.")

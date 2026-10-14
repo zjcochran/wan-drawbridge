@@ -288,7 +288,17 @@ func TestEveryPageRenders(t *testing.T) {
 		"/isps":                     "EXAMPLENET",
 		"/events":                   "state_changed",
 		"/settings":                 "Check interval",
-		"/users":                    "admin",
+		"/settings/detection":       "Check interval",
+		"/settings/notifications":   "Add a channel",
+		"/settings/backup":          "Scheduled backups",
+		"/settings/users":           "Add a user",
+		"/settings/sso":             "Issuer URL",
+		"/settings/account":         "Change password",
+		"/settings/system":          "Database",
+	}
+	// Users moved into Settings; bookmarks of /users still work.
+	if resp, _ := c.get("/users"); resp.StatusCode != http.StatusMovedPermanently || resp.Header.Get("Location") != "/settings/users" {
+		t.Errorf("/users: %d to %q", resp.StatusCode, resp.Header.Get("Location"))
 	}
 	for path, want := range pages {
 		resp, body := c.get(path)
@@ -354,7 +364,7 @@ func TestCSRFAndCrossOrigin(t *testing.T) {
 func TestViewerIsReadOnly(t *testing.T) {
 	e := newEnv(t)
 	a := e.admin()
-	if resp, _ := a.htmx("/users", url.Values{"username": {"viewer"}, "password": {"test-password-123"}, "role": {"viewer"}}); resp.StatusCode != http.StatusOK {
+	if resp, _ := a.htmx("/settings/users", url.Values{"username": {"viewer"}, "password": {"test-password-123"}, "role": {"viewer"}}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("create viewer: %d", resp.StatusCode)
 	}
 	v := e.client()
@@ -365,13 +375,28 @@ func TestViewerIsReadOnly(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || strings.Contains(body, `hx-post="/containers/policy"`) {
 		t.Fatalf("viewer sees policy controls: %d", resp.StatusCode)
 	}
-	for _, p := range []string{"/stacks/media/policy", "/actions/failover", "/settings/detection", "/users"} {
+	for _, p := range []string{"/stacks/media/policy", "/actions/failover", "/settings/detection", "/settings/users"} {
 		if resp, _ := v.htmx(p, url.Values{}); resp.StatusCode != http.StatusForbidden {
 			t.Errorf("viewer POST %s: %d", p, resp.StatusCode)
 		}
 	}
-	if resp, _ := v.get("/users"); resp.StatusCode != http.StatusForbidden {
-		t.Errorf("viewer GET /users: %d", resp.StatusCode)
+	for _, p := range []string{"/users", "/settings/users", "/settings/notifications", "/settings/backup", "/settings/sso"} {
+		if resp, _ := v.get(p); resp.StatusCode != http.StatusForbidden {
+			t.Errorf("viewer GET %s: %d", p, resp.StatusCode)
+		}
+	}
+	// Viewers see only their tabs, and can open them.
+	_, page := v.get("/settings")
+	for _, tab := range []string{"/settings/detection", "/settings/account", "/settings/system"} {
+		if !strings.Contains(page, `href="`+tab+`"`) {
+			t.Errorf("viewer tabs lack %s", tab)
+		}
+		if resp, _ := v.get(tab); resp.StatusCode != http.StatusOK {
+			t.Errorf("viewer GET %s: %d", tab, resp.StatusCode)
+		}
+	}
+	if strings.Contains(page, `href="/settings/users"`) || strings.Contains(page, `href="/users"`) {
+		t.Error("viewers see a link to Users")
 	}
 }
 

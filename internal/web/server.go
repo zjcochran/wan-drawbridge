@@ -173,7 +173,14 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /events", s.auth(s.eventsPage))
 	mux.Handle("GET /events.csv", s.auth(s.eventsCSV))
 
-	mux.Handle("GET /settings", s.auth(s.settingsPage))
+	mux.Handle("GET /settings", s.auth(s.settingsPage(settingsTabs[0])))
+	for _, t := range settingsTabs {
+		if t.Admin {
+			mux.Handle("GET /settings/"+t.ID, s.admin(s.settingsPage(t)))
+		} else {
+			mux.Handle("GET /settings/"+t.ID, s.auth(s.settingsPage(t)))
+		}
+	}
 	mux.Handle("POST /settings/detection", s.admin(s.saveDetection))
 	mux.Handle("POST /settings/password", s.auth(s.changePassword))
 	mux.Handle("POST /settings/appearance", s.auth(s.saveAppearance))
@@ -189,9 +196,12 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/notifications/test", s.admin(s.testChannel))
 	mux.Handle("POST /settings/restore", limitBody(maxBackupUpload, s.admin(s.restoreBackup)))
 
-	mux.Handle("GET /users", s.admin(s.usersPage))
-	mux.Handle("POST /users", s.admin(s.createUser))
-	mux.Handle("POST /users/{id}/{op}", s.admin(s.userOp))
+	// Users moved into Settings; the old address still works.
+	mux.Handle("GET /users", s.admin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/settings/users", http.StatusMovedPermanently)
+	})))
+	mux.Handle("POST /settings/users", s.admin(s.createUser))
+	mux.Handle("POST /settings/users/{id}/{op}", s.admin(s.userOp))
 
 	var h http.Handler = mux
 	h = s.requireSetup(h)
