@@ -21,7 +21,6 @@
     <a href="/isps" {{if eq .Nav "isps"}}aria-current="page"{{end}}>ISPs</a>
     <a href="/events" {{if eq .Nav "events"}}aria-current="page"{{end}}>Events</a>
     <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a>
-    {{if .Session.User.IsAdmin}}<a href="/users" {{if eq .Nav "users"}}aria-current="page"{{end}}>Users</a>{{end}}
   </nav>
   <form class="whoami" method="post" action="/logout">
     <input type="hidden" name="_csrf" value="{{.Session.CSRF}}">

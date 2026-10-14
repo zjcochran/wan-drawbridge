@@ -111,11 +111,11 @@ func TestDownloadBackupProblems(t *testing.T) {
 	} {
 		resp, _ := c.download(form[0], form[1], form[2])
 		loc := resp.Header.Get("Location")
-		if resp.StatusCode != http.StatusSeeOther || !strings.HasPrefix(loc, "/settings?flash=") {
+		if resp.StatusCode != http.StatusSeeOther || !strings.HasPrefix(loc, "/settings/backup?flash=") {
 			t.Errorf("%s: %d %s", name, resp.StatusCode, loc)
 			continue
 		}
-		if msg, _ := url.QueryUnescape(strings.TrimPrefix(loc, "/settings?flash=")); !strings.Contains(msg, name) {
+		if msg, _ := url.QueryUnescape(strings.TrimPrefix(loc, "/settings/backup?flash=")); !strings.Contains(msg, name) {
 			t.Errorf("%s: message %q", name, msg)
 		}
 	}

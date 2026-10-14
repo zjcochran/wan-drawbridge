@@ -230,7 +230,7 @@ func (s *Server) oidcLogin(w http.ResponseWriter, r *http.Request) {
 			redirect(w, r, "/login")
 			return
 		}
-		p.linkUser, p.next = sess.User.ID, "/settings"
+		p.linkUser, p.next = sess.User.ID, "/settings/account"
 	}
 	_, cfg, err := s.oauthConfig(ctx, r, o)
 	if err != nil {
@@ -375,11 +375,11 @@ func (s *Server) linkAccount(w http.ResponseWriter, r *http.Request, o OIDCSetti
 		return
 	}
 	if err := s.Store.LinkIdentity(r.Context(), l.pending.linkUser, l.issuer, l.subject, l.claims.Email, s.now()); err != nil {
-		redirect(w, r, "/settings?flash="+url.QueryEscape(err.Error()))
+		redirect(w, r, "/settings/account?flash="+url.QueryEscape(err.Error()))
 		return
 	}
 	s.event(r.Context(), "sso_linked", map[string]any{"user": sess.User.Username, "sso_user": l.claims.username()})
-	redirect(w, r, "/settings?flash="+url.QueryEscape(o.Name()+" account linked."))
+	redirect(w, r, "/settings/account?flash="+url.QueryEscape(o.Name()+" account linked."))
 }
 
 // ssoAccount finds the account for a verified identity, applying the admin
@@ -527,7 +527,7 @@ func (s *Server) unlinkSSO(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.event(r.Context(), "sso_unlinked", map[string]any{"user": me.Username})
-	redirect(w, r, "/settings?flash="+url.QueryEscape("Single sign-on unlinked."))
+	redirect(w, r, "/settings/account?flash="+url.QueryEscape("Single sign-on unlinked."))
 }
 
 var errSSOOnly = errors.New("password sign-in is turned off; use single sign-on")

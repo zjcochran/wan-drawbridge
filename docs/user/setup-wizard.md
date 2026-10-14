@@ -139,7 +139,7 @@ on a regular page.
 
 | Wizard step | Where to change it later |
 | --- | --- |
-| Admin account | Users (add admins), Settings → Your sign-in (password) |
+| Admin account | Settings → Users (add admins), Settings → Your account (password) |
 | Single sign-on | Settings → Single sign-on |
 | WAN detection | Settings → WAN detection |
 | Primary ISP | ISPs |

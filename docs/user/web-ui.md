@@ -3,14 +3,16 @@
 The web UI is a set of server-rendered pages that update themselves live: when
 the WAN state changes or a container starts or stops, open pages refresh the
 affected part within a second, without reloading. It works on phones (the
-navigation bar scrolls sideways) and follows your system's light or dark mode,
+navigation bar and the Settings tabs scroll sideways) and follows your system's light or dark mode,
 in the colour theme you choose (see [Appearance](#appearance)).
 
 There are two roles:
 
 - **Admins** can change everything.
-- **Viewers** see every page except **Users**, and can change only their own
-  password and single sign-on link. Controls they cannot use are not shown.
+- **Viewers** see every page, but in Settings only the **WAN detection**
+  (read-only), **Your account** and **System** tabs. They can change only their
+  own password, single sign-on link and appearance. Controls they cannot use
+  are not shown.
 
 Every page footer shows the version and links to the source code, as the AGPL
 requires.
@@ -173,29 +175,28 @@ by type; **Export CSV** downloads up to 1,000 events of the selected type as
 
 ## Settings
 
-![Settings page](../images/settings.jpg)
+![Settings, WAN detection tab](../images/settings.jpg)
 
-- **WAN detection**: the detection settings described in the
-  [setup wizard](setup-wizard.md#4-wan-detection). Viewers see them read-only.
-  Changes apply from the next check.
-- **Your sign-in**: link or unlink your single sign-on account; change your
-  password (this signs you out everywhere, including this browser).
-- **Appearance**: your colour theme and mode; see [Appearance](#appearance).
-- **Single sign-on** (admins): see [Single sign-on](single-sign-on.md).
-- **Notifications** (admins): channels that get events; see
-  [Notifications](notifications.md).
-- **Backup and restore** (admins): download an encrypted backup file, with
-  history of the last 30, 60 or 90 days, all time, or none; schedule daily
-  backups into a folder; restore one. See
-  [Backup and restore](backup-and-restore.md#backup-files).
-- **System**: Drawbridge version, Docker connection and version, database path
-  and size.
+Settings has one tab per section, each at its own address, so a tab can be
+bookmarked. `/settings` opens the first one.
 
-## Users (admins)
+| Tab | Address | Who | Contents |
+| --- | --- | --- | --- |
+| WAN detection | `/settings/detection` | everyone | The detection settings described in the [setup wizard](setup-wizard.md#4-wan-detection). Viewers see them read-only. Changes apply from the next check. |
+| Notifications | `/settings/notifications` | admins | Channels that get events; see [Notifications](notifications.md). |
+| Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
+| Users | `/settings/users` | admins | Accounts; see [Users](#users). |
+| Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
+| Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); your colour theme and mode (see [Appearance](#appearance)). |
+| System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
 
-![Users page](../images/users.jpg)
+Viewers do not see the admin tabs; opening one's address gives 403.
 
-Lists every account with its role, how it signs in (password, single sign-on,
+### Users
+
+![Settings, Users tab](../images/users.jpg)
+
+**Settings → Users** (admins) lists every account with its role, how it signs in (password, single sign-on,
 or both), last sign-in and status. For other users you can **Disable** (signs
 them out everywhere), **Enable** and **Reset password**. **Add a user** creates
 a viewer or admin with a password.
@@ -209,7 +210,7 @@ Usernames are case-insensitive: `Alice` and `alice` are the same account.
 
 ## Appearance
 
-**Settings → Appearance** sets the colours for your account only. It applies
+**Settings → Your account → Appearance** sets the colours for your account only. It applies
 on every device you sign in on, and changes show at once.
 
 - **Theme**: Drawbridge (the default), Nord, Solarized, Gruvbox, Catppuccin or

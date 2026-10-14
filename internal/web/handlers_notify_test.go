@@ -51,11 +51,11 @@ func TestNotificationChannels(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
 	in := newInbox(t)
-	if _, page := c.get("/settings"); !strings.Contains(page, "Add a channel") {
+	if _, page := c.get("/settings/notifications"); !strings.Contains(page, "Add a channel") {
 		t.Fatal("no notifications card for admins")
 	}
 	viewer := e.viewerClient()
-	if _, page := viewer.get("/settings"); strings.Contains(page, "Add a channel") {
+	if _, page := viewer.get("/settings"); strings.Contains(page, "Notifications") {
 		t.Fatal("viewers see the notifications card")
 	}
 
@@ -118,7 +118,7 @@ func testAndDelete(t *testing.T, e *env, c, viewer *client, in *inbox, id string
 	if _, body := c.htmx("/settings/notifications/test", url.Values{"id": {id}, "name": {"Phone 2"}, "kind": {"ntfy"}}); !strings.Contains(body, "✗ refused: 401") {
 		t.Fatalf("failed test: %s", body)
 	}
-	if _, page := c.get("/settings"); !strings.Contains(page, "Last send failed") {
+	if _, page := c.get("/settings/notifications"); !strings.Contains(page, "Last send failed") {
 		t.Error("the failed test is not shown on the channel")
 	}
 	if _, body := c.htmx("/settings/notifications/test", url.Values{"name": {"x"}, "kind": {"ntfy"}, "url": {"nope"}}); !strings.Contains(body, "✗ the URL must") {

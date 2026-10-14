@@ -93,7 +93,7 @@ To use single sign-on for an account that already has a password (your own
 admin account, typically):
 
 1. Sign in with your password.
-2. **Settings → Your sign-in → Link my SSO account.**
+2. **Settings → Your account → Link my SSO account.**
 3. Sign in at your provider. You return to Settings with "SSO account
    linked."
 
