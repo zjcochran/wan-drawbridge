@@ -723,6 +723,7 @@ type settingsData struct {
 	Notify    notifyData
 	Schedule  scheduleView
 	API       apiTokensData
+	TwoFactor twoFactorView
 }
 
 type choice struct{ ID, Name string }
@@ -817,6 +818,9 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 			var p store.Picture
 			p, _, err = s.Store.UserPicture(ctx, sessionFrom(r).User.ID)
 			d.Picture = p.Source
+		}
+		if err == nil {
+			d.TwoFactor, err = s.twoFactorView(r)
 		}
 	case "system":
 		s.loadSystem(ctx, d)
@@ -986,6 +990,9 @@ func (s *Server) userOp(w http.ResponseWriter, r *http.Request) {
 	case "role":
 		s.setUserRole(w, r, id)
 		return
+	case "two-factor":
+		s.userTwoFactorOff(w, r, id)
+		return
 	case "password":
 		var u store.User
 		if u, err = s.Store.UserByID(ctx, id); err == nil && !u.HasLocal {
@@ -1004,5 +1011,25 @@ func (s *Server) userOp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.event(ctx, "user_"+op, map[string]any{"user_id": id, "by": actorName(r)})
+	s.usersTable(w, r)
+}
+
+// userTwoFactorOff turns off another user's two-factor sign-in, for a lost
+// phone with no recovery codes left.
+func (s *Server) userTwoFactorOff(w http.ResponseWriter, r *http.Request, id int) {
+	ctx := r.Context()
+	u, err := s.Store.UserByID(ctx, id)
+	if err != nil {
+		invalid(w, "Unknown user.")
+		return
+	}
+	on, err := s.Store.DisableTwoFactor(ctx, id)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	if on {
+		s.event(ctx, "two_factor_off", map[string]any{"user": u.Username, "by": actorName(r)})
+	}
 	s.usersTable(w, r)
 }

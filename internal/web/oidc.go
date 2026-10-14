@@ -390,7 +390,15 @@ func (s *Server) linkAccount(w http.ResponseWriter, r *http.Request, o OIDCSetti
 	}
 	s.event(r.Context(), "sso_linked", map[string]any{"user": sess.User.Username, "sso_user": l.claims.username()})
 	s.refreshSSOPicture(r.Context(), sess.User.ID, l)
-	redirect(w, r, "/settings/account?flash="+url.QueryEscape(o.Name()+" account linked."))
+	msg := o.Name() + " account linked."
+	// A linked account signs in with the provider's own second factor.
+	if on, err := s.Store.DisableTwoFactor(r.Context(), sess.User.ID); err != nil {
+		s.Log.Error("cannot turn off two-factor sign-in", "err", err)
+	} else if on {
+		s.event(r.Context(), "two_factor_off", map[string]any{"user": sess.User.Username, "by": "sso link"})
+		msg += " Two-factor sign-in is now off: use " + o.Name() + "'s."
+	}
+	redirect(w, r, "/settings/account?flash="+url.QueryEscape(msg))
 }
 
 // ssoAccount finds the account for a verified identity, applying the admin

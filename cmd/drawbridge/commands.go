@@ -41,6 +41,7 @@ var subcommands = map[string]struct {
 	"set-isp":        {2, (cmdEnv).setISP},
 	"move-asn":       {2, (cmdEnv).moveASN},
 	"reset-password": {1, (cmdEnv).resetPassword},
+	"reset-2fa":      {1, (cmdEnv).resetTwoFactor},
 }
 
 var errUsage = errors.New(usage)
@@ -235,6 +236,31 @@ func (c cmdEnv) resetPassword(args []string) error {
 			}
 		}
 		fmt.Fprintf(c.w, "password for %s changed; their sessions were signed out\n", u.Username)
+		return nil
+	}
+	return fmt.Errorf("no user %q", args[0])
+}
+
+// resetTwoFactor turns off a user's two-factor sign-in, for a lost phone
+// when no admin can sign in to do it.
+func (c cmdEnv) resetTwoFactor(args []string) error {
+	users, err := c.st.Users(c.ctx)
+	if err != nil {
+		return err
+	}
+	for _, u := range users {
+		if !strings.EqualFold(u.Username, args[0]) {
+			continue
+		}
+		on, err := c.st.DisableTwoFactor(c.ctx, u.ID)
+		if err != nil {
+			return err
+		}
+		if !on {
+			fmt.Fprintf(c.w, "%s does not use two-factor sign-in\n", u.Username)
+			return nil
+		}
+		fmt.Fprintf(c.w, "two-factor sign-in for %s is off; their recovery codes were deleted\n", u.Username)
 		return nil
 	}
 	return fmt.Errorf("no user %q", args[0])

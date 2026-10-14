@@ -33,7 +33,8 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/api/status` | JSON status; see [Monitoring → JSON status API](../user/monitoring.md#json-status-api). `Authorization: Bearer <API token>` required (401 with `WWW-Authenticate` otherwise); each use sets the token's `last_used`. `Cache-Control: no-store`. |
 | GET | `/static/…` | Embedded assets. Pages link them as `/static/<file>?v=<hash>`, where the hash covers every static file, so an upgrade that changes one gives new URLs; those get `Cache-Control: public, max-age=31536000, immutable`, a link without `v` gets `public, max-age=3600`. |
 | GET | `/login` | Sign-in page; redirects to `/` if already signed in. Query `next`. |
-| POST | `/login` | Form `username`, `password`, `next`. 401 on wrong credentials, 429 when rate-limited, 403 when password sign-in is off. Sets the session cookie and redirects to `next` (local paths only). |
+| POST | `/login` | Form `username`, `password`, `next`. 401 on wrong credentials, 429 when rate-limited, 403 when password sign-in is off. Sets the session cookie and redirects to `next` (local paths only). For an account with two-factor sign-in, it instead answers 200 with the code step and sets the `drawbridge_2fa` cookie (path `/login`, HttpOnly, SameSite=Strict, 5 minutes). |
+| POST | `/login/code` | Form `code` (an app code or a recovery code), with the `drawbridge_2fa` cookie. 401 for a wrong code or an expired step (5 minutes, 5 tries), 429 when rate-limited. On success, sets the session cookie and redirects to `next` from the password step. |
 | POST | `/logout` | Deletes the session, clears the cookie, redirects to `/login`. |
 | GET | `/auth/oidc/login` | Starts single sign-on. Query `next`; `link=1` links to the signed-in account and returns to `/settings/account`. 404 when SSO is off. |
 | GET | `/auth/oidc/callback` | Completes single sign-on. Query `code`, `state` (or `error`). |
@@ -97,6 +98,10 @@ token.
 | `/asns/{asn}/move` | admin | `to` = ISP ID or `new` | Regroup an ASN |
 | `/settings/detection` | admin | detection fields | Validate and apply |
 | `/settings/password` | auth | `current`, `new`, `confirm` | Change own password; ends all own sessions |
+| `/settings/2fa/start` | auth | | Returns the two-factor card with a new secret, its QR code, and the secret sealed for the next step. Nothing is stored. 422 unless the account has a password, no linked SSO, password sign-in is allowed, and two-factor is off |
+| `/settings/2fa/enable` | auth | `sealed`, `code`, `password` | Turn on, if the password and the code for the sealed secret are right; returns the card with the 10 recovery codes. 422 otherwise |
+| `/settings/2fa/codes` | auth | `password` | Replace the recovery codes; returns them. 422 when off or the password is wrong |
+| `/settings/2fa/off` | auth | `password` | Turn off and delete the recovery codes. 422 when the password is wrong |
 | `/settings/appearance` | auth | `theme`, `mode` | Save own colour theme and mode; 204, or 400 for an unknown value |
 | `/settings/picture` | auth | `picture` (multipart file) | Upload own profile picture: PNG, JPEG, GIF or WebP by sniffed content, at most 1 MiB; 422 otherwise. Redirects to `/settings/account` |
 | `/settings/picture/remove` | auth | | Remove own picture. If it came from single sign-on, `users.sso_picture` is turned off so sign-ins stop setting it. Redirects to `/settings/account` |
@@ -117,6 +122,7 @@ token.
 | `/settings/users/{id}/enable` | admin | | |
 | `/settings/users/{id}/role` | admin | `role` (`viewer`, `admin`) | Not yourself; not the last enabled admin; not an account without a password while an SSO admin group is set |
 | `/settings/users/{id}/delete` | admin | | Not yourself; not the last enabled admin. Their sessions and SSO links go too. |
+| `/settings/users/{id}/two-factor` | admin | | Turn off that user's two-factor sign-in and delete their recovery codes |
 | `/settings/users/{id}/password` | admin | `password` | Reset; ends their sessions. Refused for accounts without a password (SSO only). |
 
 Validation errors return **422** with a plain-text message; unexpected errors

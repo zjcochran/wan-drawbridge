@@ -34,6 +34,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 10 | `00010_outages.sql` | outages, outage_usage. At the first start with an empty `outages` table, past outages are recreated from the event log |
 | 11 | `00011_metered.sql` | `isps` gains `metered` (default 1) |
 | 12 | `00012_api_tokens.sql` | api_tokens |
+| 13 | `00013_two_factor.sql` | `users` gains `totp_secret` and `totp_step`; recovery_codes |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -248,6 +249,15 @@ Primary key `(run_id, container_id)`.
 | `theme` | TEXT | Colour theme: `default`, `nord`, `solarized`, `gruvbox`, `catppuccin`, `tokyo-night`; default `default` |
 | `mode` | TEXT | `auto`, `light` or `dark`; default `auto` |
 | `sso_picture` | INTEGER | Whether single sign-on may set the profile picture; default 1. Turned off when the user removes a picture that came from it |
+| `totp_secret` | TEXT | Two-factor sign-in: the TOTP secret, sealed with the instance key; `''` = off |
+| `totp_step` | INTEGER | The last 30-second time step whose code was accepted; codes for it or earlier steps are refused |
+
+### recovery_codes
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `user_id` | INTEGER → users, ON DELETE CASCADE | PK with `hash` |
+| `hash` | TEXT | Hex SHA-256 of the code (`xxxx-xxxx-xxxx`, 12 characters from 31 letters and digits); deleted when used |
 
 ### sessions
 

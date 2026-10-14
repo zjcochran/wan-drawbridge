@@ -120,6 +120,9 @@ admin account, typically):
 The account can now sign in either way. **Unlink** removes the link (only
 offered when the account also has a password, so you cannot lock yourself out).
 
+Linking turns off the account's [two-factor sign-in](web-ui.md#two-factor-sign-in),
+if it had it, and it is not offered while linked: use your provider's.
+
 One SSO identity can be linked to only one Drawbridge account.
 
 ## SSO only

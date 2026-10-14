@@ -45,6 +45,31 @@ Complete setup immediately after the first start.
   as long as a real one and does not reveal which usernames exist.
 - Usernames are case-insensitive (`COLLATE NOCASE`).
 
+## Two-factor sign-in
+
+Optional per account, for password sign-in (`internal/totp`, RFC 6238):
+
+- HMAC-SHA1, 6 digits, 30-second steps, 160-bit random secret; one step either
+  side is accepted. The secret is sealed with the instance key like other
+  stored secrets.
+- `users.totp_step` keeps the last accepted step, updated with
+  `UPDATE … WHERE totp_step < ?`, so each code (and any older one) works once,
+  even with two sign-ins racing.
+- 10 recovery codes of 12 characters (about 59 bits each) from a 31-character
+  alphabet, stored as SHA-256 hashes and deleted when used.
+- After the right password, no session is made: a random 256-bit token in the
+  `drawbridge_2fa` cookie (path `/login`, HttpOnly, SameSite=Strict) points to
+  an in-memory pending sign-in that lasts 5 minutes and allows 5 codes. Wrong
+  codes also count toward the sign-in rate limit, against the same IP and
+  username keys. `last_login` is set only when the code is right.
+- Setting it up, making new recovery codes and turning it off need the
+  current password. During setup the secret travels to the browser and back
+  sealed, so it is stored only after a right code.
+- It is not offered to accounts linked to single sign-on, and linking turns it
+  off: those accounts rely on the provider's second factor.
+- An admin can turn it off for another user; `drawbridge reset-2fa` does it
+  from the command line.
+
 ## Sign-in rate limit
 
 In memory, per process (cleared on restart). A failure is counted against two
@@ -173,7 +198,8 @@ entry is the one the trusted proxy saw.
 
 ## Stored secrets
 
-The OIDC client secret and each notification channel's URL, token and user are
+The OIDC client secret, each notification channel's URL, token and user, and
+each user's two-factor secret are
 sealed with AES-256-GCM (a webhook URL, a Discord one in particular, is itself
 a credential):
 

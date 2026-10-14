@@ -270,6 +270,22 @@ func TestRestoreInSetupWizard(t *testing.T) {
 	}
 }
 
+func TestMapTwoFactorSecrets(t *testing.T) {
+	snap := store.Snapshot{Config: map[string][]store.Row{"users": {
+		{"username": "alice", "totp_secret": "abc"}, {"username": "bob", "totp_secret": ""},
+	}}}
+	if err := mapSecrets(snap, func(s string) (string, error) { return strings.ToUpper(s), nil }); err != nil {
+		t.Fatal(err)
+	}
+	if u := snap.Config["users"]; u[0]["totp_secret"] != "ABC" || u[1]["totp_secret"] != "" {
+		t.Errorf("users = %v", u)
+	}
+	fail := errors.New("cannot open")
+	if err := mapSecrets(snap, func(string) (string, error) { return "", fail }); !errors.Is(err, fail) {
+		t.Errorf("error: %v", err)
+	}
+}
+
 func TestMapClientSecret(t *testing.T) {
 	snap := store.Snapshot{Config: map[string][]store.Row{"settings": {
 		{"key": "detection", "value": `{"quorum":2}`},

@@ -74,7 +74,7 @@ on the new instance.
 
 | Part | Contents |
 | --- | --- |
-| Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; stack switches and container settings, including containers waiting for review; users with their roles, disabled flags and password hashes; single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs, tokens and users; whether setup is complete and whether automation is paused |
+| Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; stack switches and container settings, including containers waiting for review; users with their roles, disabled flags, password hashes, two-factor secrets and recovery codes (hashed); single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs, tokens and users; whether setup is complete and whether automation is paused |
 | History (optional) | Checks, events, daily ISP totals, outages and data used from the chosen period (outages that started in it) |
 
 Not included: sign-in sessions, profile pictures (an uploaded one has to be

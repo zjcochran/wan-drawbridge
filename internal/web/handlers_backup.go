@@ -169,10 +169,15 @@ func (s *Server) restoreFrom(r *http.Request, actor string) error {
 }
 
 // mapSecrets rewrites every sealed value in a snapshot's settings with fn:
-// the single sign-on client secret and each notification channel's URL,
-// token and user. Open on export puts them in the encrypted backup as plain text; Seal
+// the single sign-on client secret, each notification channel's URL, token
+// and user, and each user's two-factor secret. Open on export puts them in the encrypted backup as plain text; Seal
 // on restore encrypts them with this instance's key.
 func mapSecrets(snap store.Snapshot, fn func(string) (string, error)) error {
+	for _, row := range snap.Config["users"] {
+		if err := mapField(row, "totp_secret", fn); err != nil {
+			return err
+		}
+	}
 	for _, row := range snap.Config["settings"] {
 		key, _ := row["key"].(string)
 		if key != SettingOIDC && key != notify.SettingKey {

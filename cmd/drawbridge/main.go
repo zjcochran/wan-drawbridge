@@ -13,6 +13,7 @@
 //	drawbridge set-isp <id> <setting>        primary (pinned), backup, ignored, metered or unmetered
 //	drawbridge move-asn <asn> <id>|new       merge an ASN into a group, or split it out
 //	drawbridge reset-password <username>     set a new password, read from stdin
+//	drawbridge reset-2fa <username>          turn off two-factor sign-in
 package main
 
 import (
@@ -53,7 +54,8 @@ const usage = `usage:
   drawbridge isps                          ISP groups and their ASNs
   drawbridge set-isp <id> <setting>        primary (pinned), backup, ignored, metered or unmetered
   drawbridge move-asn <asn> <id>|new       merge an ASN into a group, or split it out
-  drawbridge reset-password <username>     set a new password, read from stdin`
+  drawbridge reset-password <username>     set a new password, read from stdin
+  drawbridge reset-2fa <username>          turn off two-factor sign-in`
 
 // Set at build time: -ldflags "-X main.version=v1.2.3 -X main.sourceURL=https://…".
 // The AGPL asks that people using Drawbridge over a network can get its

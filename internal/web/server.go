@@ -86,6 +86,8 @@ type Server struct {
 	ForceLocal     bool   // DRAWBRIDGE_LOCAL_LOGIN=force: passwords work even in SSO-only mode
 
 	oidc *oidcFlows
+	// codes holds sign-ins waiting for their two-factor code.
+	codes *pendingCodes
 
 	now     func() time.Time
 	pages   map[string]*template.Template
@@ -98,6 +100,7 @@ func New(s Server) (*Server, error) {
 	srv.now = time.Now
 	srv.limiter = newLimiter(5, 15*time.Minute)
 	srv.oidc = &oidcFlows{pending: map[string]pendingLogin{}}
+	srv.codes = &pendingCodes{m: map[string]*pendingCode{}}
 	if srv.Secrets == nil {
 		return nil, errors.New("web: Secrets is required")
 	}
@@ -141,6 +144,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /login", s.login)
+	mux.HandleFunc("POST /login/code", s.loginCode)
 	mux.HandleFunc("POST /logout", s.logout)
 	mux.HandleFunc("GET /auth/oidc/login", s.oidcLogin)
 	mux.HandleFunc("GET /auth/oidc/callback", s.oidcCallback)
@@ -198,6 +202,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/sso", s.admin(s.saveSSO))
 	mux.Handle("POST /settings/sso/test", s.admin(s.testSSO))
 	mux.Handle("POST /settings/sso/unlink", s.auth(s.unlinkSSO))
+	mux.Handle("POST /settings/2fa/start", s.auth(s.startTwoFactor))
+	mux.Handle("POST /settings/2fa/enable", s.auth(s.enableTwoFactor))
+	mux.Handle("POST /settings/2fa/codes", s.auth(s.newRecoveryCodes))
+	mux.Handle("POST /settings/2fa/off", s.auth(s.disableTwoFactor))
 	mux.Handle("POST /settings/api-tokens", s.admin(s.createAPIToken))
 	mux.Handle("POST /settings/api-tokens/{id}/delete", s.admin(s.deleteAPIToken))
 	mux.Handle("POST /settings/backup", s.admin(s.downloadBackup))

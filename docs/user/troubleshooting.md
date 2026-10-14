@@ -122,6 +122,12 @@ it resumes the run.
 - **Forgot your password:**
   `echo 'new long password' | docker compose exec -T drawbridge /drawbridge reset-password <user>`.
   This also re-enables a disabled account.
+- **Lost the phone with your authenticator app:** sign in with a recovery
+  code, then turn two-factor sign-in off and on again with the new phone. No
+  codes left: another admin can **Turn off 2FA** for you in Settings → Users,
+  or run `docker compose exec drawbridge /drawbridge reset-2fa <user>`.
+- **"That code is not right" with the right app:** the phone's clock is off
+  by more than 30 seconds. Set it to automatic time.
 - **"Too many failed sign-ins":** five failures for one username or one
   address within 15 minutes block further tries for that username or address
   until the oldest failure is 15 minutes old. Restarting Drawbridge clears it.
