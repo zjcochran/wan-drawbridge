@@ -6,7 +6,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"net/http"
 	"net/url"
 	"slices"
@@ -25,7 +24,9 @@ type notifyData struct {
 
 type channelView struct {
 	ID, Name, Kind, KindName, Host string
-	HasToken, Enabled              bool
+	To, From                       string
+	HasURL, HasToken, HasUser      bool
+	Enabled                        bool
 	Topics                         map[string]bool
 	Last                           *notify.Result
 }
@@ -62,7 +63,8 @@ func (s *Server) notifyData(ctx context.Context) (notifyData, error) {
 		return d, err
 	}
 	for _, c := range set.Channels {
-		v := channelView{ID: c.ID, Name: c.Name, Kind: c.Kind, HasToken: c.Token != "", Enabled: c.Enabled, Topics: topicSet(c.Topics)}
+		v := channelView{ID: c.ID, Name: c.Name, Kind: c.Kind, To: c.To, From: c.From, HasURL: c.URL != "",
+			HasToken: c.Token != "", HasUser: c.User != "", Enabled: c.Enabled, Topics: topicSet(c.Topics)}
 		for _, k := range d.Kinds {
 			if k.ID == c.Kind {
 				v.KindName = k.Name
@@ -71,8 +73,10 @@ func (s *Server) notifyData(ctx context.Context) (notifyData, error) {
 		// Only the host is shown: the rest of a webhook URL can be its secret.
 		if plain, err := s.Secrets.Open(c.URL); err != nil {
 			v.Host = "cannot decrypt the saved URL"
-		} else if u, err := url.Parse(plain); err == nil {
+		} else if u, err := url.Parse(plain); err == nil && u.Host != "" {
 			v.Host = u.Host
+		} else {
+			v.Host = defaultHost(c.Kind)
 		}
 		if r, ok := s.Notify.Last(c.ID); ok {
 			v.Last = &r
@@ -100,6 +104,8 @@ func (s *Server) channelFromForm(r *http.Request, saved *notify.Channel) (notify
 	c := notify.Channel{
 		ID: r.PostForm.Get("id"), Name: strings.TrimSpace(r.PostForm.Get("name")), Kind: r.PostForm.Get("kind"),
 		URL: strings.TrimSpace(r.PostForm.Get("url")), Token: strings.TrimSpace(r.PostForm.Get("token")),
+		User: strings.TrimSpace(r.PostForm.Get("user")), To: strings.TrimSpace(r.PostForm.Get("to")),
+		From:   strings.TrimSpace(r.PostForm.Get("from")),
 		Topics: r.PostForm["topics"], Enabled: r.PostForm.Get("enabled") != "",
 	}
 	if saved != nil {
@@ -107,20 +113,20 @@ func (s *Server) channelFromForm(r *http.Request, saved *notify.Channel) (notify
 		if err != nil {
 			return c, err
 		}
-		if c.URL == "" {
+		if c.URL == "" && r.PostForm.Get("remove_url") == "" {
 			c.URL = old.URL
 		}
 		if c.Token == "" && r.PostForm.Get("remove_token") == "" {
 			c.Token = old.Token
 		}
+		if c.User == "" && r.PostForm.Get("remove_user") == "" {
+			c.User = old.User
+		}
 	}
-	if err := c.Validate(); err != nil {
-		return c, err
+	if c.Kind == notify.KindPushover {
+		c.URL = "" // fixed; nothing to keep
 	}
-	if c.Kind == notify.KindGotify && c.Token == "" {
-		return c, errors.New("a Gotify channel needs an application token")
-	}
-	return c, nil
+	return c, c.Validate()
 }
 
 func findChannel(set notify.Settings, id string) int {
@@ -149,7 +155,9 @@ func (s *Server) saveChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c.URL, err = s.Secrets.Seal(c.URL); err == nil {
-		c.Token, err = s.Secrets.Seal(c.Token)
+		if c.Token, err = s.Secrets.Seal(c.Token); err == nil {
+			c.User, err = s.Secrets.Seal(c.User)
+		}
 	}
 	if err != nil {
 		s.fail(w, r, err)
@@ -211,4 +219,13 @@ func (s *Server) testChannel(w http.ResponseWriter, r *http.Request) {
 		msg = "✗ " + err.Error()
 	}
 	s.partial(w, r, "settings", "notify-test", msg)
+}
+
+// defaultHost is where a channel without a URL of its own sends.
+func defaultHost(kind string) string {
+	raw := map[string]string{notify.KindPushover: notify.PushoverURL, notify.KindTelegram: notify.TelegramURL}[kind]
+	if u, err := url.Parse(raw); err == nil {
+		return u.Host
+	}
+	return ""
 }

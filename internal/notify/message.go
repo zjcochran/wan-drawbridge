@@ -103,7 +103,7 @@ func formatISP(m *Message, str, isp func(string) string) bool {
 			str("flaps"), str("failback_wait"))
 	case "isp_new":
 		m.Title = "New ISP seen"
-		m.Text = fmt.Sprintf("Drawbridge saw %s (AS%s) for the first time. Until it is learned or set as primary on the ISPs page, it counts as a backup.",
+		m.Text = fmt.Sprintf("Drawbridge saw %s (AS%s) for the first time. Until it is learned or set as primary on the ISPs page, it counts as a metered backup.",
 			str("name"), str("asn"))
 	case "primary_learned":
 		m.Title = "Primary ISP learned"

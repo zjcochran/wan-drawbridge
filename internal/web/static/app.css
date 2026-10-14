@@ -250,6 +250,7 @@ textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-siz
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 .form-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 .form-grid .wide { grid-column: 1 / -1; }
+[hidden] { display: none !important; }
 .form-actions { display: flex; align-items: end; }
 form.inline { display: inline-flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
 .filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; }

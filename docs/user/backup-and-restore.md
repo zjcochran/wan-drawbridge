@@ -74,7 +74,7 @@ on the new instance.
 
 | Part | Contents |
 | --- | --- |
-| Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; stack switches and container settings, including containers waiting for review; users with their roles, disabled flags and password hashes; single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs and tokens; whether setup is complete and whether automation is paused |
+| Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; stack switches and container settings, including containers waiting for review; users with their roles, disabled flags and password hashes; single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs, tokens and users; whether setup is complete and whether automation is paused |
 | History (optional) | Checks, events, daily ISP totals, outages and data used from the chosen period (outages that started in it) |
 
 Not included: sign-in sessions, profile pictures (an uploaded one has to be
@@ -139,7 +139,7 @@ next to the Compose file by default):
 | --- | --- | --- |
 | `drawbridge.db` | The SQLite database: users, settings, ISPs, container settings, the current state and stopped-container list, events, check history | Yes |
 | `drawbridge.db-wal`, `drawbridge.db-shm` | SQLite's write-ahead log and its index, present while Drawbridge runs. Recent changes can live only in the `-wal` file. | Yes, together with the database |
-| `secret.key` | The key that encrypts the stored single sign-on client secret and notification URLs and tokens. Only created if `DRAWBRIDGE_SECRET_KEY` is not set. | Yes, if you use single sign-on or notifications |
+| `secret.key` | The key that encrypts the stored single sign-on client secret and notification URLs, tokens and users. Only created if `DRAWBRIDGE_SECRET_KEY` is not set. | Yes, if you use single sign-on or notifications |
 
 Nothing else needs backing up. The ASN database in `/data/cache` is downloaded
 again when missing. The Compose file and any environment variables are your

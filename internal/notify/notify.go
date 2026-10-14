@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Package notify sends selected events to ntfy, Gotify, Discord or any
-// webhook. Channels are kept in the settings table; their URL and token are
-// sealed like the single sign-on client secret.
+// Package notify sends selected events to ntfy, Gotify, Pushover, Telegram,
+// Discord, email or any webhook. Channels are kept in the settings table;
+// their URL, token and user are sealed like the single sign-on client secret.
 package notify
 
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,24 +30,37 @@ const SettingKey = "notifications"
 
 // Channel kinds.
 const (
-	KindWebhook = "webhook"
-	KindNtfy    = "ntfy"
-	KindGotify  = "gotify"
-	KindDiscord = "discord"
+	KindWebhook  = "webhook"
+	KindNtfy     = "ntfy"
+	KindGotify   = "gotify"
+	KindDiscord  = "discord"
+	KindPushover = "pushover"
+	KindTelegram = "telegram"
+	KindEmail    = "email"
 )
 
 // Kinds lists the channel kinds in menu order with their names.
 var Kinds = []struct{ ID, Name string }{
-	{KindNtfy, "ntfy"}, {KindGotify, "Gotify"}, {KindDiscord, "Discord"}, {KindWebhook, "Webhook (JSON)"},
+	{KindNtfy, "ntfy"}, {KindGotify, "Gotify"}, {KindPushover, "Pushover"}, {KindTelegram, "Telegram"},
+	{KindDiscord, "Discord"}, {KindEmail, "Email (SMTP)"}, {KindWebhook, "Webhook (JSON)"},
 }
+
+// Service addresses, variables so tests can point them elsewhere.
+var (
+	PushoverURL = "https://api.pushover.net/1/messages.json"
+	TelegramURL = "https://api.telegram.org" // the default; a channel's URL replaces it
+)
 
 // Channel is one place notifications go.
 type Channel struct {
 	ID      string   `json:"id"`
 	Name    string   `json:"name"`
 	Kind    string   `json:"kind"`
-	URL     string   `json:"url"`   // sealed when stored
-	Token   string   `json:"token"` // sealed when stored; optional
+	URL     string   `json:"url"`            // sealed when stored
+	Token   string   `json:"token"`          // sealed when stored; optional
+	User    string   `json:"user,omitempty"` // sealed when stored: Pushover user key, SMTP username
+	To      string   `json:"to,omitempty"`   // Telegram chat ID; email recipients, comma-separated
+	From    string   `json:"from,omitempty"` // email sender
 	Topics  []string `json:"topics"`
 	Enabled bool     `json:"enabled"`
 }
@@ -64,14 +78,42 @@ func (c Channel) Validate() error {
 	if !slices.ContainsFunc(Kinds, func(k struct{ ID, Name string }) bool { return k.ID == c.Kind }) {
 		return fmt.Errorf("unknown kind %q", c.Kind)
 	}
-	u, err := url.Parse(c.URL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return errors.New("the URL must start with http:// or https://")
+	if err := c.validateKind(); err != nil {
+		return err
 	}
 	for _, t := range c.Topics {
 		if topicByID(t) == nil {
 			return fmt.Errorf("unknown topic %q", t)
 		}
+	}
+	return nil
+}
+
+// validateKind checks the fields each kind needs.
+func (c Channel) validateKind() error {
+	switch c.Kind {
+	case KindPushover:
+		if c.Token == "" || c.User == "" {
+			return errors.New("a Pushover channel needs the application token and your user key")
+		}
+		return nil
+	case KindTelegram:
+		if c.Token == "" || c.To == "" {
+			return errors.New("a Telegram channel needs the bot token and the chat ID")
+		}
+		if c.URL == "" {
+			return nil
+		}
+	case KindEmail:
+		return c.validateEmail()
+	case KindGotify:
+		if c.Token == "" {
+			return errors.New("a Gotify channel needs an application token")
+		}
+	}
+	u, err := url.Parse(c.URL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return errors.New("the URL must start with http:// or https://")
 	}
 	return nil
 }
@@ -141,6 +183,7 @@ type Notifier struct {
 	Client  *http.Client
 	Retry   []time.Duration // waits before each retry; nil means 5 s, then 30 s
 	Version string          // sent as the User-Agent
+	TLS     *tls.Config     // RootCAs for SMTP servers; nil uses the system's
 
 	queue        chan store.Event
 	once         sync.Once
@@ -208,13 +251,16 @@ func Load(ctx context.Context, st *store.Store) (Settings, error) {
 	return s, err
 }
 
-// Open returns a copy of c with its URL and token decrypted.
+// Open returns a copy of c with its URL, token and user decrypted.
 func Open(c Channel, o Opener) (Channel, error) {
 	var err error
 	if c.URL, err = o.Open(c.URL); err != nil {
 		return c, err
 	}
 	if c.Token, err = o.Open(c.Token); err != nil {
+		return c, err
+	}
+	if c.User, err = o.Open(c.User); err != nil {
 		return c, err
 	}
 	return c, nil
@@ -299,6 +345,9 @@ func (n *Notifier) Test(ctx context.Context, c Channel) error {
 var errPermanent = errors.New("refused")
 
 func (n *Notifier) send(ctx context.Context, c Channel, m Message) error {
+	if c.Kind == KindEmail {
+		return n.sendMail(ctx, c, m)
+	}
 	req, err := request(ctx, c, m)
 	if err != nil {
 		return err
@@ -306,6 +355,13 @@ func (n *Notifier) send(ctx context.Context, c Channel, m Message) error {
 	req.Header.Set("User-Agent", "wan-drawbridge/"+n.Version)
 	resp, err := n.Client.Do(req)
 	if err != nil {
+		var ue *url.Error
+		if errors.As(err, &ue) {
+			// The path can hold a secret: a Discord webhook's, a Telegram bot token.
+			if u, perr := url.Parse(ue.URL); perr == nil {
+				ue.URL = u.Scheme + "://" + u.Host
+			}
+		}
 		return err
 	}
 	defer resp.Body.Close()
@@ -351,6 +407,19 @@ func request(ctx context.Context, c Channel, m Message) (*http.Request, error) {
 		}
 		req.Header.Set("X-Gotify-Key", c.Token)
 		return req, nil
+	case KindPushover:
+		form := url.Values{"token": {c.Token}, "user": {c.User}, "title": {m.Title}, "message": {m.Text},
+			"priority": {fmt.Sprint(pushoverPriority(m.Priority))}, "timestamp": {fmt.Sprint(m.Time.Unix())}}
+		return post(PushoverURL, []byte(form.Encode()), "application/x-www-form-urlencoded")
+	case KindTelegram:
+		base := TelegramURL
+		if c.URL != "" {
+			base = c.URL
+		}
+		b, _ := json.Marshal(map[string]any{
+			"chat_id": c.To, "text": m.Title + "\n\n" + m.Text, "disable_web_page_preview": true,
+		})
+		return post(strings.TrimRight(base, "/")+"/bot"+c.Token+"/sendMessage", b, "application/json")
 	case KindDiscord:
 		// The URL is a channel webhook; it carries its own secret.
 		b, _ := json.Marshal(map[string]any{
@@ -380,6 +449,10 @@ func ntfyTag(m Message) string {
 	}
 	return "information_source"
 }
+
+// pushoverPriority maps 1-5 to Pushover's -2 to 1. Pushover's 2 (emergency)
+// repeats until acknowledged, so it is not used.
+func pushoverPriority(p int) int { return map[int]int{1: -2, 2: -1, 3: 0, 4: 1, 5: 1}[p] }
 
 // gotifyPriority maps 1-5 to Gotify's 0-10 scale.
 func gotifyPriority(p int) int { return map[int]int{1: 1, 2: 3, 3: 5, 4: 8, 5: 10}[p] }

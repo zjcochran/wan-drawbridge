@@ -65,6 +65,20 @@
     });
   });
 
+  // Notification channel forms show only the fields their kind uses.
+  function kindFields(form) {
+    const kind = form.elements.kind.value;
+    form.querySelectorAll("[data-kinds]").forEach((el) => {
+      el.hidden = !el.getAttribute("data-kinds").split(" ").includes(kind);
+    });
+  }
+  document.addEventListener("change", (e) => {
+    if (e.target.matches('select[name="kind"]') && e.target.form) kindFields(e.target.form);
+  });
+  document.addEventListener("htmx:load", (e) => {
+    e.detail.elt.querySelectorAll('select[name="kind"]').forEach((s) => s.form && kindFields(s.form));
+  });
+
   // Forms marked data-reset-on-success clear after a successful HTMX post.
   document.addEventListener("htmx:afterRequest", (e) => {
     const form = e.detail.elt.closest && e.detail.elt.closest("form[data-reset-on-success]");
