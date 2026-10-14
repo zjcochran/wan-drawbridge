@@ -32,6 +32,7 @@ var funcs = template.FuncMap{
 	"list":       func(v ...string) []string { return v },
 	"dict":       dict,
 	"kb":         func(n int64) float64 { return float64(n) / 1000 },
+	"initial":    initial,
 }
 
 // dict builds a map from key/value pairs, to pass several values to a template.
@@ -182,3 +183,12 @@ func summary(p map[string]any) string {
 }
 
 func urlQueryEscape(s string) string { return url.QueryEscape(s) }
+
+// initial is the first letter of a name, upper-cased, for an avatar without a
+// picture.
+func initial(name string) string {
+	for _, r := range name {
+		return strings.ToUpper(string(r))
+	}
+	return "?"
+}

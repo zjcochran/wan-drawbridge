@@ -223,6 +223,18 @@ Primary key `(run_id, container_id)`.
 | `email` | TEXT | Updated at each link |
 | `linked_at` | INTEGER | |
 
+### user_pictures
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `user_id` | INTEGER PK → users, ON DELETE CASCADE | |
+| `content_type` | TEXT | Sniffed: `image/png`, `image/jpeg`, `image/gif` or `image/webp` |
+| `data` | BLOB | At most 1 MiB (`web.MaxPictureBytes`) |
+| `source` | TEXT | `upload` or `sso`. An `sso` picture never replaces an `upload` one |
+| `updated_at` | INTEGER | Also the `?v=` of the picture URL, so a new picture is a new URL |
+
+Not in backup files.
+
 ## Retention
 
 Housekeeping runs at start-up and every 24 hours:

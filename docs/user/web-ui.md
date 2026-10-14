@@ -6,6 +6,10 @@ affected part within a second, without reloading. It works on phones (the
 navigation bar and the Settings tabs scroll sideways) and follows your system's light or dark mode,
 in the colour theme you choose (see [Appearance](#appearance)).
 
+Your picture and username sit at the top right. Click them for a menu with
+**Your account** (Settings → Your account) and **Sign out**; a click elsewhere
+or Escape closes it. On a phone only the picture is shown.
+
 There are two roles:
 
 - **Admins** can change everything.
@@ -188,7 +192,7 @@ bookmarked. `/settings` opens the first one.
 | Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
 | Users | `/settings/users` | admins | Accounts; see [Users](#users). |
 | Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
-| Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); your colour theme and mode (see [Appearance](#appearance)). |
+| Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
 | System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
 
 Viewers do not see the admin tabs; opening one's address gives 403.
@@ -215,6 +219,22 @@ Safety rules:
 Usernames are case-insensitive: `Alice` and `alice` are the same account.
 
 ## Appearance
+
+### Profile pictures
+
+**Settings → Your account → Profile picture** uploads a PNG, JPEG, GIF or WebP
+image of up to 1 MB (other types, SVG included, are refused). It shows in the
+top-right menu and, for admins, in Settings → Users. **Remove picture** deletes
+an uploaded one.
+
+Accounts linked to single sign-on also get the picture from the provider's
+`picture` claim at each SSO sign-in (see
+[Single sign-on](single-sign-on.md#profile-pictures)). An uploaded picture
+always wins; remove it to go back to the provider's. Without any picture, the
+first letter of the username is shown instead.
+
+Pictures are not in backup files; see
+[Backup and restore](backup-and-restore.md#backup-files).
 
 **Settings → Your account → Appearance** sets the colours for your account only. It applies
 on every device you sign in on, and changes show at once.

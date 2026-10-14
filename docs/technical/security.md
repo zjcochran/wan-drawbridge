@@ -161,6 +161,13 @@ entry is the one the trusted proxy saw.
   same user is still signed in.
 - "SSO only" can be enabled only by an admin whose own account is linked.
   `DRAWBRIDGE_LOCAL_LOGIN=force` overrides it from the environment.
+- Profile pictures: the URL comes from the verified ID token's `picture`
+  claim and must be `http` or `https`. The access token is sent only when the
+  URL has the issuer's scheme and host. At most 1 MiB is read, within 10 s,
+  and only PNG, JPEG, GIF and WebP (sniffed with `http.DetectContentType`)
+  are stored; SVG is refused because, served from Drawbridge's origin, it
+  could run script. Uploads follow the same limits. Pictures are served only
+  to their user and to admins.
 - The post-login redirect (`next`) is restricted to local paths: it must start
   with `/`, must not start with `//`, and must not contain `\`.
 

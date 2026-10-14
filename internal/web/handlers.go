@@ -698,6 +698,7 @@ type settingsData struct {
 	Users     usersData
 	SSO       ssoForm
 	Linked    []store.Identity
+	Picture   string // source of your profile picture: store.PictureUpload, store.PictureSSO or ""
 	HasLocal  bool
 	Detection detectionForm
 	Docker    string
@@ -796,6 +797,11 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 		d.Themes, d.Modes = Themes, Modes
 		if err = s.loadSSO(r, d); err == nil {
 			d.Linked, err = s.Store.Identities(ctx, sessionFrom(r).User.ID)
+		}
+		if err == nil {
+			var p store.Picture
+			p, _, err = s.Store.UserPicture(ctx, sessionFrom(r).User.ID)
+			d.Picture = p.Source
 		}
 	case "system":
 		s.loadSystem(ctx, d)

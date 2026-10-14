@@ -255,6 +255,7 @@ type ssoClaims struct {
 	Email             string   `json:"email"`
 	Name              string   `json:"name"`
 	Groups            []string `json:"groups"`
+	Picture           string   `json:"picture"`
 	Nonce             string   `json:"nonce"`
 }
 
@@ -298,6 +299,7 @@ func (s *Server) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		s.loginError(w, r, o, msg)
 		return
 	}
+	s.refreshSSOPicture(ctx, u.ID, login)
 	if err := s.Store.TouchLogin(ctx, u.ID, s.now()); err != nil {
 		s.Log.Warn("cannot record sign-in time", "user", u.Username, "err", err)
 	}
@@ -313,6 +315,7 @@ type ssoLogin struct {
 	pending         pendingLogin
 	claims          ssoClaims
 	issuer, subject string
+	accessToken     string
 }
 
 // verifyCallback checks the state, exchanges the code (with the PKCE
@@ -365,7 +368,7 @@ func (s *Server) verifyCallback(r *http.Request, o OIDCSettings) (ssoLogin, stri
 		s.Log.Warn("sso sign-in refused: not in allowed group", "user", c.username(), "group", o.AllowedGroup)
 		return ssoLogin{}, fmt.Sprintf("Your %s account is not in the %q group.", o.Name(), o.AllowedGroup)
 	}
-	return ssoLogin{pending: p, claims: c, issuer: idt.Issuer, subject: idt.Subject}, ""
+	return ssoLogin{pending: p, claims: c, issuer: idt.Issuer, subject: idt.Subject, accessToken: tok.AccessToken}, ""
 }
 
 // inGroup reports whether group is in groups, ignoring case: providers may
@@ -386,6 +389,7 @@ func (s *Server) linkAccount(w http.ResponseWriter, r *http.Request, o OIDCSetti
 		return
 	}
 	s.event(r.Context(), "sso_linked", map[string]any{"user": sess.User.Username, "sso_user": l.claims.username()})
+	s.refreshSSOPicture(r.Context(), sess.User.ID, l)
 	redirect(w, r, "/settings/account?flash="+url.QueryEscape(o.Name()+" account linked."))
 }
 

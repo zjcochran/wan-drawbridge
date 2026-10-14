@@ -80,6 +80,18 @@ Save. The sign-in page now offers the button:
 3. Otherwise they see "No Drawbridge account is linked to your SSO
    account. Ask an admin to add you."
 
+### Profile pictures
+
+At each SSO sign-in, and when an account is linked, Drawbridge fetches the
+image in the provider's `picture` claim (requested with the `profile` scope)
+and stores it as the account's picture. It must be a PNG, JPEG, GIF or WebP of
+up to 1 MB, fetched within 10 seconds; otherwise it is skipped with a warning
+in the log, and the sign-in goes on. If the picture is on the provider's own
+host, the request carries the sign-in's access token, for providers that
+protect pictures. A sign-in without a `picture` claim removes the stored one.
+A picture the user uploaded in Drawbridge is never replaced. See
+[Profile pictures](web-ui.md#profile-pictures).
+
 ### Admin group, precisely
 
 - **New accounts** created by single sign-on get admin if they are in the admin
