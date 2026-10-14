@@ -18,6 +18,7 @@ type loginData struct {
 	SSO                   bool // single sign-on is on
 	SSOName               string
 	Local                 bool // password sign-in is allowed
+	Code                  bool // the password was right; ask for the two-factor code
 }
 
 func (s *Server) loginData(r *http.Request, user, next string) (loginData, error) {
@@ -74,6 +75,10 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.limiter.reset(keys...)
+	if u.TwoFactor {
+		s.askForCode(w, r, u, data)
+		return
+	}
 	if err := s.startSession(w, r, u); err != nil {
 		s.fail(w, r, err)
 		return

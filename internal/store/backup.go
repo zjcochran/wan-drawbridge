@@ -25,7 +25,7 @@ type Snapshot struct {
 // ConfigTables are copied whole, in an order that satisfies the foreign keys.
 // Runtime state (wan_state, runs, run_actions, sessions) is never copied: it
 // belongs to the running instance.
-var ConfigTables = []string{"settings", "isps", "asns", "stacks", "containers", "users", "oidc_identities"}
+var ConfigTables = []string{"settings", "isps", "asns", "stacks", "containers", "users", "oidc_identities", "recovery_codes"}
 
 // historyTables are filtered by time: column holds a Unix time or, for
 // asn_daily, a YYYY-MM-DD day.
@@ -132,7 +132,7 @@ func (s *Store) Import(ctx context.Context, snap Snapshot) error {
 	}
 	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
 	// Children first, so the foreign keys hold at every step.
-	tables := []string{"sessions", "oidc_identities", "users", "asns", "isps", "stacks", "containers", "settings"}
+	tables := []string{"sessions", "recovery_codes", "oidc_identities", "users", "asns", "isps", "stacks", "containers", "settings"}
 	if snap.History != nil {
 		for _, h := range historyTables {
 			tables = append(tables, h.name)

@@ -242,6 +242,23 @@ func TestResetPassword(t *testing.T) {
 	}
 }
 
+func TestResetTwoFactor(t *testing.T) {
+	db := setup(t, false)
+	withStore(t, db, func(ctx context.Context, st *store.Store) {
+		u, _ := st.CreateUser(ctx, "alice", "test-password-123", store.RoleAdmin, time.Now())
+		st.EnableTwoFactor(ctx, u.ID, "v1:sealed", 0, []string{"h1"})
+	})
+	if code, out, _ := drawbridge(t, "", "reset-2fa", "Alice"); code != 0 || !strings.Contains(out, "two-factor sign-in for alice is off") {
+		t.Fatalf("reset-2fa: %d %q", code, out)
+	}
+	if code, out, _ := drawbridge(t, "", "reset-2fa", "alice"); code != 0 || !strings.Contains(out, "does not use two-factor") {
+		t.Fatalf("reset-2fa again: %d %q", code, out)
+	}
+	if code, _, errOut := drawbridge(t, "", "reset-2fa", "nobody"); code != 1 || !strings.Contains(errOut, `no user "nobody"`) {
+		t.Fatalf("unknown user: %d %q", code, errOut)
+	}
+}
+
 func TestDockerDownShowsStoredInventory(t *testing.T) {
 	setup(t, true)
 	code, out, errOut := drawbridge(t, "", "stacks")

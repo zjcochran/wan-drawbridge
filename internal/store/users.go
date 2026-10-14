@@ -46,6 +46,7 @@ type User struct {
 	Picture   int64  // when the profile picture was stored (Unix time); 0 = none
 	// SSOPicture is whether single sign-on may set the picture.
 	SSOPicture bool
+	TwoFactor  bool // a code is needed after the password
 }
 
 // IsAdmin reports whether the user has the admin role.
@@ -130,14 +131,16 @@ func (s *Store) CreateUser(ctx context.Context, username, password, role string,
 	return s.UserByID(ctx, int(id))
 }
 
-// Authenticate checks a local login.
+// Authenticate checks a local login. The sign-in time is recorded here,
+// unless the user has two-factor sign-in: then it is recorded with
+// TouchLogin once the code is checked.
 func (s *Store) Authenticate(ctx context.Context, username, password string, now time.Time) (User, error) {
 	var id int
 	var hash sql.NullString
-	var disabled bool
+	var disabled, twoFactor bool
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, password_hash, disabled FROM users WHERE username = ?`, strings.TrimSpace(username)).
-		Scan(&id, &hash, &disabled)
+		`SELECT id, password_hash, disabled, totp_secret <> '' FROM users WHERE username = ?`, strings.TrimSpace(username)).
+		Scan(&id, &hash, &disabled, &twoFactor)
 	if errors.Is(err, sql.ErrNoRows) {
 		CheckPassword(dummyHash, password)
 		return User{}, ErrBadLogin
@@ -148,20 +151,23 @@ func (s *Store) Authenticate(ctx context.Context, username, password string, now
 	if !hash.Valid || !CheckPassword(hash.String, password) || disabled {
 		return User{}, ErrBadLogin
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE users SET last_login = ? WHERE id = ?`, now.Unix(), id); err != nil {
-		return User{}, err
+	if !twoFactor {
+		if err := s.TouchLogin(ctx, id, now); err != nil {
+			return User{}, err
+		}
 	}
 	return s.UserByID(ctx, id)
 }
 
 const userCols = `id, username, role, disabled, password_hash IS NOT NULL,
 	EXISTS (SELECT 1 FROM oidc_identities o WHERE o.user_id = users.id), created_at, COALESCE(last_login, 0),
-	theme, mode, COALESCE((SELECT updated_at FROM user_pictures p WHERE p.user_id = users.id), 0), sso_picture`
+	theme, mode, COALESCE((SELECT updated_at FROM user_pictures p WHERE p.user_id = users.id), 0), sso_picture,
+	totp_secret <> ''`
 
 func scanUser(sc interface{ Scan(...any) error }) (User, error) {
 	var u User
 	var created, last int64
-	if err := sc.Scan(&u.ID, &u.Username, &u.Role, &u.Disabled, &u.HasLocal, &u.HasSSO, &created, &last, &u.Theme, &u.Mode, &u.Picture, &u.SSOPicture); err != nil {
+	if err := sc.Scan(&u.ID, &u.Username, &u.Role, &u.Disabled, &u.HasLocal, &u.HasSSO, &created, &last, &u.Theme, &u.Mode, &u.Picture, &u.SSOPicture, &u.TwoFactor); err != nil {
 		return User{}, err
 	}
 	u.CreatedAt = time.Unix(created, 0)

@@ -163,6 +163,17 @@ them a password.
 Interactively (`docker compose exec drawbridge /drawbridge reset-password
 alice`) the password is echoed as you type; prefer the piped form.
 
+## reset-2fa
+
+```sh
+$ docker compose exec drawbridge /drawbridge reset-2fa alice
+two-factor sign-in for alice is off; their recovery codes were deleted
+```
+
+Turns off a user's [two-factor sign-in](web-ui.md#two-factor-sign-in) and
+deletes their recovery codes, for a lost phone when no other admin can do it
+in Settings → Users. The username is case-insensitive.
+
 ## Notes
 
 - Changes made with the CLI are **not** recorded in the event log.

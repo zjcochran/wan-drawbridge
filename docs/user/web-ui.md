@@ -244,7 +244,7 @@ bookmarked. `/settings` opens the first one.
 | Users | `/settings/users` | admins | Accounts; see [Users](#users). |
 | Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
 | API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
-| Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
+| Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); [two-factor sign-in](#two-factor-sign-in); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
 | System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
 
 Viewers do not see the admin tabs; opening one's address gives 403.
@@ -253,15 +253,17 @@ Viewers do not see the admin tabs; opening one's address gives 403.
 
 ![Settings, Users tab](../images/users.jpg)
 
-**Settings → Users** (admins) lists every account with its role, how it signs in (password, single sign-on,
-or both), last sign-in and status. For other users you can change the **Role**
+**Settings → Users** (admins) lists every account with its role, how it signs in (password, "password +
+code" with two-factor sign-in, single sign-on, or both), last sign-in and
+status. For other users you can change the **Role**
 (viewer or admin; not for accounts without a password while an SSO admin group
 is set, since the group decides theirs), **Disable** (signs them out
 everywhere), **Enable**, **Delete** (also removes their sessions and
 single sign-on links; it asks first and cannot be undone) and **Reset
 password**. Reset password is shown only for accounts that have a password, not
-for ones that sign in with single sign-on only. **Add a user** creates a viewer
-or admin with a password.
+for ones that sign in with single sign-on only. **Turn off 2FA** appears for
+accounts with two-factor sign-in, for someone who lost their phone and their
+recovery codes. **Add a user** creates a viewer or admin with a password.
 
 Safety rules:
 
@@ -269,6 +271,46 @@ Safety rules:
 - The last enabled admin cannot be disabled, deleted or turned into a viewer.
 
 Usernames are case-insensitive: `Alice` and `alice` are the same account.
+
+### Two-factor sign-in
+
+![Settings, Your account, setting up two-factor sign-in](../images/two-factor.jpg)
+
+Accounts that sign in with a password can also require a code from an
+authenticator app (any app for time-based one-time passwords: 2FAS, Aegis,
+Google Authenticator, 1Password, Bitwarden and others). It is offered only
+when the account has a password, password sign-in is allowed, and the account
+is **not** linked to single sign-on: a linked account should use the
+provider's own two-factor sign-in. Linking single sign-on turns it off.
+
+To turn it on, in **Settings → Your account → Two-factor sign-in**:
+
+1. Click **Set up**. Scan the QR code with the app, or type the key in.
+2. Enter the code the app shows and your current password, then **Turn on**.
+3. Save the 10 **recovery codes** shown, somewhere other than your phone.
+   They are shown once. Each works once instead of an app code.
+
+From then on, signing in with your password opens a second step, **Code from
+your authenticator app**:
+
+- The code has 6 digits and changes every 30 seconds. The code before and the
+  code after the current one are also accepted, for a clock that is slightly
+  off. A code that was used (or an older one) is refused, so a code cannot be
+  replayed.
+- A recovery code works too (`k3f9-x2pq-7hwd`; with or without dashes, in any
+  case). Using one records a `recovery_code_used` event with how many are left.
+- The second step lasts 5 minutes and allows 5 tries; then sign in again.
+  Wrong codes count toward the [sign-in rate limit](../technical/security.md#sign-in-rate-limit).
+- Single sign-on is not affected.
+
+While it is on, the card shows how many recovery codes are left, with **New
+recovery codes** (replaces all of them) and **Turn off**, both after your
+current password.
+
+Lost your phone and your recovery codes? Another admin can click **Turn off
+2FA** for you in Settings → Users. If you are the only admin, run
+`docker compose exec drawbridge /drawbridge reset-2fa <user>` (see the
+[command line](cli.md#reset-2fa)).
 
 ## Appearance
 

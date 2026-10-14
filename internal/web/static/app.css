@@ -190,6 +190,7 @@ time { white-space: nowrap; }
 .avatar-large .avatar { width: 72px; height: 72px; font-size: 1.8rem; }
 .user-cell { display: inline-flex; align-items: center; gap: 0.6rem; }
 .picture-row { display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap; }
+.qr { image-rendering: pixelated; background: #fff; padding: 8px; border-radius: 8px; }
 .picture-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 
 /* Settings tabs: one link per section. On a narrow screen the row scrolls

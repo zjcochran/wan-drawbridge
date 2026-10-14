@@ -225,6 +225,10 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `user_disable`, `user_enable`, `user_delete`, `user_password` | User operations in Settings → Users | `user_id`, `by` |
 | `user_role` | An admin changed a role in Settings → Users, or single sign-on changed it through the admin group (`by` = `sso groups`) | `user`, `role`, `by` |
 | `password_changed` | A user changed their own password | `user` |
+| `two_factor_on` | A user turned on two-factor sign-in | `user` |
+| `two_factor_off` | Two-factor sign-in was turned off: by the user, by an admin in Settings → Users, or by linking single sign-on (`by` = `sso link`) | `user`, `by` |
+| `recovery_codes_new` | A user made new recovery codes | `user` |
+| `recovery_code_used` | Someone signed in with a recovery code | `user`, `left` |
 | `sso_settings` | Single sign-on settings saved | `enabled`, `sso_only`, `by` |
 | `sso_linked`, `sso_unlinked` | An account was linked to or unlinked from single sign-on | `user`; `sso_user` when linked |
 | `notifications_changed` | A notification channel was added, changed or deleted | `channel`, `action` (`added`, `updated`, `deleted`), `by` |

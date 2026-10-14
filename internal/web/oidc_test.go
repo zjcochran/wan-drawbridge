@@ -248,10 +248,15 @@ func TestSSOLinkThenSSOOnly(t *testing.T) {
 		t.Fatalf("sso-only without a link: %d", resp.StatusCode)
 	}
 
+	// Linking turns two-factor sign-in off: the provider's applies.
+	e.st.EnableTwoFactor(context.Background(), 1, "v1:x", 0, nil)
 	idp.as(map[string]any{"sub": "alice-sub", "preferred_username": "alice"})
 	resp, _ = admin.ssoLogin("/auth/oidc/login?link=1")
-	if !strings.HasPrefix(resp.Header.Get("Location"), "/settings/account?flash=") {
-		t.Fatalf("link: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	if loc := resp.Header.Get("Location"); !strings.HasPrefix(loc, "/settings/account?flash=") || !strings.Contains(loc, "Two-factor") {
+		t.Fatalf("link: %d %s", resp.StatusCode, loc)
+	}
+	if u, _ := e.st.UserByID(context.Background(), 1); u.TwoFactor {
+		t.Error("two-factor sign-in is still on after linking")
 	}
 	u, ok, _ := e.st.UserByIdentity(context.Background(), idp.srv.URL, "alice-sub")
 	if !ok || u.Username != "admin" {

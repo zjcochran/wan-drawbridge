@@ -63,6 +63,7 @@ flowchart LR
 | `internal/docker` | Minimal Docker Engine API client (list, inspect, stop, start, events, stats, version). |
 | `internal/store` | All persistence: SQLite, migrations, users, sessions, ISPs, policies, runs, events. |
 | `internal/secrets` | AES-GCM sealing of stored secrets. |
+| `internal/totp` | Time-based one-time passwords (RFC 6238) for two-factor sign-in. |
 | `internal/notify` | Notification channels: formats events into messages and delivers them in the background, with retries. |
 | `internal/syslog` | Optional copy of the log to a syslog server: an `slog` handler that queues RFC 5424 or RFC 3164 messages, and a sender over UDP, TCP or TLS that reconnects. |
 | `internal/backup` | Backup file format: argon2id key, AES-256-GCM, gzipped JSON of a `store.Snapshot`. |

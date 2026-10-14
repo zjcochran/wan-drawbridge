@@ -102,6 +102,7 @@
   <p class="muted">You sign in with {{$d.SSO.Name}} only.</p>
   {{end}}
 </section>
+{{template "two-factor" $d.TwoFactor}}
 <section class="card" id="picture">
   <h2>Profile picture</h2>
   <div class="picture-row">
@@ -301,7 +302,7 @@
         <option value="admin" {{if eq .Role "admin"}}selected{{end}}>admin</option>
       </select>{{end}}
     </td>
-    <td>{{if .HasLocal}}password{{end}}{{if and .HasLocal .HasSSO}} and {{end}}{{if .HasSSO}}single sign-on{{end}}</td>
+    <td>{{if .HasLocal}}password{{if .TwoFactor}} + code{{end}}{{end}}{{if and .HasLocal .HasSSO}} and {{end}}{{if .HasSSO}}single sign-on{{end}}</td>
     <td>{{if .LastLogin.IsZero}}never{{else}}<time title="{{datetime .LastLogin}}">{{ago .LastLogin}}</time>{{end}}</td>
     <td>{{if .Disabled}}<span class="badge muted">Disabled</span>{{else}}<span class="badge ok">Active</span>{{end}}</td>
     <td class="right">
@@ -309,6 +310,8 @@
         {{if .Disabled}}<button class="link" hx-post="/settings/users/{{.ID}}/enable" hx-target="#users-table" hx-swap="outerHTML">Enable</button>
         {{else}}<button class="link" hx-post="/settings/users/{{.ID}}/disable" hx-target="#users-table" hx-swap="outerHTML"
           hx-confirm="Disable {{.Username}}? They are signed out everywhere.">Disable</button>{{end}}
+        {{if .TwoFactor}}<button class="link" hx-post="/settings/users/{{.ID}}/two-factor" hx-target="#users-table" hx-swap="outerHTML"
+          hx-confirm="Turn off two-factor sign-in for {{.Username}}? Use this when they lost their phone and recovery codes.">Turn off 2FA</button>{{end}}
         <button class="link danger-text" hx-post="/settings/users/{{.ID}}/delete" hx-target="#users-table" hx-swap="outerHTML"
           hx-confirm="Delete {{.Username}}? They are signed out everywhere, and this cannot be undone.">Delete</button>
         {{if .HasLocal}}
@@ -357,4 +360,42 @@
   <h3>Example</h3>
   <pre><code>curl -H "Authorization: Bearer &lt;token&gt;" {{.Base}}/api/status</code></pre>
 </div>
+{{end}}
+
+{{define "two-factor"}}
+<section class="card" id="two-factor">
+  <h2>Two-factor sign-in</h2>
+  {{if .Linked}}<p class="muted">Your account is linked to single sign-on: use your provider's two-factor sign-in.</p>
+  {{else if not .Offer}}<p class="muted">Only for accounts that sign in with a password.</p>
+  {{else if .Codes}}
+    <div class="banner ok" role="status">Save these recovery codes now: they are not shown again. Each works once, if you lose your phone.
+      <pre><code>{{range .Codes}}{{.}}
+{{end}}</code></pre></div>
+    <p>Two-factor sign-in is on.</p>
+  {{else if .On}}
+    <p>On. After your password, Drawbridge asks for a code from your authenticator app. {{.Left}} recovery code{{if ne .Left 1}}s{{end}} left.</p>
+    <form class="row end" hx-target="#two-factor" hx-swap="outerHTML">
+      <label>Current password <input name="password" type="password" autocomplete="current-password" required></label>
+      <button class="secondary" hx-post="/settings/2fa/codes">New recovery codes</button>
+      <button class="danger" hx-post="/settings/2fa/off" hx-confirm="Turn off two-factor sign-in?">Turn off</button>
+    </form>
+  {{else if .Secret}}
+    <p>Scan the code with an authenticator app, or type the key in, then enter the code it shows.</p>
+    <div class="picture-row">
+      <img class="qr" src="{{.QR}}" alt="QR code for your authenticator app" width="180" height="180">
+      <div class="stack">
+        <p>Key: <code>{{.Secret}}</code></p>
+        <form class="stack narrow-form" hx-post="/settings/2fa/enable" hx-target="#two-factor" hx-swap="outerHTML">
+          <input type="hidden" name="sealed" value="{{.Sealed}}">
+          <label>Code from the app <input name="code" inputmode="numeric" autocomplete="one-time-code" required></label>
+          <label>Current password <input name="password" type="password" autocomplete="current-password" required></label>
+          <button>Turn on</button>
+        </form>
+      </div>
+    </div>
+  {{else}}
+    <p>Off. With it on, signing in with your password also needs a code from an authenticator app on your phone.</p>
+    <button class="secondary" hx-post="/settings/2fa/start" hx-target="#two-factor" hx-swap="outerHTML">Set up</button>
+  {{end}}
+</section>
 {{end}}
