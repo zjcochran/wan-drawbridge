@@ -166,6 +166,41 @@ func TestUserOperations(t *testing.T) {
 	if resp, _ := c.htmx(id(amy)+"/promote", url.Values{}); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown operation: %d", resp.StatusCode)
 	}
+
+	if resp, _ := c.htmx(id(me)+"/delete", url.Values{}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("deleting yourself: %d", resp.StatusCode)
+	}
+	if resp, body := c.htmx(id(amy)+"/delete", url.Values{}); resp.StatusCode != http.StatusOK || strings.Contains(body, "amy") {
+		t.Fatalf("delete: %d", resp.StatusCode)
+	}
+	if _, err := e.st.UserByID(context.Background(), amy); err == nil {
+		t.Error("amy still exists")
+	}
+	if resp, _ := c.htmx(id(amy)+"/delete", url.Values{}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("deleting a deleted user: %d", resp.StatusCode)
+	}
+}
+
+func TestNoPasswordResetForSSOOnlyUsers(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	u, err := e.st.CreateSSOUser(context.Background(), "alice", store.RoleViewer, "https://id.example.com", "alice-sub", "", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, page := c.get("/settings/users")
+	if strings.Contains(page, `aria-label="New password for alice"`) {
+		t.Error("an SSO-only user has a reset password form")
+	}
+	if !strings.Contains(page, `/settings/users/`+strconv.Itoa(u.ID)+`/delete`) {
+		t.Error("an SSO-only user has no Delete button")
+	}
+	if resp, _ := c.htmx("/settings/users/"+strconv.Itoa(u.ID)+"/password", url.Values{"password": {"a brand new password"}}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("reset an SSO-only user's password: %d", resp.StatusCode)
+	}
+	if got, _ := e.st.UserByID(context.Background(), u.ID); got.HasLocal {
+		t.Error("the SSO-only user got a password")
+	}
 }
 
 func TestLogout(t *testing.T) {

@@ -67,7 +67,7 @@
     <label>Role
       <select name="role"><option value="viewer">Viewer (read-only)</option><option value="admin">Admin</option></select>
     </label>
-    <div class="form-actions"><button>Add user</button></div>
+    <div class="form-actions wide"><button>Add user</button></div>
   </form>
 </section>
 
@@ -256,10 +256,14 @@
         {{if .Disabled}}<button class="link" hx-post="/settings/users/{{.ID}}/enable" hx-target="#users-table" hx-swap="outerHTML">Enable</button>
         {{else}}<button class="link" hx-post="/settings/users/{{.ID}}/disable" hx-target="#users-table" hx-swap="outerHTML"
           hx-confirm="Disable {{.Username}}? They are signed out everywhere.">Disable</button>{{end}}
+        <button class="link danger-text" hx-post="/settings/users/{{.ID}}/delete" hx-target="#users-table" hx-swap="outerHTML"
+          hx-confirm="Delete {{.Username}}? They are signed out everywhere, and this cannot be undone.">Delete</button>
+        {{if .HasLocal}}
         <form class="inline" hx-post="/settings/users/{{.ID}}/password" hx-target="#users-table" hx-swap="outerHTML">
           <input name="password" type="password" minlength="12" placeholder="New password" aria-label="New password for {{.Username}}" autocomplete="new-password" required>
           <button class="link">Reset password</button>
         </form>
+        {{end}}
       {{end}}
     </td>
   </tr>

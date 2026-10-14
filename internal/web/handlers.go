@@ -914,8 +914,21 @@ func (s *Server) userOp(w http.ResponseWriter, r *http.Request) {
 		err = s.Store.SetUserDisabled(ctx, id, true)
 	case "enable":
 		err = s.Store.SetUserDisabled(ctx, id, false)
+	case "delete":
+		if id == sessionFrom(r).User.ID {
+			invalid(w, "You cannot delete yourself.")
+			return
+		}
+		err = s.Store.DeleteUser(ctx, id)
 	case "password":
-		err = s.Store.SetPassword(ctx, id, r.PostFormValue("password"))
+		var u store.User
+		if u, err = s.Store.UserByID(ctx, id); err == nil && !u.HasLocal {
+			invalid(w, u.Username+" signs in with single sign-on only and has no password.")
+			return
+		}
+		if err == nil {
+			err = s.Store.SetPassword(ctx, id, r.PostFormValue("password"))
+		}
 	default:
 		http.NotFound(w, r)
 		return

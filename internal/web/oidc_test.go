@@ -213,6 +213,55 @@ func TestSSOAllowedGroupAndNoProvisioning(t *testing.T) {
 	}
 }
 
+func TestSSOMatchesExistingAccounts(t *testing.T) {
+	ctx := context.Background()
+	e := newEnv(t)
+	idp := newIDP(t)
+	admin := e.admin()
+	configureSSO(t, admin, idp, url.Values{"auto_provision": {""}, "admin_group": {"drawbridge-admins"}})
+	alice, err := e.st.CreateUser(ctx, "Alice", "test-password-123", store.RoleViewer, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// preferred_username matches an unlinked account: it is linked and kept.
+	idp.as(map[string]any{"sub": "alice-sub", "preferred_username": "alice", "groups": []string{"drawbridge-admins"}})
+	if resp, _ := e.client().ssoLogin("/auth/oidc/login"); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("matched sign-in: %d", resp.StatusCode)
+	}
+	u, ok, _ := e.st.UserByIdentity(ctx, idp.srv.URL, "alice-sub")
+	if !ok || u.ID != alice.ID || u.Role != store.RoleViewer || !u.HasLocal {
+		t.Fatalf("linked to %+v", u)
+	}
+
+	// Another identity with the same name does not take the linked account.
+	idp.as(map[string]any{"sub": "other-sub", "preferred_username": "alice"})
+	if resp, _ := e.client().ssoLogin("/auth/oidc/login"); resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("second identity: %d", resp.StatusCode)
+	}
+
+	// The email matches too; a disabled account is refused.
+	bob, _ := e.st.CreateUser(ctx, "bob@example.com", "test-password-123", store.RoleViewer, time.Now())
+	e.st.SetUserDisabled(ctx, bob.ID, true)
+	idp.as(map[string]any{"sub": "bob-sub", "preferred_username": "bob", "email": "bob@example.com"})
+	if resp, body := e.client().ssoLogin("/auth/oidc/login"); resp.StatusCode != http.StatusUnauthorized || !strings.Contains(body, "disabled") {
+		t.Fatalf("disabled match: %d", resp.StatusCode)
+	}
+	if _, ok, _ := e.st.UserByIdentity(ctx, idp.srv.URL, "bob-sub"); ok {
+		t.Error("linked a disabled account")
+	}
+	e.st.SetUserDisabled(ctx, bob.ID, false)
+	if resp, _ := e.client().ssoLogin("/auth/oidc/login"); resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("email match: %d", resp.StatusCode)
+	}
+	if u, _, _ := e.st.UserByIdentity(ctx, idp.srv.URL, "bob-sub"); u.ID != bob.ID {
+		t.Fatalf("email match linked to %+v", u)
+	}
+	if n, _ := e.st.CountUsers(ctx); n != 3 {
+		t.Errorf("users = %d, want 3", n)
+	}
+}
+
 func TestSSOLinkThenSSOOnly(t *testing.T) {
 	e := newEnv(t)
 	idp := newIDP(t)

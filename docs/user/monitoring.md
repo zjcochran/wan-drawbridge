@@ -141,11 +141,11 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `container_policy` | A container setting changed | `container`, `policy`, `converted_stack`, `by` |
 | `settings_changed` | Detection settings saved in Settings | `by` |
 | `user_created` | A user was added: in the setup wizard (`by` = `setup`), by an admin, or by single sign-on (`by` = `sso`) | `user`, `role`, `by` |
-| `user_disable`, `user_enable`, `user_password` | User operations in Settings → Users | `user_id`, `by` |
+| `user_disable`, `user_enable`, `user_delete`, `user_password` | User operations in Settings → Users | `user_id`, `by` |
 | `user_role` | Single sign-on changed a role through the admin group | `user`, `role`, `by` |
 | `password_changed` | A user changed their own password | `user` |
 | `sso_settings` | Single sign-on settings saved | `enabled`, `sso_only`, `by` |
-| `sso_linked`, `sso_unlinked` | An account was linked to or unlinked from single sign-on | `user`; `sso_user` when linked |
+| `sso_linked`, `sso_unlinked` | An account was linked to or unlinked from single sign-on | `user`; `sso_user` when linked; `by` = `username match` when linked at an SSO sign-in by its username |
 | `notifications_changed` | A notification channel was added, changed or deleted | `channel`, `action` (`added`, `updated`, `deleted`), `by` |
 | `backup_created` | A backup file was downloaded, or a scheduled one written (`by` = `schedule`) | `history` (`none`, `30d`, `60d`, `90d`, `all`), `by`; `file` for scheduled ones |
 | `backup_failed` | A scheduled backup could not be written | `error`, `by` (`schedule`) |
