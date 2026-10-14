@@ -142,13 +142,13 @@ func testAndDelete(t *testing.T, e *env, c, viewer *client, in *inbox, id string
 
 func TestMapSecretsNotifications(t *testing.T) {
 	snap := store.Snapshot{Config: map[string][]store.Row{"settings": {
-		{"key": notify.SettingKey, "value": `{"channels":[{"id":"a","url":"u1","token":""},{"id":"b","url":"u2","token":"t2"}]}`},
+		{"key": notify.SettingKey, "value": `{"channels":[{"id":"a","url":"u1","token":""},{"id":"b","url":"u2","token":"t2","user":"k2"}]}`},
 	}}}
 	if err := mapSecrets(snap, func(s string) (string, error) { return "[" + s + "]", nil }); err != nil {
 		t.Fatal(err)
 	}
 	v := snap.Config["settings"][0]["value"].(string)
-	for _, want := range []string{`"url":"[u1]"`, `"token":""`, `"url":"[u2]"`, `"token":"[t2]"`} {
+	for _, want := range []string{`"url":"[u1]"`, `"token":""`, `"url":"[u2]"`, `"token":"[t2]"`, `"user":"[k2]"`} {
 		if !strings.Contains(v, want) {
 			t.Errorf("missing %s in %s", want, v)
 		}
