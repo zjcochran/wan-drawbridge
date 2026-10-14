@@ -33,6 +33,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 9 | `00009_sso_picture.sql` | `users` gains `sso_picture` |
 | 10 | `00010_outages.sql` | outages, outage_usage. At the first start with an empty `outages` table, past outages are recreated from the event log |
 | 11 | `00011_metered.sql` | `isps` gains `metered` (default 1) |
+| 12 | `00012_api_tokens.sql` | api_tokens |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -266,6 +267,21 @@ Primary key `(run_id, container_id)`.
 | `user_id` | INTEGER → users, ON DELETE CASCADE | |
 | `email` | TEXT | Updated at each link |
 | `linked_at` | INTEGER | |
+
+### api_tokens
+
+Tokens for `/api/status`, made in Settings → API tokens.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | INTEGER PK | |
+| `name` | TEXT | 1–64 characters |
+| `hash` | TEXT UNIQUE | Hex SHA-256 of the token (`dbt_` + 43 base64url characters from 32 random bytes); the token itself is not stored |
+| `created_at` | INTEGER | |
+| `created_by` | TEXT | User who made it |
+| `last_used` | INTEGER | 0 = never |
+
+Not in backup files.
 
 ### user_pictures
 

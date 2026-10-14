@@ -76,6 +76,9 @@
   {{template "sso-fields" $d.SSO}}
 </section>
 
+{{else if eq $d.Tab "api"}}
+<section class="card">{{template "api-tokens" $d.API}}</section>
+
 {{else if eq $d.Tab "account"}}
 <section class="card">
   <h2>Your sign-in</h2>
@@ -297,5 +300,38 @@
   {{end}}
   </tbody>
 </table>
+</div>
+{{end}}
+
+{{define "api-tokens"}}
+<div id="api-tokens">
+  <p>Programs such as Home Assistant can read Drawbridge's status as JSON from <code>GET /api/status</code>,
+    with a token in the <code>Authorization</code> header. Tokens can only read the status; they cannot change anything.</p>
+  {{with .New}}<div class="banner ok" role="status">Token "{{$.Name}}" was created. Copy it now: it is not shown again.
+    <pre><code>{{.}}</code></pre></div>{{end}}
+  {{if .Tokens}}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Name</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+    <tbody>
+    {{range .Tokens}}
+    <tr>
+      <td><strong>{{.Name}}</strong></td>
+      <td><time title="{{isodate .CreatedAt}}">{{datetime .CreatedAt}}</time>{{with .CreatedBy}} <span class="sub">by {{.}}</span>{{end}}</td>
+      <td>{{if .LastUsed.IsZero}}never{{else}}<time title="{{datetime .LastUsed}}">{{ago .LastUsed}}</time>{{end}}</td>
+      <td class="right"><button class="link danger-text" hx-post="/settings/api-tokens/{{.ID}}/delete" hx-target="#api-tokens" hx-swap="outerHTML"
+        hx-confirm="Revoke the token {{.Name}}? Programs using it lose access at once.">Revoke</button></td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{else}}<p class="muted">No tokens yet.</p>{{end}}
+  <form class="row end" hx-post="/settings/api-tokens" hx-target="#api-tokens" hx-swap="outerHTML">
+    <label>Name <input name="name" maxlength="64" placeholder="Home Assistant" required></label>
+    <button>Create token</button>
+  </form>
+  <h3>Example</h3>
+  <pre><code>curl -H "Authorization: Bearer &lt;token&gt;" {{.Base}}/api/status</code></pre>
 </div>
 {{end}}

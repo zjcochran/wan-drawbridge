@@ -243,6 +243,7 @@ bookmarked. `/settings` opens the first one.
 | Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
 | Users | `/settings/users` | admins | Accounts; see [Users](#users). |
 | Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
+| API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
 | Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
 | System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
 
