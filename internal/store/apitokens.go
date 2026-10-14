@@ -32,6 +32,8 @@ func (s *Store) CreateAPIToken(ctx context.Context, name, by string, now time.Ti
 		return "", errors.New("the name must be 1 to 64 characters")
 	}
 	token := APITokenPrefix + randomToken()
+	// Parameterized: every value is a bound argument, not SQL text.
+	// nosemgrep
 	_, err := s.db.ExecContext(ctx, `INSERT INTO api_tokens (name, hash, created_at, created_by) VALUES (?, ?, ?, ?)`,
 		name, hashToken(token), now.Unix(), by)
 	return token, err
