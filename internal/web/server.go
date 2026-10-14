@@ -137,6 +137,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", cacheStatic(http.FileServerFS(static))))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /metrics", s.metrics)
+	mux.HandleFunc("GET /api/status", s.apiStatus)
 
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /login", s.login)
@@ -197,6 +198,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/sso", s.admin(s.saveSSO))
 	mux.Handle("POST /settings/sso/test", s.admin(s.testSSO))
 	mux.Handle("POST /settings/sso/unlink", s.auth(s.unlinkSSO))
+	mux.Handle("POST /settings/api-tokens", s.admin(s.createAPIToken))
+	mux.Handle("POST /settings/api-tokens/{id}/delete", s.admin(s.deleteAPIToken))
 	mux.Handle("POST /settings/backup", s.admin(s.downloadBackup))
 	mux.Handle("POST /settings/backup/schedule", s.admin(s.saveSchedule))
 	mux.Handle("POST /settings/backup/run", s.admin(s.runBackupNow))
@@ -274,7 +277,7 @@ func securityHeaders(h http.Handler) http.Handler {
 func (s *Server) requireSetup(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/healthz" || p == "/metrics" || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/setup") {
+		if p == "/healthz" || p == "/metrics" || strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/setup") {
 			h.ServeHTTP(w, r)
 			return
 		}

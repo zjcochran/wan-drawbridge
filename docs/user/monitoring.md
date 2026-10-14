@@ -1,7 +1,7 @@
 # Monitoring
 
-Drawbridge offers four ways to watch it: Prometheus metrics, a health check,
-the event log, and its container log.
+Drawbridge offers five ways to watch it: Prometheus metrics, a JSON status
+API, a health check, the event log, and its container log.
 
 ## Prometheus metrics
 
@@ -101,6 +101,85 @@ groups:
           summary: "Drawbridge automation has been paused for 12 hours"
 ```
 
+## JSON status API
+
+`GET /api/status` returns the current state as JSON, for Home Assistant,
+dashboards or scripts. It needs an API token:
+
+1. As an admin, open **Settings → API tokens**, type a name (what will use
+   it) and click **Create token**.
+2. Copy the token (it starts with `dbt_`). It is shown once; Drawbridge keeps
+   only its SHA-256 hash.
+3. Send it as `Authorization: Bearer <token>`.
+
+![Settings, API tokens tab, right after making a token](../images/api-tokens.jpg)
+
+A missing, unknown or revoked token gets 401 with `WWW-Authenticate`. Tokens
+can only read the status. The tab lists each token's name, who made it, when,
+and when it was last used; **Revoke** deletes it at once. Making and revoking
+tokens are recorded as `api_token_created` and `api_token_deleted` events.
+Tokens are not in backup files: after a restore on a new host, make new ones.
+
+```sh
+$ curl -H "Authorization: Bearer dbt_..." http://drawbridge:8080/api/status
+{
+  "state": "failover",
+  "state_label": "Failover",
+  "since": "2026-10-14T15:17:34Z",
+  "due": null,
+  "current_isp": { "id": 2, "name": "SKYLINK", "asn": 64510, "metered": true },
+  "primary_isp": { "id": 1, "name": "EXAMPLENET" },
+  "public_ip": "198.51.100.20",
+  "last_check": "2026-10-14T15:18:30Z",
+  "conclusive": true,
+  "paused": false,
+  "paused_until": null,
+  "failover_test_until": null,
+  "busy": "",
+  "stopped": ["media-db-1", "media-downloader-1"],
+  "version": "0.13.0"
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `state` | `learning`, `primary`, `failover_pending`, `failover` or `failback_pending` |
+| `state_label` | The same as the dashboard shows it ("On primary", "Failover", ...) |
+| `since` | When this state began |
+| `due` | When a pending failover or failback completes if nothing interrupts it; `null` in other states |
+| `current_isp` | The ISP of the last conclusive check, or `null`. `metered` is true when traffic on it counts as a failover: a metered backup. It is false for the primary and for an [unmetered backup](isps.md#metered-and-unmetered-backups) |
+| `primary_isp` | The primary ISP, or `null` while none is known |
+| `public_ip` | The public IP of the last conclusive check |
+| `last_check` | When the last check ran, or `null` before the first |
+| `conclusive` | Whether the last check was conclusive |
+| `paused`, `paused_until` | Automation paused; `paused_until` is `null` when paused until resumed |
+| `failover_test_until` | When a running failover test ends, or `null` |
+| `busy` | `stopping`, `starting` or `applying` while containers are being changed, else `""` |
+| `stopped` | Names of the containers Drawbridge has stopped and not yet started again; `[]` when none |
+| `version` | Drawbridge's version |
+
+Times are RFC 3339 in UTC. The response has `Cache-Control: no-store`.
+
+A Home Assistant [RESTful](https://www.home-assistant.io/integrations/rest/)
+example, with the token in `secrets.yaml` as
+`drawbridge_auth: "Bearer dbt_..."`:
+
+```yaml
+rest:
+  - resource: http://drawbridge:8080/api/status
+    headers:
+      Authorization: !secret drawbridge_auth
+    scan_interval: 30
+    sensor:
+      - name: Drawbridge state
+        value_template: "{{ value_json.state_label }}"
+      - name: Drawbridge ISP
+        value_template: "{{ value_json.current_isp.name if value_json.current_isp else 'unknown' }}"
+    binary_sensor:
+      - name: Drawbridge failover
+        value_template: "{{ value_json.state in ['failover', 'failback_pending'] }}"
+```
+
 ## Health check
 
 - `GET /healthz` returns `200 ok` whenever the web server runs. It needs no
@@ -136,6 +215,7 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `primary_suggested` | Another ISP now looks primary | `isp`, `current` |
 | `relearn` | Re-learn primary ISP | `by` |
 | `isp_role` | An ISP's role was changed in the UI | `isp`, `role`, `by` |
+| `api_token_created`, `api_token_deleted` | An API token was made or revoked in Settings → API tokens | `name`, `by` |
 | `isp_metered` | An ISP's Metered switch was changed in the UI | `isp`, `metered`, `by` |
 | `asn_moved` | An ASN was moved to another ISP in the UI | `asn`, `isp`, `by` |
 | `stack_policy` | A stack switch was flipped | `stack`, `disable`, `by` |

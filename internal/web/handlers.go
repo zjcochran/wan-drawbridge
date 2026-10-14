@@ -722,6 +722,7 @@ type settingsData struct {
 	Modes     []choice
 	Notify    notifyData
 	Schedule  scheduleView
+	API       apiTokensData
 }
 
 type choice struct{ ID, Name string }
@@ -766,6 +767,7 @@ var settingsTabs = []settingsTab{
 	{ID: "backup", Name: "Backup and restore", Admin: true},
 	{ID: "users", Name: "Users", Admin: true},
 	{ID: "sso", Name: "Single sign-on", Admin: true},
+	{ID: "api", Name: "API tokens", Admin: true},
 	{ID: "account", Name: "Your account"},
 	{ID: "system", Name: "System"},
 }
@@ -804,6 +806,8 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 		d.Users, err = s.usersData(r)
 	case "sso":
 		err = s.loadSSO(r, d)
+	case "api":
+		d.API, err = s.apiTokensData(r)
 	case "account":
 		d.Themes, d.Modes = Themes, Modes
 		if err = s.loadSSO(r, d); err == nil {

@@ -1,7 +1,8 @@
 # HTTP interface
 
 All routes are served by `web.Server.Handler()` using Go's `net/http` pattern
-router. The interface is the web UI; there is no separate JSON API. Requests
+router. The interface is the web UI, plus one read-only JSON route,
+`/api/status`. Requests
 from HTMX carry `HX-Request: true`; for those, redirects are sent as
 `HX-Redirect` headers with status 204, and errors (4xx/5xx) are shown as toast
 messages instead of replacing page content.
@@ -13,7 +14,7 @@ From the outside in:
 1. `securityHeaders`: sets the headers listed in [Security](security.md#response-headers).
 2. `http.CrossOriginProtection`: rejects cross-origin unsafe requests.
 3. `requireSetup`: until a user exists, redirects everything except
-   `/healthz`, `/metrics`, `/static/…` and `/setup…` to `/setup`.
+   `/healthz`, `/metrics`, `/api/…`, `/static/…` and `/setup…` to `/setup`.
 4. The router, with per-route `auth` (signed in; POSTs need the CSRF token)
    or `admin` (auth plus admin role).
 
@@ -29,6 +30,7 @@ Non-admins get 403 "admins only" on admin routes.
 | --- | --- | --- |
 | GET | `/healthz` | `200 ok`. No auth. |
 | GET | `/metrics` | Prometheus text. 404 unless `DRAWBRIDGE_METRICS_TOKEN` is set; then `Authorization: Bearer` required (401). |
+| GET | `/api/status` | JSON status; see [Monitoring → JSON status API](../user/monitoring.md#json-status-api). `Authorization: Bearer <API token>` required (401 with `WWW-Authenticate` otherwise); each use sets the token's `last_used`. `Cache-Control: no-store`. |
 | GET | `/static/…` | Embedded assets. Pages link them as `/static/<file>?v=<hash>`, where the hash covers every static file, so an upgrade that changes one gives new URLs; those get `Cache-Control: public, max-age=31536000, immutable`, a link without `v` gets `public, max-age=3600`. |
 | GET | `/login` | Sign-in page; redirects to `/` if already signed in. Query `next`. |
 | POST | `/login` | Form `username`, `password`, `next`. 401 on wrong credentials, 429 when rate-limited, 403 when password sign-in is off. Sets the session cookie and redirects to `next` (local paths only). |
@@ -66,7 +68,7 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/reports/outages/{id}` | auth | One outage and its data used per container; 404 if there is no such outage. |
 | GET | `/settings` | auth | The first Settings tab, WAN detection. Query `flash` shows a message. |
 | GET | `/settings/detection`, `/settings/account`, `/settings/system` | auth | Settings tabs. |
-| GET | `/settings/notifications`, `/settings/backup`, `/settings/users`, `/settings/sso` | admin | Settings tabs for admins. |
+| GET | `/settings/notifications`, `/settings/backup`, `/settings/users`, `/settings/sso`, `/settings/api` | admin | Settings tabs for admins. |
 | GET | `/settings/backups/{name}` | admin | Downloads a file from the backup folder. Only names matching `drawbridge-backup-YYYYMMDD-HHMMSS.json` are served; anything else is 404. |
 | GET | `/users` | admin | 301 to `/settings/users`, where Users moved. |
 | GET | `/users/{id}/picture` | auth | A user's profile picture, for that user and admins; 404 for others or without a picture. `Cache-Control: private, max-age=86400`: links carry `?v=<updated_at>`. |
@@ -106,6 +108,8 @@ token.
 | `/settings/notifications/test` | admin | as above | Send a test message with the form's values (saved ones for blanks); returns "✓ Sent…" or "✗ error" |
 | `/settings/sso` | admin | SSO fields | Save single sign-on settings |
 | `/settings/sso/test` | admin | `issuer` | Try discovery |
+| `/settings/api-tokens` | admin | `name` (1–64 characters) | Make an API token; returns the tab fragment showing the token once; 422 for a bad name |
+| `/settings/api-tokens/{id}/delete` | admin | | Revoke a token; 422 for an unknown one |
 | `/settings/sso/unlink` | auth | | Unlink own SSO identities (refused without a password); redirects to `/settings/account` |
 | `/settings/restore` | admin | Multipart: `file`, `passphrase`; body at most 128 MB | Restore a backup file; ends every session; `HX-Redirect: /login` |
 | `/settings/users` | admin | `username`, `password`, `role` | Create user |

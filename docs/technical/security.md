@@ -8,7 +8,7 @@ model:
 
 | Threat | Mitigation |
 | --- | --- |
-| Someone on the network uses the UI | Authentication required for every page except `/login`, `/setup` (until an admin exists), `/healthz`, `/metrics` (token), static files |
+| Someone on the network uses the UI | Authentication required for every page except `/login`, `/setup` (until an admin exists), `/healthz`, `/metrics` (token), `/api/status` (API token), static files |
 | Password guessing | argon2id hashes, minimum 12 characters, rate limit per IP and per username |
 | Stolen session cookie | `HttpOnly`, `SameSite=Lax`, `Secure` over HTTPS; only a hash stored server-side; sessions end on password change or disable |
 | Cross-site request forgery | Per-session CSRF token on every POST, plus Go's cross-origin protection |
@@ -235,6 +235,16 @@ Off unless `DRAWBRIDGE_METRICS_TOKEN` is set (404). With a token, requires
 `Authorization: Bearer <token>`, compared in constant time; otherwise 401 with
 `WWW-Authenticate`. Metrics reveal the ISP name, ASN and container counts, not
 container names or IPs.
+
+## API tokens
+
+`/api/status` needs a token made by an admin in Settings → API tokens:
+`dbt_` followed by 32 random bytes in base64url. The token is shown once;
+only its SHA-256 hash is stored, and a request is matched by hashing the
+presented token. A token can only read the status (the same facts as the
+dashboard, including container names and the public IP); it cannot sign in
+or change anything. Revoking deletes it immediately. Tokens are not in backup
+files.
 
 ## Docker access
 
