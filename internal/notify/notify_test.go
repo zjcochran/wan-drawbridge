@@ -289,6 +289,8 @@ func TestFormat(t *testing.T) {
 		{"backup_created", map[string]any{"by": "schedule", "history": "none", "file": "drawbridge-backup-20270115-030000.json"}, "Scheduled backup saved", "Saved drawbridge-backup-20270115-030000.json"},
 		{"backup_failed", map[string]any{"error": "disk full"}, "Scheduled backup failed", "disk full."},
 		{"drill_started", map[string]any{"by": "alice", "minutes": 5.0}, "Failover test started", "They start again in 5 minutes."},
+		{"drill_started", map[string]any{"by": "schedule", "minutes": 5.0}, "Failover test started", "The schedule stopped"},
+		{"drill_skipped", map[string]any{"by": "schedule", "reason": "skipped: automation is paused"}, "Scheduled failover test skipped", "(skipped: automation is paused)"},
 		{"drill_ended", map[string]any{"by": "timer"}, "Failover test ended", "being started again"},
 		{"drill_ended", map[string]any{"by": "failover", "kept_stopped": true}, "Failover test ended", "stay stopped until failback"},
 		{"something_else", nil, "something_else", ""},

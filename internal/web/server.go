@@ -193,6 +193,7 @@ func (s *Server) Handler() http.Handler {
 		}
 	}
 	mux.Handle("POST /settings/detection", s.admin(s.saveDetection))
+	mux.Handle("POST /settings/test-schedule", s.admin(s.saveTestSchedule))
 	mux.Handle("POST /settings/password", s.auth(s.changePassword))
 	mux.Handle("POST /settings/appearance", s.auth(s.saveAppearance))
 	mux.Handle("POST /settings/picture", limitBody(MaxPictureBytes+64<<10, s.auth(s.uploadPicture)))

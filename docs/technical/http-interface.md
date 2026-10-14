@@ -97,6 +97,7 @@ token.
 | `/isps/relearn` | admin | | Forget the primary, restart learning |
 | `/asns/{asn}/move` | admin | `to` = ISP ID or `new` | Regroup an ASN |
 | `/settings/detection` | admin | detection fields | Validate and apply |
+| `/settings/test-schedule` | admin | `enabled` (`on` or absent), `every` (`week`, `month`), `weekday` (0–6, Sunday first), `day` (1–28), `time` (`HH:MM`), `minutes` (2, 5, 10, 15) | Save the failover test schedule; returns its fragment; 422 with the reason if invalid |
 | `/settings/password` | auth | `current`, `new`, `confirm` | Change own password; ends all own sessions |
 | `/settings/2fa/start` | auth | | Returns the two-factor card with a new secret, its QR code, and the secret sealed for the next step. Nothing is stored. 422 unless the account has a password, no linked SSO, password sign-in is allowed, and two-factor is off |
 | `/settings/2fa/enable` | auth | `sealed`, `code`, `password` | Turn on, if the password and the code for the sealed secret are right; returns the card with the 10 recovery codes. 422 otherwise |

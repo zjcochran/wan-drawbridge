@@ -211,6 +211,38 @@ real failover, and starts them again when the time is up:
 "Fail over now", "Restore now" and "Test failover" ask for confirmation, and
 only admins see them.
 
+### Scheduled tests
+
+**Settings → WAN detection → Scheduled failover test** (admins; viewers see
+it read-only) runs the same test on a schedule. It is **off** until you tick
+**Run a failover test on a schedule**:
+
+| Field | Meaning |
+| --- | --- |
+| Every | Month or week |
+| Day of the month | 1 to 28 (so every month has it); shown when every month |
+| Day of the week | Sunday to Saturday; shown when every week |
+| At | Server time (`TZ`), `HH:MM`; default 04:00 |
+| For | 2, 5, 10 or 15 minutes; default 5 |
+
+Defaults: every month on the 1st at 04:00, for 5 minutes. The card shows when
+the next test is due and what happened at the last scheduled time.
+
+- Drawbridge checks once a minute. A test starts at the scheduled time, or
+  within the hour after it if Drawbridge was busy or restarting; a later start
+  is skipped ("missed"), so a test never starts hours late.
+- Saving the schedule counts from that moment: a time earlier today does not
+  start a test at once.
+- It is skipped, not postponed, when automation is paused, or when a test
+  could not start by hand either (not on the primary ISP or learning, or
+  containers already stopped). Each skip records a `drill_skipped` event,
+  which is sent with the failover group of
+  [notifications](notifications.md#what-is-sent).
+- A test that starts records `drill_started` with `by` = `schedule`; a
+  container that does not stop or start records `run_failed` as usual, so
+  the failures group of notifications tells you.
+- Saving records a `test_schedule` event.
+
 ## Tuning
 
 | You want… | Change |

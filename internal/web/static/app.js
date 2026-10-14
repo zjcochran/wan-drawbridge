@@ -65,18 +65,21 @@
     });
   });
 
-  // Notification channel forms show only the fields their kind uses.
-  function kindFields(form) {
-    const kind = form.elements.kind.value;
-    form.querySelectorAll("[data-kinds]").forEach((el) => {
-      el.hidden = !el.getAttribute("data-kinds").split(" ").includes(kind);
+  // Forms show only the fields that apply: notification channels by their
+  // kind (data-kinds), the test schedule by how often it runs (data-every).
+  const choosers = { kind: "data-kinds", every: "data-every" };
+  function showFields(select) {
+    const attr = choosers[select.name];
+    select.form.querySelectorAll(`[${attr}]`).forEach((el) => {
+      el.hidden = !el.getAttribute(attr).split(" ").includes(select.value);
     });
   }
+  const chooser = 'select[name="kind"], select[name="every"]';
   document.addEventListener("change", (e) => {
-    if (e.target.matches('select[name="kind"]') && e.target.form) kindFields(e.target.form);
+    if (e.target.matches(chooser) && e.target.form) showFields(e.target);
   });
   document.addEventListener("htmx:load", (e) => {
-    e.detail.elt.querySelectorAll('select[name="kind"]').forEach((s) => s.form && kindFields(s.form));
+    e.detail.elt.querySelectorAll(chooser).forEach((s) => s.form && showFields(s));
   });
 
   // Forms marked data-reset-on-success clear after a successful HTMX post.

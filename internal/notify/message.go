@@ -67,16 +67,6 @@ func Format(e store.Event, names map[int]string) Message {
 	case "manual_restore":
 		m.Title = "Manual restore"
 		m.Text = str("by") + " started the containers Drawbridge had stopped."
-	case "drill_started":
-		m.Title = "Failover test started"
-		m.Text = fmt.Sprintf("%s stopped the containers set to stop on failover, as a test. They start again in %s minutes.",
-			str("by"), str("minutes"))
-	case "drill_ended":
-		m.Title = "Failover test ended"
-		m.Text = "The containers stopped for the test are being started again."
-		if p["kept_stopped"] == true {
-			m.Text = "A failover took over during the test, so the containers stay stopped until failback."
-		}
 	case "run_failed":
 		m.Title, m.Priority = map[string]string{
 			"stopping": "Stopping containers failed", "starting": "Starting containers failed",
@@ -86,7 +76,7 @@ func Format(e store.Event, names map[int]string) Message {
 		}
 		m.Text = str("error") + ". See the dashboard for which containers are affected."
 	default:
-		if !formatISP(&m, str, isp) {
+		if !formatISP(&m, str, isp) && !formatDrill(&m, str) {
 			formatAdmin(&m, str)
 		}
 	}
@@ -115,6 +105,33 @@ func formatISP(m *Message, str, isp func(string) string) bool {
 	case "primary_undecided":
 		m.Title = "Primary ISP not decided"
 		m.Text = "Learning ended without a clear primary ISP. Set one on the ISPs page."
+	default:
+		return false
+	}
+	return true
+}
+
+// formatDrill fills in the messages about failover tests, and reports
+// whether m.Event is one of them.
+func formatDrill(m *Message, str func(string) string) bool {
+	switch m.Event {
+	case "drill_started":
+		m.Title = "Failover test started"
+		who := str("by")
+		if who == "schedule" {
+			who = "The schedule"
+		}
+		m.Text = fmt.Sprintf("%s stopped the containers set to stop on failover, as a test. They start again in %s minutes.",
+			who, str("minutes"))
+	case "drill_ended":
+		m.Title = "Failover test ended"
+		m.Text = "The containers stopped for the test are being started again."
+		if m.Details["kept_stopped"] == true {
+			m.Text = "A failover took over during the test, so the containers stay stopped until failback."
+		}
+	case "drill_skipped":
+		m.Title, m.Priority = "Scheduled failover test skipped", 4
+		m.Text = "The scheduled failover test did not run (" + str("reason") + ")."
 	default:
 		return false
 	}
