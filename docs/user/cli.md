@@ -129,7 +129,10 @@ ISP 1 is now primary
 ```
 
 Roles: `primary` (pinned; the previous primary becomes a backup), `backup`,
-`ignored`. See [ISPs and the primary ISP](isps.md#roles).
+`ignored`. See [ISPs and the primary ISP](isps.md#roles). `metered` and
+`unmetered` set the ISP's
+[Metered switch](isps.md#metered-and-unmetered-backups) instead; the `isps`
+command shows an unmetered backup as `backup (unmetered)`.
 
 ## move-asn
 

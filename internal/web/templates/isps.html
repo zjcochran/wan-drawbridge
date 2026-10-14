@@ -1,6 +1,6 @@
 {{define "content"}}
 <h1>ISPs</h1>
-<p class="lead">Drawbridge groups networks (ASNs) that belong to the same provider into one ISP. Traffic on any ISP other than the primary counts as a failover.</p>
+<p class="lead">Drawbridge groups networks (ASNs) that belong to the same provider into one ISP. Traffic on a metered backup ISP counts as a failover; an unmetered one counts like the primary.</p>
 <section class="card">{{template "isps-table" .Data}}</section>
 {{end}}
 
@@ -9,7 +9,7 @@
 <div id="isps-table">
 <div class="table-wrap">
 <table>
-  <thead><tr><th>ISP</th><th>Role</th><th>Last 7 days</th><th>All time</th><th>Networks (ASNs)</th></tr></thead>
+  <thead><tr><th>ISP</th><th>Role</th><th>Metered</th><th>Last 7 days</th><th>All time</th><th>Networks (ASNs)</th></tr></thead>
   <tbody>
   {{range .ISPs}}{{$isp := .}}
   <tr>
@@ -33,6 +33,16 @@
       {{if and (eq .Role "primary") (not .Pinned)}}<div class="sub">learned</div>{{end}}
       {{else}}{{.Role}}{{if .Pinned}} (pinned){{end}}{{end}}
     </td>
+    <td>
+      {{if ne .Role "backup"}}<span class="muted" title="Only a backup ISP can be metered">–</span>
+      {{else if $d.IsAdmin}}
+      <label class="switch" title="On: traffic on this ISP fails over. Off: it counts like the primary">
+        <input type="checkbox" name="metered" {{if .Metered}}checked{{end}} aria-label="{{.Name}} is metered"
+               hx-post="/isps/{{.ID}}/metered" hx-target="#isps-table" hx-swap="outerHTML">
+        <span class="slider"></span>
+      </label>
+      {{else}}{{if .Metered}}yes{{else}}no{{end}}{{end}}
+    </td>
     <td>{{if eq .Role "ignored"}}–{{else}}{{pct .WeekSeconds $d.WeekTotal}}{{end}}</td>
     <td>{{hours .AllSeconds}}</td>
     <td>
@@ -54,7 +64,7 @@
     </td>
   </tr>
   {{else}}
-  <tr><td colspan="5" class="empty">No ISPs seen yet. They appear after the first successful check.</td></tr>
+  <tr><td colspan="6" class="empty">No ISPs seen yet. They appear after the first successful check.</td></tr>
   {{end}}
   </tbody>
 </table>

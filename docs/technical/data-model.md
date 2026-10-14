@@ -32,6 +32,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 8 | `00008_user_pictures.sql` | user_pictures |
 | 9 | `00009_sso_picture.sql` | `users` gains `sso_picture` |
 | 10 | `00010_outages.sql` | outages, outage_usage. At the first start with an empty `outages` table, past outages are recreated from the event log |
+| 11 | `00011_metered.sql` | `isps` gains `metered` (default 1) |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -78,6 +79,7 @@ ISP groups.
 | `display_name` | TEXT | Set by Rename; `''` = use `name` |
 | `role` | TEXT | `primary`, `backup` (default), `ignored` |
 | `pinned` | INTEGER | Primary chosen by a person |
+| `metered` | INTEGER | Default 1. Only a metered backup triggers a failover; an unmetered one counts like the primary |
 | `first_seen`, `last_seen` | INTEGER | |
 
 Index `isps_one_primary`: unique on `role` where `role = 'primary'`, so at most

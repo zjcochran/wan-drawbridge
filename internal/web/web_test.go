@@ -39,6 +39,8 @@ type fakeMon struct {
 	calls     []string
 	policies  int
 	loadErr   error // returned by LoadBackup when set
+	isp       int   // current ISP; 1 (the primary) when 0
+	unmetered bool
 }
 
 func (f *fakeMon) record(c string) { f.mu.Lock(); f.calls = append(f.calls, c); f.mu.Unlock() }
@@ -48,8 +50,12 @@ func (f *fakeMon) Status() monitor.Status {
 	if state == "" {
 		state = wan.Primary
 	}
-	return monitor.Status{State: state, Due: time.Now().Add(90 * time.Second), Since: time.Now().Add(-3 * time.Hour), Paused: f.paused, PausedTill: f.till(), DrillTill: f.drillTill(), LastCheck: time.Now(), Conclusive: true,
-		LastIP: "203.0.113.7", ASN: 64500, ISP: 1, PrimaryISP: 1,
+	isp := f.isp
+	if isp == 0 {
+		isp = 1
+	}
+	return monitor.Status{State: state, Unmetered: f.unmetered, Due: time.Now().Add(90 * time.Second), Since: time.Now().Add(-3 * time.Hour), Paused: f.paused, PausedTill: f.till(), DrillTill: f.drillTill(), LastCheck: time.Now(), Conclusive: true,
+		LastIP: "203.0.113.7", ASN: 64500, ISP: isp, PrimaryISP: 1,
 		Flaps: f.flaps, Hold: (5 * time.Minute) << f.flaps}
 }
 func (f *fakeMon) Detection(context.Context) (config.Detection, error) { return f.det, nil }

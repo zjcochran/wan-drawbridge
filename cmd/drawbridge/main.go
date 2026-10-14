@@ -10,7 +10,7 @@
 //	drawbridge set-stack <project> on|off    disable a whole stack on failover
 //	drawbridge set-container <key> <policy>  inherit, disable or keep
 //	drawbridge isps                          ISP groups and their ASNs
-//	drawbridge set-isp <id> <role>           primary (pinned), backup or ignored
+//	drawbridge set-isp <id> <setting>        primary (pinned), backup, ignored, metered or unmetered
 //	drawbridge move-asn <asn> <id>|new       merge an ASN into a group, or split it out
 //	drawbridge reset-password <username>     set a new password, read from stdin
 package main
@@ -51,7 +51,7 @@ const usage = `usage:
   drawbridge set-stack <project> on|off    disable a whole stack on failover
   drawbridge set-container <key> <policy>  inherit, disable or keep
   drawbridge isps                          ISP groups and their ASNs
-  drawbridge set-isp <id> <role>           primary (pinned), backup or ignored
+  drawbridge set-isp <id> <setting>        primary (pinned), backup, ignored, metered or unmetered
   drawbridge move-asn <asn> <id>|new       merge an ASN into a group, or split it out
   drawbridge reset-password <username>     set a new password, read from stdin`
 

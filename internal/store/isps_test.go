@@ -21,7 +21,7 @@ func TestGroupKey(t *testing.T) {
 		{"Skylink Wireless, Inc.", 64510, "SKYLINK"}, // ipinfo fallback spelling
 		{"Examplenet Communications, LLC", 64500, "EXAMPLENET"},
 		{"SPECTRUM-AS Spectrum Internet Services", 139570, "SPECTRUM"},
-		{"BIGTEL-INTERNET4", 7018, "BIGTEL-INTERNET4"},
+		{"BIGTEL-INTERNET4", 64506, "BIGTEL-INTERNET4"},
 		{"BIGTEL-MOBILITY-LLC-AS64511", 64511, "BIGTEL-MOBILITY-LLC"},
 		{"SPACEX-STARLINK", 14593, "SPACEX-STARLINK"},
 		{"", 64512, "AS64512"},
@@ -59,17 +59,37 @@ func TestASNsGroupIntoOneISP(t *testing.T) {
 	}
 }
 
+func TestMetered(t *testing.T) {
+	ctx, s, now := context.Background(), open(t), time.Unix(1_800_000_000, 0)
+	id, _, _ := s.SeeASN(ctx, 64510, "SKYLINK-AS64510", now)
+	if m, err := s.Metered(ctx, id); err != nil || !m {
+		t.Fatalf("a new ISP: metered = %v, %v", m, err)
+	}
+	if err := s.SetMetered(ctx, id, false); err != nil {
+		t.Fatal(err)
+	}
+	if isps, _ := s.ISPs(ctx, now); len(isps) != 1 || isps[0].Metered {
+		t.Errorf("ISPs = %+v", isps)
+	}
+	if m, _ := s.Metered(ctx, 99); !m {
+		t.Error("an unknown ISP should count as metered")
+	}
+	if err := s.SetMetered(ctx, 99, true); err == nil {
+		t.Error("SetMetered on an unknown ISP succeeded")
+	}
+}
+
 func TestMoveASNAndRoles(t *testing.T) {
 	ctx, s, now := context.Background(), open(t), time.Unix(1_800_000_000, 0)
-	att, _, _ := s.SeeASN(ctx, 7018, "BIGTEL-INTERNET4", now)
+	bigtel, _, _ := s.SeeASN(ctx, 64506, "BIGTEL-INTERNET4", now)
 	odd, _, _ := s.SeeASN(ctx, 64600, "BIGTEL-SOMETHING-ELSE", now)
 
 	// Merge the odd ASN into the BigTel group; its now-empty group is removed.
-	if got, err := s.MoveASN(ctx, 64600, att, now); err != nil || got != att {
+	if got, err := s.MoveASN(ctx, 64600, bigtel, now); err != nil || got != bigtel {
 		t.Fatalf("merge: %d %v", got, err)
 	}
-	if id, _ := s.ISPOfASN(ctx, 64600); id != att {
-		t.Fatalf("64600 in %d, want %d", id, att)
+	if id, _ := s.ISPOfASN(ctx, 64600); id != bigtel {
+		t.Fatalf("64600 in %d, want %d", id, bigtel)
 	}
 	isps, _ := s.ISPs(ctx, now)
 	for _, i := range isps {
@@ -80,11 +100,11 @@ func TestMoveASNAndRoles(t *testing.T) {
 
 	// Split it back out into its own group.
 	alone, err := s.MoveASN(ctx, 64600, 0, now)
-	if err != nil || alone == att {
+	if err != nil || alone == bigtel {
 		t.Fatalf("split: %d %v", alone, err)
 	}
 
-	if err := s.SetRole(ctx, att, RolePrimary, true); err != nil {
+	if err := s.SetRole(ctx, bigtel, RolePrimary, true); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetRole(ctx, alone, RolePrimary, false); err != nil {
@@ -94,10 +114,10 @@ func TestMoveASNAndRoles(t *testing.T) {
 	if id != alone || pinned {
 		t.Fatalf("primary = %d pinned=%v", id, pinned)
 	}
-	if err := s.SetRole(ctx, att, RoleIgnored, false); err != nil {
+	if err := s.SetRole(ctx, bigtel, RoleIgnored, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, role, _ := s.SeeASN(ctx, 7018, "", now); role != RoleIgnored {
+	if _, role, _ := s.SeeASN(ctx, 64506, "", now); role != RoleIgnored {
 		t.Fatalf("role = %s", role)
 	}
 }

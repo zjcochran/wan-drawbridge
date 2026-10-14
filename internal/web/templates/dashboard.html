@@ -31,7 +31,7 @@
     {{if .S.Flaps}}<div class="banner warn">The primary ISP has been flapping, so failback now waits {{duration .S.Hold}} of stable connection (normally less). This resets after six hours without a failover.</div>{{end}}
     <dl class="facts">
       <dt>Current ISP</dt>
-      <dd>{{if .ISPName}}{{.ISPName}} <span class="sub">AS{{.S.ASN}}</span>{{else}}–{{end}}</dd>
+      <dd>{{if .ISPName}}{{.ISPName}} <span class="sub">AS{{.S.ASN}}</span>{{if and .S.Unmetered (ne .S.ISP .S.PrimaryISP)}} <span class="badge muted" title="Counts like the primary: no failover">unmetered</span>{{end}}{{else}}–{{end}}</dd>
       <dt>Primary ISP</dt>
       <dd>{{if .Primary}}{{.Primary}}{{else}}<span class="warn-text">Not known yet</span> <a href="/isps">Set it</a>{{end}}</dd>
       <dt>Public IP</dt><dd>{{or .S.LastIP "–"}}</dd>

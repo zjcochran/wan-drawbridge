@@ -196,6 +196,17 @@ func TestISPCommands(t *testing.T) {
 	if code, out, _ := drawbridge(t, "", "move-asn", "64510", "new"); code != 0 || strings.Contains(out, "ISP 1\n") {
 		t.Fatalf("move-asn new: %d %q", code, out)
 	}
+	_, out, _ = drawbridge(t, "", "isps")
+	id := strings.Fields(strings.Split(out, "\n")[2])[0] // the new ISP of AS64510
+	if code, out, _ := drawbridge(t, "", "set-isp", id, "unmetered"); code != 0 || !strings.Contains(out, "is now unmetered") {
+		t.Fatalf("set-isp unmetered: %d %q", code, out)
+	}
+	if _, out, _ := drawbridge(t, "", "isps"); !strings.Contains(out, "backup (unmetered)") {
+		t.Fatalf("isps after unmetered: %q", out)
+	}
+	if code, _, _ := drawbridge(t, "", "set-isp", "99", "metered"); code != 1 {
+		t.Fatal("an unknown ISP was marked metered")
+	}
 	if code, _, _ := drawbridge(t, "", "set-isp", "1", "owner"); code != 1 {
 		t.Fatal("bad role accepted")
 	}

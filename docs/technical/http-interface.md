@@ -90,6 +90,7 @@ token.
 | `/containers/bulk` | admin | `keys` (repeated), `bulk_policy` | Set several containers |
 | `/isps/{id}/role` | admin | `role` | Primary (pinned), backup or ignored |
 | `/isps/{id}/rename` | admin | `name` | Empty resets |
+| `/isps/{id}/metered` | admin | `metered=on` or absent | Metered or unmetered; 422 for an unknown ISP |
 | `/isps/relearn` | admin | | Forget the primary, restart learning |
 | `/asns/{asn}/move` | admin | `to` = ISP ID or `new` | Regroup an ASN |
 | `/settings/detection` | admin | detection fields | Validate and apply |

@@ -19,6 +19,44 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/wan"
 )
 
+func TestISPMetered(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	ctx := context.Background()
+	tmo, _, _ := e.st.SeeASN(ctx, 64510, "SKYLINK-AS64510", time.Now())
+	e.st.SetRole(ctx, 1, store.RolePrimary, true)
+	// New backups start metered; the switch turns it off (no "metered" field).
+	if _, page := c.get("/isps"); !strings.Contains(page, `hx-post="/isps/`+strconv.Itoa(tmo)+`/metered"`) ||
+		strings.Contains(page, `hx-post="/isps/1/metered"`) {
+		t.Error("the metered switch should show for the backup only")
+	}
+	if resp, _ := c.htmx("/isps/"+strconv.Itoa(tmo)+"/metered", url.Values{}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("metered off: %d", resp.StatusCode)
+	}
+	if m, _ := e.st.Metered(ctx, tmo); m {
+		t.Error("still metered")
+	}
+	if resp, _ := c.htmx("/isps/"+strconv.Itoa(tmo)+"/metered", url.Values{"metered": {"on"}}); resp.StatusCode != http.StatusOK {
+		t.Fatalf("metered on: %d", resp.StatusCode)
+	}
+	if m, _ := e.st.Metered(ctx, tmo); !m {
+		t.Error("not metered again")
+	}
+	if resp, _ := c.htmx("/isps/999/metered", url.Values{}); resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("metered on an unknown ISP: %d", resp.StatusCode)
+	}
+	e.st.SetSetting(ctx, store.SettingSetupComplete, true)
+	if _, page := c.get("/"); strings.Contains(page, ">unmetered<") {
+		t.Error("the primary is shown as unmetered")
+	}
+	e.mon.isp, e.mon.unmetered = tmo, true
+	if _, page := c.get("/"); !strings.Contains(page, ">unmetered<") {
+		t.Error("the dashboard does not say the current ISP is unmetered")
+	}
+	e.mon.isp, e.mon.unmetered = 0, false
+
+}
+
 func TestISPManagement(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
@@ -451,6 +489,7 @@ func TestHandlersReportDatabaseErrors(t *testing.T) {
 		"/containers/policy":   {"key": {"dns"}, "policy": {"disable"}},
 		"/isps/1/role":         {"role": {"primary"}},
 		"/isps/1/rename":       {"name": {"x"}},
+		"/isps/1/metered":      {"metered": {"on"}},
 		"/asns/64500/move":     {"to": {"new"}},
 		"/setup/check":         {},
 		"/setup/primary":       {"choice": {"pin"}, "isp": {"1"}},

@@ -136,6 +136,7 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `primary_suggested` | Another ISP now looks primary | `isp`, `current` |
 | `relearn` | Re-learn primary ISP | `by` |
 | `isp_role` | An ISP's role was changed in the UI | `isp`, `role`, `by` |
+| `isp_metered` | An ISP's Metered switch was changed in the UI | `isp`, `metered`, `by` |
 | `asn_moved` | An ASN was moved to another ISP in the UI | `asn`, `isp`, `by` |
 | `stack_policy` | A stack switch was flipped | `stack`, `disable`, `by` |
 | `container_policy` | A container setting changed | `container`, `policy`, `converted_stack`, `by` |

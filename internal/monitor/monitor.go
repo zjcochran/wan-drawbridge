@@ -43,6 +43,7 @@ type Status struct {
 	ASN        int    // last conclusive ASN
 	ASNName    string // its name from the ASN database
 	ISP        int    // its ISP group
+	Unmetered  bool   // that ISP is unmetered, so it counts like the primary
 	PrimaryISP int
 	Busy       string // "stopping" / "starting" while a run is in progress
 	Counters   Counters
@@ -507,7 +508,7 @@ func (m *Monitor) Check(ctx context.Context) {
 	now := m.now()
 	started := time.Now()
 	res := m.prober.Probe(ctx)
-	obs, info := m.observe(ctx, res, now)
+	obs, info, metered := m.observe(ctx, res, now)
 
 	var latency int64
 	for _, p := range res.Providers {
@@ -528,7 +529,11 @@ func (m *Monitor) Check(ctx context.Context) {
 	m.lastCheck = now
 
 	primary := m.learn(ctx, now)
-	tr := m.state.Machine.Step(obs, primary, m.policy())
+	step := obs
+	if obs.Conclusive && primary != 0 && !metered {
+		step.ISP = primary // an unmetered ISP counts like the primary
+	}
+	tr := m.state.Machine.Step(step, primary, m.policy())
 
 	m.log.Debug("check", "ip", ip, "asn", info.ASN, "name", info.Name, "isp", obs.ISP, "conclusive", obs.Conclusive,
 		"state", m.state.Machine.State, "due", m.state.Machine.Due(m.policy()))
@@ -555,7 +560,7 @@ func (m *Monitor) Check(ctx context.Context) {
 			s.Counters.ChecksInconclusive++
 		}
 		if obs.Conclusive {
-			s.ASN, s.ASNName, s.ISP = info.ASN, info.Name, obs.ISP
+			s.ASN, s.ASNName, s.ISP, s.Unmetered = info.ASN, info.Name, obs.ISP, !metered
 		}
 		s.PrimaryISP = primary
 	})
@@ -564,12 +569,12 @@ func (m *Monitor) Check(ctx context.Context) {
 }
 
 // observe turns a probe result into an observation: conclusive only when the
-// IP's ASN is known and its ISP is not ignored.
-func (m *Monitor) observe(ctx context.Context, res probe.Result, now time.Time) (wan.Observation, asn.Info) {
-	obs := wan.Observation{At: now}
-	var info asn.Info
+// IP's ASN is known and its ISP is not ignored. metered is the ISP's flag
+// (true when there is none).
+func (m *Monitor) observe(ctx context.Context, res probe.Result, now time.Time) (obs wan.Observation, info asn.Info, metered bool) {
+	obs, metered = wan.Observation{At: now}, true
 	if !res.Conclusive {
-		return obs, info
+		return obs, info, metered
 	}
 	var err error
 	if info, err = m.resolver.Lookup(ctx, res.IP); err != nil {
@@ -578,8 +583,12 @@ func (m *Monitor) observe(ctx context.Context, res probe.Result, now time.Time) 
 		m.report(err)
 	} else if role != store.RoleIgnored {
 		obs = wan.Observation{At: now, Conclusive: true, Clean: res.Clean, ISP: id}
+		if metered, err = m.store.Metered(ctx, id); err != nil {
+			m.report(err)
+			metered = true
+		}
 	}
-	return obs, info
+	return obs, info, metered
 }
 
 // act carries out a transition's action: events, counters and the container
