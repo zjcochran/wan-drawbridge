@@ -105,6 +105,18 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 	t.Fatalf("timed out waiting for %s", what)
 }
 
+// delivered reports whether the receiver got a message for each channel and
+// the notifier recorded every result.
+func delivered(n *Notifier, r *receiver, ids ...string) bool {
+	sent, _ := n.Counts()
+	for _, id := range ids {
+		if _, ok := n.Last(id); !ok {
+			return false
+		}
+	}
+	return len(r.got()) == len(ids) && sent == uint64(len(ids))
+}
+
 func TestDeliveryByTopicAndKind(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -126,7 +138,9 @@ func TestDeliveryByTopicAndKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	n.Store.AddEvent(ctx, time.Now(), "settings_changed", map[string]any{"by": "alice"}) // no topic: never sent
-	waitFor(t, "four deliveries", func() bool { return len(r.got()) == 4 })
+	// The receiver can see a message before the notifier has recorded the
+	// result: wait for both.
+	waitFor(t, "four deliveries", func() bool { return delivered(n, r, "a", "b", "c", "d") })
 
 	by := map[string]hit{}
 	for _, h := range r.got() {
