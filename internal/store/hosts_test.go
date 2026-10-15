@@ -229,6 +229,8 @@ func oldDatabase(t *testing.T) string {
 		`INSERT INTO outages (id, started) VALUES (1, 1)`,
 		`INSERT INTO outage_usage (outage_id, container, container_id, rx, tx, last_rx, last_tx, ts) VALUES (1, 'media/player', 'c1', 5, 6, 0, 0, 1)`,
 	} {
+		// Fixed statements from the list above, no input: test data for an old schema.
+		// nosemgrep
 		if _, err := db.ExecContext(ctx, q); err != nil {
 			t.Fatal(q, err)
 		}

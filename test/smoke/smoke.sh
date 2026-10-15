@@ -87,7 +87,7 @@ CSRF=$(curl -fsS -b "$JAR" "$URL/settings" | sed -n '/name="_csrf"/{s/.*name="_c
 pass "admin created"
 
 wait_for 60 "victims stack discovered" sh -c "curl -fsS -b '$JAR' '$URL/stacks' | grep -q dbsmoke-victims"
-post -X POST "$URL/stacks/dbsmoke-victims/policy" -d disable=on || fail "set stack policy"
+post -X POST "$URL/stacks/1/dbsmoke-victims/policy" -d disable=on || fail "set stack policy"
 post -X POST "$URL/setup/finish" || fail "finish setup"
 pass "dbsmoke-victims set to stop on failover; automation on"
 
