@@ -226,8 +226,9 @@ drawbridge agent
 ```
 
 Runs [agent mode](hosts.md), with the settings from `DRAWBRIDGE_MANAGER`,
-`DRAWBRIDGE_ENROLL_TOKEN`, `DRAWBRIDGE_MANAGER_KEY`, `DRAWBRIDGE_AGENT_ALLOW`,
-`DRAWBRIDGE_AGENT_DIR`, `DOCKER_HOST` and `LOG_LEVEL`. It opens no database
+`DRAWBRIDGE_ENROLL_TOKEN`, `DRAWBRIDGE_MANAGER_KEY`, `DRAWBRIDGE_AGENT_PLATFORM`,
+`DRAWBRIDGE_AGENT_ALLOW`, `DRAWBRIDGE_AGENT_DIR`, `DOCKER_HOST` and
+`LOG_LEVEL`. It opens no database
 and no port. In a Compose file, this is `command: agent`.
 
 ## Notes

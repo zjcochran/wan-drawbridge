@@ -21,6 +21,7 @@ the first failover test closely:
 
 - An agent on a real second Docker host, and an agent reaching Drawbridge
   through a real reverse proxy.
+- A Docker Swarm.
 
 ## Adding a Docker host
 
@@ -61,6 +62,7 @@ differs.
 | `DRAWBRIDGE_ENROLL_TOKEN` | A one-time token: it works **once**, within **one hour**. It is not needed after the agent enrolled, and is ignored then |
 | `DRAWBRIDGE_MANAGER_KEY` | The manager's public key. The agent refuses to enroll if the manager it reaches has another key, so a wrong address or someone in between cannot take the agent over |
 | `DRAWBRIDGE_AGENT_ALLOW` | Optional: a comma-separated list of stacks (Compose projects). The agent then lists and acts on containers of those stacks only, whatever the manager asks; standalone containers are left out |
+| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` (default) for a Docker host, or `swarm` for a whole Docker Swarm from a manager node; see [below](#adding-a-docker-swarm) |
 | `DRAWBRIDGE_AGENT_DIR` | Where the agent keeps its key and state; default `/data/agent`. Mount it, as above, so the agent keeps its identity across re-creation |
 | `DOCKER_HOST` | The Docker engine; default `unix:///var/run/docker.sock` |
 | `LOG_LEVEL` | `debug`, `info` (default), `warn` or `error`, as for the manager |
@@ -72,6 +74,58 @@ If `DRAWBRIDGE_MANAGER` is plain `http://`, the agent logs a warning: requests
 and commands are still signed, so they cannot be forged or replayed, but the
 container list can be read on the way. Use HTTPS when the agent reaches the
 manager over a network you do not control.
+
+## Adding a Docker Swarm
+
+One agent controls a whole swarm: its services, grouped by stack, plus the
+standalone containers of the node it runs on. It must run on a **manager
+node**, with `DRAWBRIDGE_AGENT_PLATFORM: swarm`. Add the host as above, then
+deploy the agent as a stack, pinned to one manager node so its folder (and
+with it its key) stays on that node:
+
+```yaml
+# docker stack deploy -c drawbridge-agent.yml drawbridge-agent
+services:
+  agent:
+    image: ghcr.io/zjcochran/wan-drawbridge:latest
+    command: agent
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /srv/drawbridge-agent:/data/agent
+    environment:
+      DRAWBRIDGE_AGENT_PLATFORM: swarm
+      DRAWBRIDGE_MANAGER: https://drawbridge.example.com
+      DRAWBRIDGE_ENROLL_TOKEN: dbe_...
+      DRAWBRIDGE_MANAGER_KEY: ed25519:...
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+          - node.hostname == manager-1
+```
+
+Use the manager's real hostname, and create `/srv/drawbridge-agent` on that
+node. An agent on a node that is not a manager stops with "needs a swarm
+manager node".
+
+The agent is pinned to one node because its key lives in its folder: an
+agent that moved to another node would have no key and need a new
+enrollment token. If that node is down, the swarm host shows **Offline**
+until it is back, like any other host.
+
+How the swarm is controlled:
+
+| | |
+| --- | --- |
+| What is listed | Every service, as "Swarm service" on the Containers page, grouped by its stack (`com.docker.stack.namespace`), with the key `stack/service`; services outside a stack use their name. Standalone containers on the agent's node are listed as on a Docker host. Containers that are tasks of a service are not listed. The agent's own service is left out. |
+| Running | A service runs while at least one of its tasks runs. |
+| Stopping a replicated service | It is scaled to 0. Its replica count is kept with the failover, and on the service as the label `drawbridge.replicas`. |
+| Stopping a global service | It cannot be scaled, so it gets the placement constraint `node.labels.drawbridge-stopped==true`, which no node has: its tasks stop everywhere. |
+| Starting | The replica count comes back (from the failover, else from the label, else 1), or the constraint is removed. |
+| Order | Services have no `depends_on`, so they all stop and start at once. For the health wait, a service counts as healthy once all its tasks run. |
+| Labels | `drawbridge.on-failover` works on a service's own labels (`deploy.labels` in a stack file). |
+| Data used | Not measured for services: their tasks run on several nodes. Standalone containers are measured as usual. |
 
 ## What the Hosts page shows
 

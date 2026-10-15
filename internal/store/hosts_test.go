@@ -238,3 +238,22 @@ func oldDatabase(t *testing.T) string {
 	db.Close()
 	return path
 }
+
+func TestWorkloadKind(t *testing.T) {
+	ctx, s := context.Background(), open(t)
+	items := []InventoryItem{
+		{Key: "media/db", Project: "media", Service: "db", Name: "media_db", Kind: "service"},
+		{Key: "dns", Name: "dns"},
+	}
+	if _, err := s.SyncInventory(ctx, LocalHost, items, t0); err != nil {
+		t.Fatal(err)
+	}
+	cs, _ := s.Containers(ctx)
+	kinds := map[string]string{}
+	for _, c := range cs {
+		kinds[c.Key] = c.Kind
+	}
+	if kinds["media/db"] != "service" || kinds["dns"] != "container" {
+		t.Errorf("kinds = %v", kinds)
+	}
+}

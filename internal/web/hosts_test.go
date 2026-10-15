@@ -187,3 +187,17 @@ func TestHostsOnDashboardReportsAPIAndMetrics(t *testing.T) {
 		t.Errorf("outage page:\n%s", body)
 	}
 }
+
+func TestSwarmServicesListed(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	id := addHost(t, e, false)
+	if _, err := e.st.SyncInventory(context.Background(), id, []store.InventoryItem{
+		{Key: "media/player", Project: "media", Service: "player", Name: "media_player", Kind: "service"},
+	}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, body := c.get("/containers"); !strings.Contains(body, `<strong>media_player</strong> <span class="badge muted">Swarm service</span>`) {
+		t.Errorf("a Swarm service is not marked:\n%s", body)
+	}
+}
