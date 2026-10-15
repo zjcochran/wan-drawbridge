@@ -36,6 +36,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
 	"github.com/zjcochran/wan-drawbridge/internal/executor"
+	"github.com/zjcochran/wan-drawbridge/internal/hosts"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
@@ -51,6 +52,7 @@ const usage = `usage:
   drawbridge containers                    containers and their effective policy
   drawbridge set-stack <project> on|off    disable a whole stack on failover
   drawbridge set-container <key> <policy>  inherit, disable or keep
+      (on another host: <host>:<project> or <host>:<key>)
   drawbridge isps                          ISP groups and their ASNs
   drawbridge set-isp <id> <setting>        primary (pinned), backup, ignored, metered or unmetered
   drawbridge move-asn <asn> <id>|new       merge an ASN into a group, or split it out
@@ -134,7 +136,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return err
 	}
 	self, _ := os.Hostname() // Docker sets it to the container's short ID
-	ex := executor.New(dc, st, log, self)
+	reg := hosts.NewRegistry(hosts.Host{ID: store.LocalHost, Name: "local", Runtime: hosts.Local{Docker: dc, SelfID: self}})
+	ex := executor.New(reg, st, log)
 
 	if len(args) == 0 {
 		return serve(ctx, cfg, st, dc, ex, sl, log)
@@ -176,7 +179,7 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 	bg.Go(func() { notifier.Run(ctx) })
 
 	ui, err := web.New(web.Server{
-		Store: st, Mon: m, Docker: dc, Sync: ex, Hub: hub, Log: log,
+		Store: st, Mon: m, Docker: dc, Hosts: ex.Hosts, Sync: ex, Hub: hub, Log: log,
 		BaseURL: cfg.BaseURL, DBPath: filepath.Join(cfg.DBDir, "drawbridge.db"), TrustedProxies: proxies,
 		Secrets: box, Notify: notifier, Syslog: sl, BackupDir: cfg.BackupDir, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
 		SourceURL: env("DRAWBRIDGE_SOURCE_URL", sourceURL),
@@ -197,7 +200,7 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 		}
 	}()
 	bg.Go(func() { ex.WatchInventory(ctx, dc, 30*time.Second) })
-	bg.Go(func() { ex.WatchUsage(ctx, dc, time.Minute) })
+	bg.Go(func() { ex.WatchUsage(ctx, time.Minute) })
 	bg.Go(func() { ui.RunBackupSchedule(ctx) })
 	bg.Go(func() { ui.RunTestSchedule(ctx) })
 	bg.Go(func() { errc <- m.Run(ctx) })

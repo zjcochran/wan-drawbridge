@@ -74,7 +74,7 @@ on the new instance.
 
 | Part | Contents |
 | --- | --- |
-| Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; stack switches and container settings, including containers waiting for review; users with their roles, disabled flags, password hashes, two-factor secrets and recovery codes (hashed); single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs, tokens and users; whether setup is complete and whether automation is paused |
+| Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; hosts; stack switches and container settings per host, including containers waiting for review; users with their roles, disabled flags, password hashes, two-factor secrets and recovery codes (hashed); single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs, tokens and users; whether setup is complete and whether automation is paused |
 | History (optional) | Checks, events, daily ISP totals, outages and data used from the chosen period (outages that started in it) |
 
 Not included: sign-in sessions, profile pictures (an uploaded one has to be
@@ -105,9 +105,11 @@ Restoring **replaces**:
 Afterwards everyone is signed out, including you; sign in with an account
 from the backup. A `backup_restored` event is recorded, and Drawbridge runs a
 check straight away with the restored settings. Container settings are matched
-by Compose project and service (or container name), so they apply to the
-same stacks on another host. Settings for containers that are not in Docker
-are deleted within 10 minutes, so start the stacks before restoring.
+by host and by Compose project and service (or container name), so they apply
+to the same stacks on another machine. A backup made before Drawbridge had
+hosts puts all its settings on the local host. Settings for containers that
+are not on their host are deleted within 10 minutes, so start the stacks
+before restoring.
 
 A restore is refused, and nothing changes, when:
 

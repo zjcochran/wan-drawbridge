@@ -18,8 +18,10 @@ It uses a **key**:
 - **Standalone containers** (`docker run`): the container name, for example
   `dns`.
 
+Keys are per **host**: the local Docker socket is the host `local`, and the
+same project on another host is a different stack with its own settings.
 Settings belong to the key, so they survive re-creation. A container removed
-from Docker disappears from the lists at once. Its row, with its setting, is
+from its host disappears from the lists at once. Its row, with its setting, is
 deleted once it has been missing for 10 minutes, long enough for a re-create
 (`docker compose up` after a pull) to bring it back. A stack is deleted, with
 its switch, when it has no containers left. Renaming a standalone container or a Compose project creates a new
@@ -144,7 +146,8 @@ part of a selected stack.
 ## Order of stopping and starting
 
 Drawbridge reads Compose's `depends_on` (from the
-`com.docker.compose.depends_on` label) within each stack:
+`com.docker.compose.depends_on` label) within each stack, on each host;
+hosts are stopped and started at the same time:
 
 - **Stopping:** dependents first. If `player` depends on `db`, `player` stops
   before `db`.

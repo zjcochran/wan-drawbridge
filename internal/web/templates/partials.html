@@ -3,16 +3,25 @@
 {{/* avatar is a user's profile picture, or their initial without one. */}}
 {{define "avatar"}}{{if .Picture}}<img class="avatar" src="/users/{{.ID}}/picture?v={{.Picture}}" alt="" width="28" height="28">{{else}}<span class="avatar" aria-hidden="true">{{initial .Username}}</span>{{end}}{{end}}
 
+{{/* host-filter is the host select of a filter form; .Hosts and .Host come from the page data. */}}
+{{define "host-filter"}}
+<select name="host" aria-label="Host">
+  <option value="">All hosts</option>
+  {{range .Hosts}}<option value="{{.ID}}" {{if eq (printf "%d" .ID) $.Host}}selected{{end}}>{{.Name}}</option>{{end}}
+</select>
+{{end}}
+
 {{define "stacks-table"}}
-<div id="stacks-table" hx-get="/stacks?partial=1" hx-trigger="sse:inventory" hx-swap="outerHTML">
+<div id="stacks-table" hx-get="/stacks?partial=1" hx-include="#stack-filters" hx-trigger="sse:inventory" hx-swap="outerHTML">
 <div class="table-wrap">
 <table>
-  <thead><tr><th>Stack</th><th>Containers</th><th>On failover</th><th>Stop whole stack</th><th></th></tr></thead>
+  <thead><tr><th>Stack</th>{{if .MultiHost}}<th>Host</th>{{end}}<th>Containers</th><th>On failover</th><th>Stop whole stack</th><th></th></tr></thead>
   <tbody>
   {{range $i, $s := .Stacks}}
-  <tr>
+  <tr{{if .Down}} class="dim"{{end}}>
     <td><strong>{{.Project}}</strong></td>
-    <td>{{.Running}} running of {{.Containers}}</td>
+    {{if $.MultiHost}}<td><a href="/stacks?host={{.HostID}}">{{.Host}}</a></td>{{end}}
+    <td>{{if .Down}}<span class="muted">host offline</span>{{else}}{{.Running}} running of {{.Containers}}{{end}}</td>
     <td>
       {{if eq .Status "disabled"}}<span class="badge bad">Stops (stack rule)</span>
       {{else if eq .Status "partial"}}<span class="badge warn">Partial · {{.Disabling}} of {{.Containers}}</span>
@@ -22,20 +31,20 @@
       {{if $.IsAdmin}}
       <label class="switch" title="Changing this resets every container in the stack to follow it">
         <input type="checkbox" name="disable" {{if .Disabled}}checked{{end}}
-               hx-post="/stacks/{{.Project}}/policy" hx-target="#stacks-table" hx-swap="outerHTML">
+               hx-post="/stacks/{{.HostID}}/{{.Project}}/policy" hx-include="#stack-filters" hx-target="#stacks-table" hx-swap="outerHTML">
         <span class="slider"></span>
         <span class="visually-hidden">Stop {{.Project}} on failover</span>
       </label>
       {{else}}{{if .Disabled}}Yes{{else}}No{{end}}{{end}}
     </td>
     <td class="right">
-      <button class="link" hx-get="/stacks/{{.Project}}/containers" hx-target="#stack-{{$i}}" hx-swap="innerHTML"
+      <button class="link" hx-get="/stacks/{{.HostID}}/{{.Project}}/containers" hx-target="#stack-{{$i}}" hx-swap="innerHTML"
               data-collapse="Hide containers" aria-expanded="false" aria-controls="stack-{{$i}}">Show containers</button>
     </td>
   </tr>
-  <tr class="detail"><td colspan="5" id="stack-{{$i}}"></td></tr>
+  <tr class="detail"><td colspan="6" id="stack-{{$i}}"></td></tr>
   {{else}}
-  <tr><td colspan="5" class="empty">No Compose stacks found. Stacks appear here once Drawbridge can read Docker.</td></tr>
+  <tr><td colspan="6" class="empty">No Compose stacks found. Stacks appear here once Drawbridge can read Docker.</td></tr>
   {{end}}
   </tbody>
 </table>

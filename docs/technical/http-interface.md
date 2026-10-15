@@ -59,9 +59,9 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/partials/status` | auth | Status card fragment (refreshed on SSE `state`/`inventory`). |
 | GET | `/partials/timeline` | auth | 24-hour timeline fragment. |
 | GET | `/sse` | auth | Server-Sent Events stream (below). |
-| GET | `/stacks` | auth | `?partial=1` with `HX-Request` returns the table only. |
-| GET | `/stacks/{project}/containers` | auth | Container list fragment for one stack. |
-| GET | `/containers` | auth | Filters: `q`, `stack` (`-` = standalone), `state` (`running`, `stopped`), `policy` (`disable`, `keep`, `review`); `partial=1`. |
+| GET | `/stacks` | auth | Filter `host` (a host ID). `?partial=1` with `HX-Request` returns the table only. |
+| GET | `/stacks/{host}/{project}/containers` | auth | Container list fragment for one stack on one host (host ID). 404 if `{host}` is not a number. |
+| GET | `/containers` | auth | Filters: `q`, `host` (a host ID), `stack` (`-` = standalone), `state` (`running`, `stopped`), `policy` (`disable`, `keep`, `review`); `partial=1`. |
 | GET | `/isps` | auth | |
 | GET | `/events` | auth | Query `type`, `before` (event ID cursor). 100 per page. |
 | GET | `/events.csv` | auth | Query `type`. Up to 1,000 newest events; columns `time` (RFC 3339 UTC), `type`, `actor`, `details`. Cells starting with `= + - @ TAB CR` are prefixed with `'` against spreadsheet formula injection. |
@@ -88,9 +88,9 @@ token.
 | `/actions/drill` | admin | `for`: `2m`, `5m`, `10m`, `15m`; anything else is 400 | Start a failover test; 422 if containers are already stopped or the state is not primary or learning |
 | `/actions/drill-end` | admin | | End a failover test now |
 | `/actions/restore` | admin | | Restore now |
-| `/stacks/{project}/policy` | admin | `disable=on` or absent | Set the stack switch |
-| `/containers/policy` | admin | `key`, `policy` | Set one container (filters are echoed back) |
-| `/containers/bulk` | admin | `keys` (repeated), `bulk_policy` | Set several containers |
+| `/stacks/{host}/{project}/policy` | admin | `disable=on` or absent; `host` = the page's host filter, echoed back | Set the stack switch of a stack on one host (host ID); 404 if `{host}` is not a number |
+| `/containers/policy` | admin | `container_host` (host ID; the local host when absent), `key`, `policy` | Set one container (filters are echoed back) |
+| `/containers/bulk` | admin | `keys` (repeated, each `<host ID>:<key>`; 422 if one is not), `bulk_policy` | Set several containers |
 | `/isps/{id}/role` | admin | `role` | Primary (pinned), backup or ignored |
 | `/isps/{id}/rename` | admin | `name` | Empty resets |
 | `/isps/{id}/metered` | admin | `metered=on` or absent | Metered or unmetered; 422 for an unknown ISP |

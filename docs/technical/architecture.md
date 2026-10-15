@@ -59,7 +59,8 @@ flowchart LR
 | `internal/learner` | Pure function deciding the primary ISP from observed time. |
 | `internal/wan` | Pure failover state machine: observation in, transition and action out. |
 | `internal/monitor` | The check loop. Owns the state machine, runs the learner, persists state, calls the executor. |
-| `internal/executor` | Stops and starts containers for runs; keeps the container inventory in sync with Docker. |
+| `internal/executor` | Stops and starts containers for runs on every host at once; keeps the container inventory in sync; catches up with hosts that could not be reached (`Retry`). |
+| `internal/hosts` | The hosts Drawbridge controls: the `Runtime` interface (list, inspect, stop, start, stats), the registry of hosts, and the local Docker runtime. |
 | `internal/docker` | Minimal Docker Engine API client (list, inspect, stop, start, events, stats, version). |
 | `internal/store` | All persistence: SQLite, migrations, users, sessions, ISPs, policies, runs, events. |
 | `internal/secrets` | AES-GCM sealing of stored secrets. |
@@ -129,15 +130,22 @@ publishes the `state` topic on the SSE hub. HTTP handlers read the snapshot
 with `Status()` and never touch loop-owned fields.
 
 **The inventory watcher** runs `executor.Sync` every 30 seconds and about 2
-seconds after Docker reports a container `create`, `destroy` or `rename`
-event. It writes only the `stacks` and `containers` tables. It publishes the
-`inventory` topic when the set of containers or their running state changes
-(a fingerprint of ID, name and running flag), not on every sync.
+seconds after the local Docker reports a container `create`, `destroy` or
+`rename` event. It lists every host in parallel and writes only the `hosts`
+(status), `stacks` and `containers` tables. It publishes the `inventory`
+topic when the set of containers, their running state or the hosts that
+could not be reached change (a fingerprint of host, ID, name and running
+flag), not on every sync.
+
+**Retries** run in the monitor's loop: once a minute, unless automation is
+paused, it calls `executor.Retry`, which stops or starts what a host that
+could not be reached is still owed, once it answers.
 
 **The usage watcher** (`executor.WatchUsage`) runs every minute. When an
-outage is open (`outages.ended IS NULL`), it lists the containers and reads
-each running one's network counters (`GET /containers/{id}/stats?stream=false&one-shot=true`),
-writing only `outage_usage`.
+outage is open (`outages.ended IS NULL`), it lists every host and reads each
+running container's network counters (for Docker,
+`GET /containers/{id}/stats?stream=false&one-shot=true`), writing only
+`outage_usage`.
 
 **Notifications** are fed by the store: every recorded event is passed to
 `Notifier.Event`, which queues it (64 at most, never blocking the caller) if

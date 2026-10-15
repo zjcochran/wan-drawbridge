@@ -88,7 +88,7 @@ func TestRecordUsage(t *testing.T) {
 	id, _ := s.OpenOutage(ctx)
 	rec := func(key, cid string, rx, tx int64) {
 		t.Helper()
-		if err := s.RecordUsage(ctx, id, key, cid, rx, tx, t0); err != nil {
+		if err := s.RecordUsage(ctx, id, LocalHost, key, cid, rx, tx, t0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -97,19 +97,30 @@ func TestRecordUsage(t *testing.T) {
 	rec("app/web", "c1", 50, 20)    // restarted: counters reset, count in full
 	rec("app/web", "c2", 10, 5)     // re-created: new ID, count in full
 	rec("app/db", "d1", 7, 7)       // baseline only
+	// The same key on another host is another container.
+	nas, err := s.AddHost(ctx, "nas", "agent", "docker", "test", t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rx := range []int64{100, 130} {
+		if err := s.RecordUsage(ctx, id, nas, "app/web", "n1", rx, 0, t0); err != nil {
+			t.Fatal(err)
+		}
+	}
 	u, err := s.OutageUsage(ctx, id)
-	if err != nil || len(u) != 2 || u[0] != (Usage{"app/web", 560, 225}) || u[1] != (Usage{"app/db", 0, 0}) {
+	if err != nil || len(u) != 3 || u[0] != (Usage{LocalHost, "local", "app/web", 560, 225}) ||
+		u[1] != (Usage{nas, "nas", "app/web", 30, 0}) || u[2] != (Usage{LocalHost, "local", "app/db", 0, 0}) {
 		t.Fatalf("usage = %+v, %v", u, err)
 	}
 	o, _, _ := s.OutageByID(ctx, id)
-	if !o.Measured || o.RX != 560 || o.TX != 225 {
+	if !o.Measured || o.RX != 590 || o.TX != 225 {
 		t.Errorf("outage totals = %+v", o)
 	}
 	saveState(t, s, wan.Primary, t0.Add(time.Hour), 0)
 	if u, _ := s.UsageSince(ctx, t0.Add(2*time.Hour)); len(u) != 0 {
 		t.Errorf("usage after the outage = %+v", u)
 	}
-	if u, _ := s.UsageSince(ctx, t0); len(u) != 2 || u[0].RX != 560 {
+	if u, _ := s.UsageSince(ctx, t0); len(u) != 3 || u[0].RX != 560 || u[1].Host != "nas" {
 		t.Errorf("usage since t0 = %+v", u)
 	}
 }

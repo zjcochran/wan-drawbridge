@@ -81,17 +81,21 @@
       <p>{{.Stopped}} stopped since <time title="{{datetime .Run.StartedAt}}">{{ago .Run.StartedAt}}</time>{{if eq .Run.Trigger "manual"}} (manual failover){{else if eq .Run.Trigger "drill"}} (failover test){{end}}.</p>
       <ul class="mini-list">
       {{range .Actions}}
+        {{$on := ""}}{{if $.MultiHost}}{{$on = printf " on %s" .Host}}{{end}}
         <li>
-          {{if .Error}}<span class="dot stopped"></span>{{.Name}} <span class="bad-text">{{.Error}}</span>
-          {{else if .Started}}<span class="dot running"></span>{{.Name}} <span class="sub">started again</span>
-          {{else if .Stopped}}<span class="dot stopped"></span>{{.Name}} <span class="sub">stopped</span>
-          {{else if not .WasRunning}}<span class="dot gone"></span>{{.Name}} <span class="sub">was already stopped; left alone</span>
-          {{else}}<span class="dot unknown"></span>{{.Name}} <span class="sub">waiting</span>{{end}}
+          {{if .Error}}<span class="dot stopped"></span>{{.Name}}{{$on}} <span class="bad-text">{{.Error}}</span>
+          {{else if .Started}}<span class="dot running"></span>{{.Name}}{{$on}} <span class="sub">started again</span>
+          {{else if .Stopped}}<span class="dot stopped"></span>{{.Name}}{{$on}} <span class="sub">stopped</span>
+          {{else if not .WasRunning}}<span class="dot gone"></span>{{.Name}}{{$on}} <span class="sub">was already stopped; left alone</span>
+          {{else}}<span class="dot unknown"></span>{{.Name}}{{$on}} <span class="sub">waiting</span>{{end}}
         </li>
       {{end}}
       </ul>
-    {{else}}
+    {{else if not .Owed}}
       <p class="muted">Nothing. Every container is as you left it.</p>
+    {{end}}
+    {{range $host, $n := .Owed}}
+      <p class="warn-text">{{$n}} {{if eq $n 1}}container{{else}}containers{{end}} on {{$host}} will be started again once Drawbridge can reach it.</p>
     {{end}}
   </div>
 </section>

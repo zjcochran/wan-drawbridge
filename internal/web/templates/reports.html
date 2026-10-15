@@ -38,9 +38,9 @@
   {{if $d.Top}}
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Container</th><th>Received</th><th>Sent</th><th>Total</th></tr></thead>
+    <thead><tr><th>Container</th>{{if $d.MultiHost}}<th>Host</th>{{end}}<th>Received</th><th>Sent</th><th>Total</th></tr></thead>
     <tbody>
-    {{range $d.Top}}<tr><td>{{.Container}}</td><td>{{bytes .RX}}</td><td>{{bytes .TX}}</td><td><strong>{{bytes (add64 .RX .TX)}}</strong></td></tr>{{end}}
+    {{range $d.Top}}<tr><td>{{.Container}}</td>{{if $d.MultiHost}}<td>{{.Host}}</td>{{end}}<td>{{bytes .RX}}</td><td>{{bytes .TX}}</td><td><strong>{{bytes (add64 .RX .TX)}}</strong></td></tr>{{end}}
     </tbody>
   </table>
   </div>

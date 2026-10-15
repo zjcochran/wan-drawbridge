@@ -31,8 +31,8 @@ func TestReportsPage(t *testing.T) {
 	start := time.Now().Add(-3 * time.Hour)
 	save(wan.Failover, start)
 	id, _ := e.st.OpenOutage(ctx)
-	e.st.RecordUsage(ctx, id, "media/downloader", "c1", 0, 0, start)
-	e.st.RecordUsage(ctx, id, "media/downloader", "c1", 2_500_000_000, 500_000_000, start)
+	e.st.RecordUsage(ctx, id, store.LocalHost, "media/downloader", "c1", 0, 0, start)
+	e.st.RecordUsage(ctx, id, store.LocalHost, "media/downloader", "c1", 2_500_000_000, 500_000_000, start)
 	save(wan.Primary, start.Add(90*time.Minute))
 	save(wan.Failover, time.Now().Add(-time.Minute)) // ongoing
 

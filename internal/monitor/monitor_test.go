@@ -24,13 +24,20 @@ import (
 )
 
 type countingActor struct {
-	mu                    sync.Mutex
-	stops, starts, applys int
+	mu                             sync.Mutex
+	stops, starts, applys, retries int
 }
 
 func (a *countingActor) Stop(context.Context, string, int) error { a.inc(&a.stops); return nil }
 func (a *countingActor) Start(context.Context) error             { a.inc(&a.starts); return nil }
 func (a *countingActor) Apply(context.Context) error             { a.inc(&a.applys); return nil }
+func (a *countingActor) Retry(context.Context) error             { a.inc(&a.retries); return nil }
+
+func (a *countingActor) retried() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.retries
+}
 
 func (a *countingActor) inc(n *int) {
 	a.mu.Lock()
@@ -308,6 +315,32 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
+}
+
+// The loop lets the actor catch up with unreachable hosts, but not while
+// automation is paused.
+func TestRetryLoop(t *testing.T) {
+	ctx := context.Background()
+	actor := &countingActor{}
+	m := newMonitor(t, newFakeWAN(t), actor)
+	m.retryEvery = 5 * time.Millisecond
+	if err := m.store.SetSetting(ctx, store.SettingSetupComplete, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.store.SetSetting(ctx, store.SettingPaused, true); err != nil {
+		t.Fatal(err)
+	}
+	stop := runMonitor(m)
+	waitFor(t, "paused", func() bool { return m.Status().Paused })
+	time.Sleep(30 * time.Millisecond)
+	if n := actor.retried(); n != 0 {
+		t.Errorf("retried %d times while paused", n)
+	}
+	if err := m.SetPaused(ctx, false, "test"); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "a retry", func() bool { return actor.retried() > 0 })
+	stop()
 }
 
 func TestManualFailoverRestoreAndResume(t *testing.T) {

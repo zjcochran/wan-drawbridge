@@ -27,6 +27,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
 	"github.com/zjcochran/wan-drawbridge/internal/executor"
+	"github.com/zjcochran/wan-drawbridge/internal/hosts"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
@@ -191,11 +192,11 @@ func start(t *testing.T, dbDir string, d *fakeDocker, w *fakeWAN) *system {
 	cfg.IPProviders = []string{w.srv.URL + "/ip", w.srv.URL + "/ip?second"}
 
 	hub := web.NewHub()
-	ex := executor.New(dc, st, log, "")
+	ex := executor.New(hosts.NewRegistry(hosts.Host{ID: store.LocalHost, Name: "local", Runtime: hosts.Local{Docker: dc}}), st, log)
 	ex.PollEvery = 10 * time.Millisecond
 	ex.OnChange = func() { hub.Publish(web.TopicInventory) }
 	mon := monitor.New(cfg, st, res, ex, log, func() { hub.Publish(web.TopicState) })
-	ui, err := web.New(web.Server{Store: st, Mon: mon, Docker: dc, Sync: ex, Hub: hub, Log: log,
+	ui, err := web.New(web.Server{Store: st, Mon: mon, Docker: dc, Hosts: ex.Hosts, Sync: ex, Hub: hub, Log: log,
 		Secrets: box, MetricsToken: "e2e", DBPath: filepath.Join(dbDir, "drawbridge.db")})
 	if err != nil {
 		t.Fatal(err)
@@ -285,7 +286,7 @@ func TestFailoverFailbackAndCrashRecovery(t *testing.T) {
 	}
 	b.get("/settings")
 	waitFor(t, "inventory", func() bool { body := b.get("/stacks"); return strings.Contains(body, "media") })
-	if code := b.post("/stacks/media/policy", url.Values{"disable": {"on"}}); code != 200 {
+	if code := b.post("/stacks/1/media/policy", url.Values{"disable": {"on"}}); code != 200 {
 		t.Fatalf("stack policy: %d", code)
 	}
 	if code := b.post("/setup/finish", url.Values{}); code != http.StatusNoContent {

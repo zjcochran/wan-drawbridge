@@ -3,6 +3,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -38,7 +39,17 @@ type apiStatus struct {
 	TestUntil   *time.Time `json:"failover_test_until"`
 	Busy        string     `json:"busy"`    // "stopping", "starting", "applying" or ""
 	Stopped     []string   `json:"stopped"` // containers Drawbridge has stopped
+	Hosts       []apiHost  `json:"hosts"`
 	Version     string     `json:"version"`
+}
+
+type apiHost struct {
+	Name       string     `json:"name"`
+	Platform   string     `json:"platform"`
+	Status     string     `json:"status"`
+	LastSeen   *time.Time `json:"last_seen"`
+	Containers int        `json:"containers"`
+	Stopped    int        `json:"stopped"` // containers Drawbridge has stopped on it
 }
 
 func utcOrNil(t time.Time) *time.Time {
@@ -82,7 +93,7 @@ func (s *Server) apiStatus(w http.ResponseWriter, r *http.Request) {
 		State: string(st.State), StateLabel: stateLabel(st.State), Since: st.Since.UTC(),
 		PublicIP: st.LastIP, LastCheck: utcOrNil(st.LastCheck), Conclusive: st.Conclusive,
 		Paused: st.Paused, PausedUntil: utcOrNil(st.PausedTill), TestUntil: utcOrNil(st.DrillTill),
-		Busy: st.Busy, Stopped: []string{}, Version: s.Version,
+		Busy: st.Busy, Stopped: []string{}, Hosts: []apiHost{}, Version: s.Version,
 	}
 	if st.State == "failover_pending" || st.State == "failback_pending" {
 		out.Due = utcOrNil(st.Due)
@@ -111,6 +122,10 @@ func (s *Server) apiStatus(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if out.Hosts, err = s.apiHosts(ctx, run); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	enc := json.NewEncoder(w)
@@ -118,6 +133,41 @@ func (s *Server) apiStatus(w http.ResponseWriter, r *http.Request) {
 	if err := enc.Encode(out); err != nil {
 		s.Log.Warn("api status write failed", "err", err)
 	}
+}
+
+// apiHosts summarises every host, with the containers the open run stopped on
+// it.
+func (s *Server) apiHosts(ctx context.Context, run *store.Run) ([]apiHost, error) {
+	hs, err := s.Store.Hosts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cs, err := s.Store.Containers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var actions []store.RunAction
+	if run != nil {
+		if actions, err = s.Store.RunActions(ctx, run.ID); err != nil {
+			return nil, err
+		}
+	}
+	out := make([]apiHost, 0, len(hs))
+	for _, h := range hs {
+		a := apiHost{Name: h.Name, Platform: h.Platform, Status: h.Status, LastSeen: utcOrNil(h.LastSeen)}
+		for _, c := range cs {
+			if c.HostID == h.ID {
+				a.Containers++
+			}
+		}
+		for _, ac := range actions {
+			if ac.HostID == h.ID && ac.Stopped && !ac.Started {
+				a.Stopped++
+			}
+		}
+		out = append(out, a)
+	}
+	return out, nil
 }
 
 // ---- tokens, in Settings ----

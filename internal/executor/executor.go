@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // Package executor stops and starts containers for failover runs and keeps the
-// container inventory in sync with Docker.
+// container inventory in sync with every host.
 package executor
 
 import (
@@ -14,77 +14,79 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zjcochran/wan-drawbridge/internal/docker"
+	"github.com/zjcochran/wan-drawbridge/internal/hosts"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
-// Docker is the part of the Docker client the executor uses.
-type Docker interface {
-	List(ctx context.Context) ([]docker.Container, error)
-	Inspect(ctx context.Context, id string) (running bool, health docker.Health, err error)
-	Stop(ctx context.Context, id string, timeout time.Duration) error
-	Start(ctx context.Context, id string) error
-}
-
 // Executor stops and starts containers for runs and keeps the container
-// inventory in sync with Docker.
+// inventory in sync with the hosts.
 type Executor struct {
-	Docker      Docker
+	Hosts       *hosts.Registry
 	Store       *store.Store
 	Log         *slog.Logger
 	Now         func() time.Time
-	SelfID      string        // this container's ID or ID prefix (its hostname)
 	StopTimeout time.Duration // per container, before Docker kills it
-	Parallel    int           // containers stopped or started at once
+	Parallel    int           // containers stopped or started at once, per host
 	HealthWait  time.Duration // max wait for a healthcheck before starting dependents
 	PollEvery   time.Duration
-	OnChange    func() // called after the inventory or a run changes; may be nil
+	ListTimeout time.Duration // per host, for listing its containers
+	OnChange    func()        // called after the inventory or a run changes; may be nil
 
 	mu        sync.Mutex
-	lastPrint string // inventory fingerprint, to notify only on real changes
+	lastPrint string         // inventory fingerprint, to notify only on real changes
+	missed    map[int64]bool // hosts that could not be reached by the last stop pass
 }
 
 // New returns an Executor with the default timings: a 30 s stop timeout, 4
-// containers at a time, and health checks polled every 2 s for up to 120 s.
-func New(d Docker, st *store.Store, log *slog.Logger, selfID string) *Executor {
+// containers at a time per host, health checks polled every 2 s for up to
+// 120 s, and 10 s to list a host.
+func New(reg *hosts.Registry, st *store.Store, log *slog.Logger) *Executor {
 	return &Executor{
-		Docker: d, Store: st, Log: log, Now: time.Now, SelfID: selfID,
+		Hosts: reg, Store: st, Log: log, Now: time.Now,
 		StopTimeout: 30 * time.Second, Parallel: 4, HealthWait: 120 * time.Second, PollEvery: 2 * time.Second,
+		ListTimeout: 10 * time.Second,
 	}
 }
 
-// isSelf reports whether c is Drawbridge's own container, which is never touched.
-func (e *Executor) isSelf(c docker.Container) bool {
-	if c.Labels[docker.LabelSelf] == "true" {
-		return true
-	}
-	return len(e.SelfID) >= 12 && strings.HasPrefix(c.ID, e.SelfID)
+// hostKey identifies a container across hosts.
+type hostKey struct {
+	host int64
+	key  string
 }
 
-// list returns Docker's containers without Drawbridge itself, after recording
-// them in the inventory.
-func (e *Executor) list(ctx context.Context) ([]docker.Container, error) {
-	all, err := e.Docker.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var cs []docker.Container
-	var items []store.InventoryItem
+// list lists every host and records the inventory of those that answered.
+// down holds the hosts that could not be reached, whose inventory rows are
+// kept as they were.
+func (e *Executor) list(ctx context.Context) (ws []hosts.Workload, down map[int64]error, err error) {
+	down = map[int64]error{}
 	var fingerprint strings.Builder
-	for _, c := range all {
-		if e.isSelf(c) {
+	now := e.Now()
+	for _, l := range e.Hosts.List(ctx, e.ListTimeout) {
+		if l.Err != nil {
+			down[l.Host.ID] = l.Err
+			e.Log.Warn("cannot reach host", "host", l.Host.Name, "err", l.Err)
+			if err := e.Store.SetHostReached(ctx, l.Host.ID, l.Err.Error(), now); err != nil {
+				return nil, nil, err
+			}
+			fmt.Fprintf(&fingerprint, "%d down;", l.Host.ID)
 			continue
 		}
-		cs = append(cs, c)
-		items = append(items, store.InventoryItem{Key: c.Key(), Project: c.Project, Service: c.Service, Name: c.Name, Label: c.OnFailover()})
-		fmt.Fprintf(&fingerprint, "%s=%s:%v;", c.ID, c.Name, c.Running)
-	}
-	added, err := e.Store.SyncInventory(ctx, items, e.Now())
-	if err != nil {
-		return nil, err
-	}
-	if len(added) > 0 {
-		e.Log.Info("new containers found", "keys", added)
+		if err := e.Store.SetHostReached(ctx, l.Host.ID, "", now); err != nil {
+			return nil, nil, err
+		}
+		items := make([]store.InventoryItem, 0, len(l.Workloads))
+		for _, w := range l.Workloads {
+			items = append(items, store.InventoryItem{Key: w.Key(), Project: w.Group, Service: w.Member, Name: w.Name, Label: w.Label})
+			fmt.Fprintf(&fingerprint, "%d/%s=%s:%v;", w.Host, w.ID, w.Name, w.Running)
+		}
+		added, err := e.Store.SyncInventory(ctx, l.Host.ID, items, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(added) > 0 {
+			e.Log.Info("new containers found", "host", l.Host.Name, "keys", added)
+		}
+		ws = append(ws, l.Workloads...)
 	}
 	e.mu.Lock()
 	changed := fingerprint.String() != e.lastPrint
@@ -93,34 +95,65 @@ func (e *Executor) list(ctx context.Context) ([]docker.Container, error) {
 	if changed {
 		e.changed()
 	}
-	return cs, nil
+	return ws, down, nil
 }
 
-// Sync refreshes the inventory from Docker.
+// unreachable describes the hosts that could not be reached.
+func (e *Executor) unreachable(down map[int64]error, then string) error {
+	var errs []error
+	for _, h := range e.Hosts.All() {
+		if err, ok := down[h.ID]; ok {
+			errs = append(errs, fmt.Errorf("cannot reach host %s (%w); %s", h.Name, err, then))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// Sync refreshes the inventory from every host. It fails if a host could not
+// be reached.
 func (e *Executor) Sync(ctx context.Context) error {
-	_, err := e.list(ctx)
-	return err
-}
-
-// Stop stops every container whose effective policy is disable. It is safe to
-// call again for the same failover: the open run is reused, and containers
-// already recorded keep their original was_running. trigger is "auto" or
-// "manual".
-func (e *Executor) Stop(ctx context.Context, trigger string, toASN int) error {
-	defer e.changed()
-	cs, err := e.list(ctx)
+	_, down, err := e.list(ctx)
 	if err != nil {
 		return err
 	}
+	return e.unreachable(down, "its containers are kept as they were")
+}
+
+// effective maps every known container to its effective policy.
+func (e *Executor) effective(ctx context.Context) (map[hostKey]string, error) {
 	rows, err := e.Store.Containers(ctx)
 	if err != nil {
+		return nil, err
+	}
+	out := make(map[hostKey]string, len(rows))
+	for _, r := range rows {
+		out[hostKey{r.HostID, r.Key}] = r.Effective
+	}
+	return out, nil
+}
+
+// job is one container to stop or start in a run.
+type job struct {
+	w        hosts.Workload
+	recorded string // the run_actions container ID
+	restore  []byte
+}
+
+// Stop stops every container whose effective policy is disable, on every host
+// at once. It is safe to call again for the same failover: the open run is
+// reused, and containers already recorded keep their original was_running.
+// A host that cannot be reached is stopped by Retry once it is back. trigger
+// is "auto", "manual" or "drill".
+func (e *Executor) Stop(ctx context.Context, trigger string, toASN int) error {
+	defer e.changed()
+	ws, down, err := e.list(ctx)
+	if err != nil {
 		return err
 	}
-	effective := map[string]string{}
-	for _, r := range rows {
-		effective[r.Key] = r.Effective
+	effective, err := e.effective(ctx)
+	if err != nil {
+		return err
 	}
-
 	run, err := e.Store.OpenRun(ctx)
 	if err != nil {
 		return err
@@ -129,40 +162,66 @@ func (e *Executor) Stop(ctx context.Context, trigger string, toASN int) error {
 		if run, err = e.Store.CreateRun(ctx, trigger, toASN, e.Now()); err != nil {
 			return err
 		}
+		if err := e.Store.TakePendingStarts(ctx, run.ID); err != nil {
+			return err
+		}
 	}
 
-	var targets []docker.Container
-	for _, c := range cs {
-		if effective[c.Key()] != store.Disable {
+	var targets []job
+	for _, w := range ws {
+		if effective[hostKey{w.Host, w.Key()}] != store.Disable {
 			continue
 		}
 		if err := e.Store.AddRunAction(ctx, run.ID, store.RunAction{
-			ContainerID: c.ID, Key: c.Key(), Name: c.Name, WasRunning: c.Running,
+			HostID: w.Host, ContainerID: w.ID, Key: w.Key(), Name: w.Name, WasRunning: w.Running,
 		}); err != nil {
 			return err
 		}
-		if c.Running {
-			targets = append(targets, c)
+		if w.Running {
+			targets = append(targets, job{w: w, recorded: w.ID})
 		}
 	}
-	e.Log.Info("failover: stopping containers", "run", run.ID, "count", len(targets))
+	e.setMissed(down)
+	e.Log.Info("failover: stopping containers", "run", run.ID, "count", len(targets), "unreachable_hosts", len(down))
 
-	layers := Layers(targets)
-	slices.Reverse(layers) // dependents first
-	var errs []error
-	for _, layer := range layers {
-		errs = append(errs, e.each(ctx, layer, func(i int) error {
-			c := targets[i]
-			err := e.Docker.Stop(ctx, c.ID, e.StopTimeout)
-			e.record(ctx, e.Store.MarkStopped, run.ID, c.ID, c.Name, err)
-			return err
-		})...)
-	}
+	errs := e.perHost(targets, func(rt hosts.Runtime, js []job) []error {
+		ls := layers(js)
+		slices.Reverse(ls) // dependents first
+		var errs []error
+		for _, layer := range ls {
+			errs = append(errs, e.each(layer, func(i int) error {
+				j := js[i]
+				restore, err := rt.Stop(ctx, j.w, e.StopTimeout)
+				e.record(j.w, err)
+				e.report(e.Store.MarkStopped(ctx, run.ID, j.w.Host, j.recorded, restore, errMsg(err), e.Now()))
+				return err
+			})...)
+		}
+		return errs
+	})
+	errs = append(errs, e.unreachable(down, "its containers are stopped when it is back"))
 	return errors.Join(errs...)
 }
 
+func (e *Executor) setMissed(down map[int64]error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.missed = map[int64]bool{}
+	for id := range down {
+		e.missed[id] = true
+	}
+}
+
+func (e *Executor) anyMissed() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.missed) > 0
+}
+
 // Start starts the containers the open run stopped, if they were running
-// before, then closes the run. Without an open run it does nothing.
+// before, then closes the run. Containers on a host that cannot be reached
+// stay pending and are started by Retry once it is back. Without an open run
+// it does nothing.
 func (e *Executor) Start(ctx context.Context) error {
 	defer e.changed()
 	run, err := e.Store.OpenRun(ctx)
@@ -173,60 +232,19 @@ func (e *Executor) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	cs, err := e.list(ctx)
+	ws, down, err := e.list(ctx)
 	if err != nil {
 		return err
 	}
-	byID := map[string]docker.Container{}
-	byKey := map[string][]docker.Container{}
-	for _, c := range cs {
-		byID[c.ID] = c
-		byKey[c.Key()] = append(byKey[c.Key()], c)
-	}
-
-	var targets []docker.Container
-	var recorded []string // the run_actions container ID for each target
-	var errs []error
-	seen := map[string]bool{}
+	e.setMissed(nil)
+	var owed []store.RunAction
 	for _, a := range actions {
-		if !a.WasRunning || a.Started {
-			continue
-		}
-		// Prefer the exact container; fall back to its key if it was re-created.
-		found := []docker.Container{}
-		if c, ok := byID[a.ContainerID]; ok {
-			found = append(found, c)
-		} else {
-			found = byKey[a.Key]
-		}
-		if len(found) == 0 {
-			err := fmt.Errorf("%s no longer exists", a.Name)
-			errs = append(errs, err)
-			e.report(e.Store.MarkStarted(ctx, run.ID, a.ContainerID, err.Error(), e.Now()))
-			continue
-		}
-		for _, c := range found {
-			if !seen[c.ID] {
-				seen[c.ID] = true
-				targets = append(targets, c)
-				recorded = append(recorded, a.ContainerID)
-			}
+		if a.WasRunning && !a.Started {
+			owed = append(owed, a)
 		}
 	}
-	e.Log.Info("failback: starting containers", "run", run.ID, "count", len(targets))
-
-	layers := Layers(targets)
-	for n, layer := range layers {
-		errs = append(errs, e.each(ctx, layer, func(i int) error {
-			c := targets[i]
-			err := e.Docker.Start(ctx, c.ID)
-			e.record(ctx, e.Store.MarkStarted, run.ID, recorded[i], c.Name, err)
-			return err
-		})...)
-		if n < len(layers)-1 {
-			e.waitHealthy(ctx, targets, layer)
-		}
-	}
+	e.Log.Info("failback: starting containers", "run", run.ID, "count", len(owed))
+	errs := e.startOwed(ctx, run.ID, owed, ws, down)
 
 	status := "completed"
 	if len(errs) > 0 {
@@ -236,35 +254,174 @@ func (e *Executor) Start(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-func (e *Executor) record(ctx context.Context, mark func(context.Context, int64, string, string, time.Time) error,
-	runID int64, containerID, name string, err error) {
-	msg := ""
-	if err != nil {
-		msg = err.Error()
-		e.Log.Error("container action failed", "container", name, "err", err)
-	} else {
-		e.Log.Info("container action done", "container", name)
+// startOwed starts the given actions of a run, finding each container by its
+// ID or, if it was re-created, by its key. Actions on a host that cannot be
+// reached are marked pending.
+func (e *Executor) startOwed(ctx context.Context, runID int64, owed []store.RunAction, ws []hosts.Workload, down map[int64]error) []error {
+	byID := map[hostKey]hosts.Workload{}
+	byKey := map[hostKey][]hosts.Workload{}
+	for _, w := range ws {
+		byID[hostKey{w.Host, w.ID}] = w
+		byKey[hostKey{w.Host, w.Key()}] = append(byKey[hostKey{w.Host, w.Key()}], w)
 	}
-	e.report(mark(ctx, runID, containerID, msg, e.Now()))
+	var targets []job
+	var errs []error
+	pending := map[int64]bool{}
+	seen := map[hostKey]bool{}
+	for _, a := range owed {
+		if _, ok := e.Hosts.Get(a.HostID); !ok || down[a.HostID] != nil {
+			pending[a.HostID] = true
+			e.report(e.Store.MarkPending(ctx, runID, a.HostID, a.ContainerID, "waiting for the host to be reachable"))
+			continue
+		}
+		found := []hosts.Workload{}
+		if w, ok := byID[hostKey{a.HostID, a.ContainerID}]; ok {
+			found = append(found, w)
+		} else {
+			found = byKey[hostKey{a.HostID, a.Key}]
+		}
+		if len(found) == 0 {
+			err := fmt.Errorf("%s no longer exists", a.Name)
+			errs = append(errs, err)
+			e.report(e.Store.MarkStarted(ctx, runID, a.HostID, a.ContainerID, err.Error(), e.Now()))
+			continue
+		}
+		for _, w := range found {
+			if !seen[hostKey{w.Host, w.ID}] {
+				seen[hostKey{w.Host, w.ID}] = true
+				targets = append(targets, job{w: w, recorded: a.ContainerID, restore: a.Restore})
+			}
+		}
+	}
+
+	errs = append(errs, e.perHost(targets, func(rt hosts.Runtime, js []job) []error {
+		var errs []error
+		ls := layers(js)
+		for n, layer := range ls {
+			errs = append(errs, e.each(layer, func(i int) error {
+				j := js[i]
+				err := rt.Start(ctx, j.w, j.restore)
+				e.record(j.w, err)
+				e.report(e.Store.MarkStarted(ctx, runID, j.w.Host, j.recorded, errMsg(err), e.Now()))
+				return err
+			})...)
+			if n < len(ls)-1 {
+				e.waitHealthy(ctx, rt, js, layer)
+			}
+		}
+		return errs
+	})...)
+	for _, h := range e.Hosts.All() {
+		if pending[h.ID] {
+			errs = append(errs, fmt.Errorf("cannot reach host %s; its containers are started when it is back", h.Name))
+			delete(pending, h.ID)
+		}
+	}
+	for id := range pending {
+		errs = append(errs, fmt.Errorf("host %d is not connected; its containers are started when it is back", id))
+	}
+	return errs
+}
+
+// Retry catches up with hosts that could not be reached: during a failover it
+// stops their containers once they answer again, and afterwards it starts
+// the containers still owed by an ended run. It does nothing when nothing is
+// owed.
+func (e *Executor) Retry(ctx context.Context) error {
+	run, err := e.Store.OpenRun(ctx)
+	if err != nil {
+		return err
+	}
+	if run != nil {
+		if !e.anyMissed() {
+			return nil
+		}
+		return e.Stop(ctx, run.Trigger, run.ToASN)
+	}
+	pend, err := e.Store.PendingStarts(ctx)
+	if err != nil || len(pend) == 0 {
+		return err
+	}
+	defer e.changed()
+	ws, down, err := e.list(ctx)
+	if err != nil {
+		return err
+	}
+	byRun := map[int64][]store.RunAction{}
+	var runs []int64
+	for _, p := range pend {
+		if down[p.HostID] != nil {
+			continue // still unreachable: try again next time
+		}
+		if _, ok := byRun[p.RunID]; !ok {
+			runs = append(runs, p.RunID)
+		}
+		byRun[p.RunID] = append(byRun[p.RunID], p.RunAction)
+	}
+	var errs []error
+	for _, id := range runs {
+		e.Log.Info("host back: starting the containers still owed", "run", id, "count", len(byRun[id]))
+		errs = append(errs, e.startOwed(ctx, id, byRun[id], ws, down)...)
+	}
+	return errors.Join(errs...)
+}
+
+// perHost runs fn for each host's jobs, every host at once.
+func (e *Executor) perHost(js []job, fn func(rt hosts.Runtime, js []job) []error) []error {
+	byHost := map[int64][]job{}
+	for _, j := range js {
+		byHost[j.w.Host] = append(byHost[j.w.Host], j)
+	}
+	var mu sync.Mutex
+	var errs []error
+	var wg sync.WaitGroup
+	for id, hjs := range byHost {
+		h, ok := e.Hosts.Get(id)
+		if !ok {
+			continue
+		}
+		wg.Go(func() {
+			herrs := fn(h.Runtime, hjs)
+			mu.Lock()
+			errs = append(errs, herrs...)
+			mu.Unlock()
+		})
+	}
+	wg.Wait()
+	return errs
+}
+
+func errMsg(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func (e *Executor) record(w hosts.Workload, err error) {
+	if err != nil {
+		e.Log.Error("container action failed", "host", w.Host, "container", w.Name, "err", err)
+		return
+	}
+	e.Log.Info("container action done", "host", w.Host, "container", w.Name)
 }
 
 // each runs fn for every index, at most e.Parallel at a time.
-func (e *Executor) each(_ context.Context, idx []int, fn func(int) error) []error {
+func (e *Executor) each(idx []int, fn func(int) error) []error {
 	sem := make(chan struct{}, max(1, e.Parallel))
 	var mu sync.Mutex
 	var errs []error
 	var wg sync.WaitGroup
 	for _, i := range idx {
-		wg.Add(1)
 		sem <- struct{}{}
-		go func() {
-			defer func() { <-sem; wg.Done() }()
+		wg.Go(func() {
+			defer func() { <-sem }()
 			if err := fn(i); err != nil {
 				mu.Lock()
 				errs = append(errs, err)
 				mu.Unlock()
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	return errs
@@ -272,17 +429,17 @@ func (e *Executor) each(_ context.Context, idx []int, fn func(int) error) []erro
 
 // waitHealthy waits until every container with a healthcheck reports healthy,
 // up to HealthWait. Containers without a healthcheck count as ready.
-func (e *Executor) waitHealthy(ctx context.Context, cs []docker.Container, idx []int) {
+func (e *Executor) waitHealthy(ctx context.Context, rt hosts.Runtime, js []job, idx []int) {
 	deadline := time.Now().Add(e.HealthWait)
 	for _, i := range idx {
-		c := cs[i]
+		w := js[i].w
 		for {
-			running, health, err := e.Docker.Inspect(ctx, c.ID)
+			running, health, err := rt.Inspect(ctx, w)
 			if err != nil || !running || health == "" || health == "healthy" {
 				break
 			}
 			if time.Now().After(deadline) {
-				e.Log.Warn("healthcheck wait timed out; starting dependents anyway", "container", c.Name, "health", health)
+				e.Log.Warn("healthcheck wait timed out; starting dependents anyway", "container", w.Name, "health", health)
 				return
 			}
 			select {
@@ -311,20 +468,22 @@ func (e *Executor) Apply(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rows, err := e.Store.Containers(ctx)
+	effective, err := e.effective(ctx)
 	if err != nil {
 		return err
 	}
-	effective := map[string]string{}
-	for _, r := range rows {
-		effective[r.Key] = r.Effective
-	}
 	for _, a := range actions {
-		if !a.WasRunning || !a.Stopped || a.Started || effective[a.Key] == store.Disable {
+		if !a.WasRunning || !a.Stopped || a.Started || effective[hostKey{a.HostID, a.Key}] == store.Disable {
 			continue
 		}
-		err := e.Docker.Start(ctx, a.ContainerID)
-		e.record(ctx, e.Store.MarkStarted, run.ID, a.ContainerID, a.Name, err)
+		h, ok := e.Hosts.Get(a.HostID)
+		if !ok {
+			continue // started at the failback, or once the host is back
+		}
+		w := hosts.Workload{Host: a.HostID, ID: a.ContainerID, Name: a.Name}
+		err := h.Runtime.Start(ctx, w, a.Restore)
+		e.record(w, err)
+		e.report(e.Store.MarkStarted(ctx, run.ID, a.HostID, a.ContainerID, errMsg(err), e.Now()))
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
@@ -342,22 +501,24 @@ func (e *Executor) report(err error) {
 	}
 }
 
-// Layers groups container indices by Compose dependency depth: layer 0 depends
-// on nothing in the set, layer 1 only on layer 0, and so on. Dependencies
-// outside the set, and cycles, are ignored.
-func Layers(cs []docker.Container) [][]int {
+// layers groups job indices by Compose dependency depth: layer 0 depends on
+// nothing in the set, layer 1 only on layer 0, and so on. Dependencies only
+// link containers of the same stack on the same host; those outside the set,
+// and cycles, are ignored.
+func layers(js []job) [][]int {
 	type node struct {
-		project, service string
+		host          int64
+		group, member string
 	}
-	bySvc := map[node][]int{}
-	for i, c := range cs {
-		if c.Service != "" {
-			n := node{c.Project, c.Service}
-			bySvc[n] = append(bySvc[n], i)
+	byMember := map[node][]int{}
+	for i, j := range js {
+		if j.w.Member != "" {
+			n := node{j.w.Host, j.w.Group, j.w.Member}
+			byMember[n] = append(byMember[n], i)
 		}
 	}
-	depth := make([]int, len(cs))
-	state := make([]int, len(cs)) // 0 new, 1 visiting, 2 done
+	depth := make([]int, len(js))
+	state := make([]int, len(js)) // 0 new, 1 visiting, 2 done
 	var visit func(i int) int
 	visit = func(i int) int {
 		switch state[i] {
@@ -368,9 +529,10 @@ func Layers(cs []docker.Container) [][]int {
 		}
 		state[i] = 1
 		d := 0
-		for _, svc := range cs[i].DependsOn() {
-			for _, j := range bySvc[node{cs[i].Project, svc}] {
-				if dd := visit(j); dd >= 0 {
+		w := js[i].w
+		for _, m := range w.DependsOn {
+			for _, k := range byMember[node{w.Host, w.Group, m}] {
+				if dd := visit(k); dd >= 0 {
 					d = max(d, dd+1)
 				}
 			}
@@ -379,7 +541,7 @@ func Layers(cs []docker.Container) [][]int {
 		return d
 	}
 	var layers [][]int
-	for i := range cs {
+	for i := range js {
 		d := visit(i)
 		for len(layers) <= d {
 			layers = append(layers, nil)

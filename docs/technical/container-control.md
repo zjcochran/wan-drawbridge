@@ -1,7 +1,29 @@
 # Container control
 
-Code: `internal/executor`, `internal/docker`, `internal/store/policy.go`,
-`internal/store/runs.go`.
+Code: `internal/executor`, `internal/hosts`, `internal/docker`,
+`internal/store/policy.go`, `internal/store/runs.go`, `internal/store/hosts.go`.
+
+## Hosts
+
+A **host** is one place Drawbridge controls. Host 1, `local`, is the Docker
+socket mounted into Drawbridge's container; it always exists. Each host has a
+**runtime** (`hosts.Runtime`) that lists, inspects, stops, starts and reads
+the network counters of its containers. The executor holds the hosts in a
+`hosts.Registry` and works on all of them at once:
+
+- **Listing** asks every host in parallel, with 10 s per host
+  (`ListTimeout`). A host that answers is marked `online` and its inventory is
+  synced. A host that does not is marked `offline` with the error, and **its
+  containers are kept as they were**: an unreachable host never makes its
+  containers look deleted.
+- **Keys are per host.** Containers, stacks, run actions and usage are keyed
+  by `(host_id, key)`, so the same Compose project on two hosts is two stacks
+  with their own switches.
+- **Stops and starts run on every host in parallel**, each host in its own
+  dependency layers. Dependencies never link containers on different hosts.
+
+The local runtime (`hosts.Local`) wraps the Docker client below and excludes
+Drawbridge's own container.
 
 ## Docker client
 
@@ -27,10 +49,11 @@ such container: …`.
 A container's **key** is `project/service` when both Compose labels
 (`com.docker.compose.project`, `com.docker.compose.service`) are present,
 otherwise its name (without the leading `/`). Replicas of a scaled service
-share a key.
+share a key. Keys are unique per host.
 
-`Sync` lists Docker's containers, drops Drawbridge's own (below), and calls
-`store.SyncInventory`, which in one transaction:
+`Sync` lists every host (the local runtime drops Drawbridge's own container,
+below) and, for each host that answered, calls `store.SyncInventory` for that
+host, which in one transaction:
 
 - inserts each new Compose project into `stacks` (switch off);
 - updates `name`, `last_seen` and `label_policy` of known keys, clearing
@@ -38,11 +61,16 @@ share a key.
 - inserts unknown keys with policy `inherit` and their `label_policy`,
   flagging them `needs_review` if they have no label and their stack already
   has any container with a non-`inherit` policy;
-- deletes containers whose `last_seen` is more than `store.GoneAfter`
-  (10 min) old, then stacks with no containers left. Present containers
-  were just stamped, so this removes only ones missing that long; a
-  re-create (remove, then create) keeps its row and setting. The web UI
-  never lists a container that is not in Docker.
+- deletes that host's containers whose `last_seen` is more than
+  `store.GoneAfter` (10 min) old, then its stacks with no containers left.
+  Present containers were just stamped, so this removes only ones missing
+  that long; a re-create (remove, then create) keeps its row and setting. The
+  web UI never lists a container that is not on its host; containers of a
+  host that cannot be reached are listed as "unknown" (with "host offline"
+  when there is more than one host).
+
+`Sync` returns an error naming each host that could not be reached ("its
+containers are kept as they were").
 
 ### Self-exclusion
 
@@ -85,43 +113,72 @@ must restore. At most one run is open (`runs_one_open` partial unique index).
 | Table | Purpose |
 | --- | --- |
 | `runs` | `trigger` (`auto`/`manual`/`drill`), `to_asn`, `started_at`, `ended_at`, `status` (`open`, `completed`, `failed`) |
-| `run_actions` | One row per container in the run: `container_id`, `container_key`, `name`, `was_running`, `stopped_at`, `started_at`, `error` |
+| `run_actions` | One row per container in the run: `host_id`, `container_id`, `container_key`, `name`, `was_running`, `stopped_at`, `started_at`, `error`, `restore` (what starting it again needs; empty for Docker containers), `pending` (a start owed to a host that could not be reached) |
 
 ### Stop
 
 `Executor.Stop(trigger, toASN)`:
 
 1. `Sync`, then load effective policies.
-2. Reuse the open run, or create one.
+2. Reuse the open run, or create one. A new run first takes over any starts
+   still owed by earlier runs (`TakePendingStarts`): they become actions of
+   the new run that were running and are stopped, so they start at its
+   failback, not in the middle of it.
 3. For every container whose effective policy is `disable`, insert a
    `run_action` with `was_running` = its current running state. **If the row
    already exists it is left unchanged** (`ON CONFLICT DO NOTHING`), so a
    repeated stop (recovery, policy change) can never overwrite the original
    `was_running`.
-4. Stop the containers that are running, in **reverse dependency order**
-   (dependents first), up to `Parallel` = 4 at a time within a layer, each with
-   a 30 s stop timeout (Docker sends SIGTERM, then SIGKILL).
+4. Stop the containers that are running, every host at once; on each host in
+   **reverse dependency order** (dependents first), up to `Parallel` = 4 at a
+   time within a layer, each with a 30 s stop timeout (Docker sends SIGTERM,
+   then SIGKILL).
 5. Record each result: success sets `stopped_at`, clears `started_at` and the
-   error; failure records the error.
+   error, and saves `restore`; failure records the error.
 
-The run stays open.
+The run stays open. Hosts that could not be listed are remembered; the error
+names each one ("its containers are stopped when it is back"), and `Retry`
+(below) stops them once they answer.
 
 ### Start
 
 `Executor.Start()` does nothing without an open run. Otherwise:
 
 1. Load the run's actions and `Sync`.
-2. Targets: actions with `was_running` and not yet `started`. Each is matched to
-   a live container by ID; if that ID is gone (re-created), by key, which may
-   match several replicas. No match records "`<name>` no longer exists".
-3. Start in **dependency order** (dependencies first), up to 4 at a time per
-   layer. Between layers, wait for health.
+2. Targets: actions with `was_running` and not yet `started`. An action on a
+   host that could not be listed, or that is not connected, is marked
+   `pending` with "waiting for the host to be reachable". The others are
+   matched to a live container on their host by ID; if that ID is gone
+   (re-created), by key, which may match several replicas. No match records
+   "`<name>` no longer exists".
+3. Start every host at once; on each host in **dependency order**
+   (dependencies first), up to 4 at a time per layer, passing each action's
+   `restore`. Between layers, wait for health.
 4. Record each result: success sets `started_at`; failure records the error.
-5. Close the run: `completed` if no errors, otherwise `failed`.
+   Either way the action is no longer pending.
+5. Close the run: `completed` if no errors, otherwise `failed`. Pending
+   starts count as errors ("cannot reach host `<name>`; its containers are
+   started when it is back"), so the run is `failed`, but they are still
+   done by `Retry`.
 
-A failed run is closed, so it is not retried automatically; the dashboard and
-`drawbridge_run_errors_total` report it. **Restore now** only acts on an open
-run.
+A failed run is closed, so failed starts are not retried automatically; the
+dashboard and `drawbridge_run_errors_total` report it. **Restore now** only
+acts on an open run.
+
+### Retry (hosts that come back)
+
+The monitor calls `Executor.Retry()` once a minute (`monitor.RetryEvery`),
+except while automation is paused. It does nothing unless something is owed:
+
+- **During a run**, if the last stop pass could not reach a host, it runs
+  `Stop` again with the run's trigger, which stops that host's containers once
+  it answers (and anything newly disabled elsewhere).
+- **With no open run**, it starts the pending actions of ended runs whose host
+  answers again, oldest run first, as in Start steps 2 to 4. Hosts still
+  unreachable are left for the next minute.
+
+The dashboard shows, per host, how many containers will be started again once
+Drawbridge can reach it.
 
 ### Health wait
 
@@ -132,12 +189,12 @@ deadline is 120 s for the whole layer; on timeout, log
 
 ### Dependency layers
 
-`Layers(containers)` assigns each container a depth: 0 if it depends on nothing
+`layers(jobs)` assigns each container a depth: 0 if it depends on nothing
 in the set, otherwise one more than the deepest dependency in the set.
 Dependencies come from the `com.docker.compose.depends_on` label
 (`db:service_healthy:false,redis:service_started:true`; only the service names
-are used) and are resolved **within the same project** to every container of
-that service. Dependencies outside the set are ignored; cycles are broken by
+are used) and are resolved **within the same project on the same host** to
+every container of that service. Dependencies outside the set are ignored; cycles are broken by
 ignoring the edge that closes them. Stop uses layers deepest first; start uses
 them shallowest first.
 
@@ -151,6 +208,7 @@ runs `Executor.Apply()`:
    stopped and added to the run.
 2. For every action that was running, is stopped, is not started, and whose
    effective policy is no longer `disable`: start it and set `started_at`.
+   Actions on a host that is not connected are left for the failback.
 
 A container started this way and disabled again later is stopped again, which
 clears its `started_at`, so it is restored at failback.
@@ -188,14 +246,16 @@ during a failover) calls `Start()`, so containers are not left stopped.
 
 `WatchInventory(ctx, docker, 30 s)`:
 
-- syncs immediately, then every 30 s;
-- in parallel, streams Docker events; on `create`, `destroy` or `rename` it
-  schedules a sync after a 2 s settle delay (bursts from `compose up` coalesce);
+- syncs every host immediately, then every 30 s;
+- in parallel, streams the local Docker's events; on `create`, `destroy` or
+  `rename` it schedules a sync after a 2 s settle delay (bursts from
+  `compose up` coalesce);
 - if the event stream ends, logs a warning and reconnects after 5 s.
 
 `OnChange` (which publishes the `inventory` SSE topic) is called after Stop,
-Start and Apply, and after a sync only when the fingerprint
-(`id=name:running` for every container) changed.
+Start, Apply and a Retry that had work, and after a sync only when the
+fingerprint (`host/id=name:running` for every container, and which hosts
+could not be reached) changed.
 
 ## Tunables
 
@@ -204,6 +264,10 @@ Set in `executor.New`; not exposed as configuration:
 | Field | Value |
 | --- | --- |
 | `StopTimeout` | 30 s |
-| `Parallel` | 4 |
+| `Parallel` | 4, per host |
 | `HealthWait` | 120 s |
 | `PollEvery` | 2 s |
+| `ListTimeout` | 10 s, per host |
+
+The web UI lists every host for live container state with 5 s per host; a
+host that does not answer in time shows its containers as "unknown".

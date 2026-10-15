@@ -25,7 +25,13 @@ type Actor interface {
 	Stop(ctx context.Context, trigger string, toASN int) error
 	Start(ctx context.Context) error
 	Apply(ctx context.Context) error
+	// Retry catches up with hosts that could not be reached before.
+	Retry(ctx context.Context) error
 }
+
+// RetryEvery is how often the monitor lets the actor catch up with hosts that
+// could not be reached, unless automation is paused.
+const RetryEvery = time.Minute
 
 // Status is a snapshot for the UI.
 type Status struct {
@@ -65,14 +71,15 @@ type Counters struct {
 // Monitor runs the checks and owns the WAN state: only Run's goroutine reads
 // or changes it, and everything else sends it commands.
 type Monitor struct {
-	store    *store.Store
-	resolver *asn.Resolver
-	actor    Actor
-	log      *slog.Logger
-	now      func() time.Time
-	notify   func() // called whenever Status changes; may be nil
-	cmds     chan func(context.Context)
-	done     chan struct{} // closed when Run returns
+	retryEvery time.Duration // how often Retry runs
+	store      *store.Store
+	resolver   *asn.Resolver
+	actor      Actor
+	log        *slog.Logger
+	now        func() time.Time
+	notify     func() // called whenever Status changes; may be nil
+	cmds       chan func(context.Context)
+	done       chan struct{} // closed when Run returns
 
 	// Owned by the loop goroutine.
 	cfg       config.Config
@@ -94,10 +101,11 @@ type Monitor struct {
 func New(cfg config.Config, st *store.Store, r *asn.Resolver, a Actor, log *slog.Logger, notify func()) *Monitor {
 	return &Monitor{
 		cfg: cfg, store: st, resolver: r, actor: a, log: log, notify: notify,
-		now:    time.Now,
-		cmds:   make(chan func(context.Context), 16),
-		done:   make(chan struct{}),
-		prober: probe.New(cfg.IPProviders, cfg.Quorum, cfg.Timeout),
+		now:        time.Now,
+		retryEvery: RetryEvery,
+		cmds:       make(chan func(context.Context), 16),
+		done:       make(chan struct{}),
+		prober:     probe.New(cfg.IPProviders, cfg.Quorum, cfg.Timeout),
 	}
 }
 
@@ -159,6 +167,8 @@ func (m *Monitor) Run(ctx context.Context) error {
 	go m.housekeeping(ctx)
 
 	next := time.After(0)
+	retry := time.NewTicker(m.retryEvery)
+	defer retry.Stop()
 	for {
 		var resume, drill <-chan time.Time
 		if m.paused && !m.pausedTil.IsZero() {
@@ -177,6 +187,10 @@ func (m *Monitor) Run(ctx context.Context) error {
 		case <-drill:
 			if !m.now().Before(m.drillTil) {
 				m.endDrill(ctx, "timer")
+			}
+		case <-retry.C:
+			if !m.paused {
+				m.report(m.actor.Retry(ctx))
 			}
 		case <-next:
 			m.Check(ctx)
