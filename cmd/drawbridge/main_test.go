@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -162,6 +163,35 @@ func TestStacksAndContainers(t *testing.T) {
 	}
 }
 
+func TestStacksOnAnotherHost(t *testing.T) {
+	db := setup(t, false)
+	withStore(t, db, func(ctx context.Context, st *store.Store) {
+		id, err := st.AddHost(ctx, "nas", "agent", "docker", "test", time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		st.SyncInventory(ctx, id, []store.InventoryItem{{Key: "media/player", Project: "media", Service: "player", Name: "media-player-1"}}, time.Now())
+	})
+	if code, out, _ := drawbridge(t, "", "set-stack", "nas:media", "on"); code != 0 || !strings.Contains(out, "stack media") {
+		t.Fatalf("set-stack on nas: %d %q", code, out)
+	}
+	if _, out, _ := drawbridge(t, "", "stacks"); !strings.Contains(out, "HOST") || !regexp.MustCompile(`nas\s+media\s+disabled`).MatchString(out) ||
+		!regexp.MustCompile(`local\s+media\s+none`).MatchString(out) {
+		t.Fatalf("stacks: %q", out)
+	}
+	if code, out, _ := drawbridge(t, "", "set-container", "nas:media/player", "keep"); code != 0 || !strings.Contains(out, "stack-wide setting was removed") {
+		t.Fatalf("set-container on nas: %d %q", code, out)
+	}
+	if _, out, _ := drawbridge(t, "", "containers"); !regexp.MustCompile(`nas\s+media/player\s+media\s+keep`).MatchString(out) {
+		t.Fatalf("containers: %q", out)
+	}
+	for _, args := range [][]string{{"set-stack", "attic:media", "on"}, {"set-container", "attic:media/player", "keep"}} {
+		if code, _, errOut := drawbridge(t, "", args...); code != 1 || !strings.Contains(errOut, `no host named "attic"`) {
+			t.Errorf("%v: %d %q", args, code, errOut)
+		}
+	}
+}
+
 func TestStatusShowsOpenRun(t *testing.T) {
 	db := setup(t, false)
 	if code, out, _ := drawbridge(t, "", "status"); code != 0 || !strings.Contains(out, "learning") || !strings.Contains(out, "none") {
@@ -170,7 +200,7 @@ func TestStatusShowsOpenRun(t *testing.T) {
 	withStore(t, db, func(ctx context.Context, st *store.Store) {
 		run, _ := st.CreateRun(ctx, "auto", 64510, time.Now())
 		st.AddRunAction(ctx, run.ID, store.RunAction{ContainerID: "p1", Key: "media/player", Name: "media-player-1", WasRunning: true})
-		st.MarkStopped(ctx, run.ID, "p1", "", time.Now())
+		st.MarkStopped(ctx, run.ID, 0, "p1", nil, "", time.Now())
 	})
 	if _, out, _ := drawbridge(t, "", "status"); !strings.Contains(out, "open run") || !strings.Contains(out, "media-player-1") {
 		t.Fatalf("status with a run: %q", out)

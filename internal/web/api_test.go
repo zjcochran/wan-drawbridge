@@ -84,7 +84,7 @@ func TestAPIStatus(t *testing.T) {
 	e.mon.state, e.mon.isp = wan.Failover, backup
 	run, _ := e.st.CreateRun(ctx, "auto", 64510, time.Now())
 	e.st.AddRunAction(ctx, run.ID, store.RunAction{ContainerID: "c1", Key: "media/player", Name: "media-player-1", WasRunning: true})
-	e.st.MarkStopped(ctx, run.ID, "c1", "", time.Now())
+	e.st.MarkStopped(ctx, run.ID, 0, "c1", nil, "", time.Now())
 
 	resp, st := apiGet(t, e, token)
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "application/json" {

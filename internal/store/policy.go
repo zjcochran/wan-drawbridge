@@ -44,13 +44,13 @@ type InventoryItem struct {
 // the old container before starting the new one, so settings survive that.
 const GoneAfter = 10 * time.Minute
 
-// SyncInventory records the containers currently in Docker. Rows for containers
-// missing for GoneAfter are deleted, and so are stacks left with no
-// containers. A new
-// container in a stack that already has per-container settings is flagged for
-// review: it keeps running until someone decides, unless its label says what
-// to do.
-func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now time.Time) (added []string, err error) {
+// SyncInventory records the containers currently on one host. That host's rows
+// for containers missing for GoneAfter are deleted, and so are its stacks left
+// with no containers; other hosts are untouched, so a host that cannot be
+// reached keeps its rows. A new container in a stack that already has
+// per-container settings is flagged for review: it keeps running until
+// someone decides, unless its label says what to do.
+func (s *Store) SyncInventory(ctx context.Context, hostID int64, items []InventoryItem, now time.Time) (added []string, err error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
@@ -59,13 +59,13 @@ func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now ti
 	for _, it := range items {
 		if it.Project != "" {
 			if _, err := tx.ExecContext(ctx,
-				`INSERT INTO stacks (project, updated_at) VALUES (?, ?) ON CONFLICT (project) DO NOTHING`,
-				it.Project, now.Unix()); err != nil {
+				`INSERT INTO stacks (host_id, project, updated_at) VALUES (?, ?, ?) ON CONFLICT (host_id, project) DO NOTHING`,
+				hostID, it.Project, now.Unix()); err != nil {
 				return nil, err
 			}
 		}
 		var exists bool
-		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM containers WHERE key = ?)`, it.Key).Scan(&exists); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM containers WHERE host_id = ? AND key = ?)`, hostID, it.Key).Scan(&exists); err != nil {
 			return nil, err
 		}
 		if exists {
@@ -73,7 +73,7 @@ func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now ti
 			if _, err := tx.ExecContext(ctx, `
 				UPDATE containers SET name = ?, last_seen = ?, label_policy = ?,
 					needs_review = needs_review AND ? = ''
-				WHERE key = ?`, it.Name, now.Unix(), it.Label, it.Label, it.Key); err != nil {
+				WHERE host_id = ? AND key = ?`, it.Name, now.Unix(), it.Label, it.Label, hostID, it.Key); err != nil {
 				return nil, err
 			}
 			continue
@@ -81,24 +81,24 @@ func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now ti
 		var review bool
 		if it.Project != "" && it.Label == "" {
 			if err := tx.QueryRowContext(ctx,
-				`SELECT EXISTS (SELECT 1 FROM containers WHERE project = ? AND policy <> 'inherit')`,
-				it.Project).Scan(&review); err != nil {
+				`SELECT EXISTS (SELECT 1 FROM containers WHERE host_id = ? AND project = ? AND policy <> 'inherit')`,
+				hostID, it.Project).Scan(&review); err != nil {
 				return nil, err
 			}
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO containers (key, project, service, name, label_policy, needs_review, first_seen, last_seen)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			it.Key, it.Project, it.Service, it.Name, it.Label, review, now.Unix(), now.Unix()); err != nil {
+			INSERT INTO containers (host_id, key, project, service, name, label_policy, needs_review, first_seen, last_seen)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			hostID, it.Key, it.Project, it.Service, it.Name, it.Label, review, now.Unix(), now.Unix()); err != nil {
 			return nil, err
 		}
 		added = append(added, it.Key)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM containers WHERE last_seen < ?`, now.Add(-GoneAfter).Unix()); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM containers WHERE host_id = ? AND last_seen < ?`, hostID, now.Add(-GoneAfter).Unix()); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx,
-		`DELETE FROM stacks WHERE project NOT IN (SELECT project FROM containers)`); err != nil {
+		`DELETE FROM stacks WHERE host_id = ? AND project NOT IN (SELECT project FROM containers WHERE host_id = ?)`, hostID, hostID); err != nil {
 		return nil, err
 	}
 	return added, tx.Commit()
@@ -106,15 +106,15 @@ func (s *Store) SyncInventory(ctx context.Context, items []InventoryItem, now ti
 
 // SetStackPolicy turns a stack's "disable on failover" on or off. Either way,
 // every container in the stack goes back to following the stack.
-func (s *Store) SetStackPolicy(ctx context.Context, project string, disable bool, actor string, now time.Time) error {
+func (s *Store) SetStackPolicy(ctx context.Context, hostID int64, project string, disable bool, actor string, now time.Time) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	res, err := tx.ExecContext(ctx,
-		`UPDATE stacks SET disable_on_failover = ?, updated_at = ?, updated_by = ? WHERE project = ?`,
-		disable, now.Unix(), actor, project)
+		`UPDATE stacks SET disable_on_failover = ?, updated_at = ?, updated_by = ? WHERE host_id = ? AND project = ?`,
+		disable, now.Unix(), actor, hostID, project)
 	if err != nil {
 		return err
 	}
@@ -122,7 +122,7 @@ func (s *Store) SetStackPolicy(ctx context.Context, project string, disable bool
 		return fmt.Errorf("unknown stack %q", project)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE containers SET policy = 'inherit', needs_review = 0 WHERE project = ?`, project); err != nil {
+		`UPDATE containers SET policy = 'inherit', needs_review = 0 WHERE host_id = ? AND project = ?`, hostID, project); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -133,7 +133,7 @@ func (s *Store) SetStackPolicy(ctx context.Context, project string, disable bool
 // rules: the stack setting is cleared and every other container in the stack
 // keeps being disabled through its own setting (containers with a label keep
 // following it). It reports whether that happened.
-func (s *Store) SetContainerPolicy(ctx context.Context, key, policy, actor string, now time.Time) (converted bool, err error) {
+func (s *Store) SetContainerPolicy(ctx context.Context, hostID int64, key, policy, actor string, now time.Time) (converted bool, err error) {
 	if policy != Inherit && policy != Disable && policy != Keep {
 		return false, fmt.Errorf("policy must be inherit, disable or keep, not %q", policy)
 	}
@@ -147,7 +147,8 @@ func (s *Store) SetContainerPolicy(ctx context.Context, key, policy, actor strin
 	var stackDisabled sql.NullBool
 	err = tx.QueryRowContext(ctx, `
 		SELECT c.project, st.disable_on_failover FROM containers c
-		LEFT JOIN stacks st ON st.project = c.project WHERE c.key = ?`, key).Scan(&project, &stackDisabled)
+		LEFT JOIN stacks st ON st.host_id = c.host_id AND st.project = c.project
+		WHERE c.host_id = ? AND c.key = ?`, hostID, key).Scan(&project, &stackDisabled)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("unknown container %q", key)
 	}
@@ -158,18 +159,18 @@ func (s *Store) SetContainerPolicy(ctx context.Context, key, policy, actor strin
 	if stackDisabled.Bool && policy == Keep {
 		converted = true
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE stacks SET disable_on_failover = 0, updated_at = ?, updated_by = ? WHERE project = ?`,
-			now.Unix(), actor, project); err != nil {
+			`UPDATE stacks SET disable_on_failover = 0, updated_at = ?, updated_by = ? WHERE host_id = ? AND project = ?`,
+			now.Unix(), actor, hostID, project); err != nil {
 			return false, err
 		}
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE containers SET policy = 'disable' WHERE project = ? AND key <> ? AND policy = 'inherit' AND label_policy = ''`,
-			project, key); err != nil {
+			`UPDATE containers SET policy = 'disable' WHERE host_id = ? AND project = ? AND key <> ? AND policy = 'inherit' AND label_policy = ''`,
+			hostID, project, key); err != nil {
 			return false, err
 		}
 	}
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE containers SET policy = ?, needs_review = 0 WHERE key = ?`, policy, key); err != nil {
+		`UPDATE containers SET policy = ?, needs_review = 0 WHERE host_id = ? AND key = ?`, policy, hostID, key); err != nil {
 		return false, err
 	}
 	return converted, tx.Commit()
@@ -177,6 +178,8 @@ func (s *Store) SetContainerPolicy(ctx context.Context, key, policy, actor strin
 
 // ContainerRow is a container's stored settings with its effective policy.
 type ContainerRow struct {
+	HostID                      int64
+	Host                        string // the host's name
 	Key, Project, Service, Name string
 	Policy                      string
 	Label                       string // from the drawbridge.on-failover label
@@ -186,12 +189,15 @@ type ContainerRow struct {
 	LastSeen                    time.Time
 }
 
-// Containers returns every known container, ordered by stack then key.
+// Containers returns every known container, ordered by host, stack, then key.
 func (s *Store) Containers(ctx context.Context) ([]ContainerRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.key, c.project, c.service, c.name, c.policy, c.label_policy, COALESCE(st.disable_on_failover, 0), c.needs_review, c.last_seen
-		FROM containers c LEFT JOIN stacks st ON st.project = c.project
-		ORDER BY c.project, c.key`)
+		SELECT c.host_id, COALESCE(h.name, ''), c.key, c.project, c.service, c.name, c.policy, c.label_policy,
+			COALESCE(st.disable_on_failover, 0), c.needs_review, c.last_seen
+		FROM containers c
+		LEFT JOIN stacks st ON st.host_id = c.host_id AND st.project = c.project
+		LEFT JOIN hosts h ON h.id = c.host_id
+		ORDER BY c.host_id, c.project, c.key`)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +206,7 @@ func (s *Store) Containers(ctx context.Context) ([]ContainerRow, error) {
 	for rows.Next() {
 		var r ContainerRow
 		var seen int64
-		if err := rows.Scan(&r.Key, &r.Project, &r.Service, &r.Name, &r.Policy, &r.Label, &r.StackDisabled, &r.NeedsReview, &seen); err != nil {
+		if err := rows.Scan(&r.HostID, &r.Host, &r.Key, &r.Project, &r.Service, &r.Name, &r.Policy, &r.Label, &r.StackDisabled, &r.NeedsReview, &seen); err != nil {
 			return nil, err
 		}
 		r.Effective = Effective(r.Policy, r.Label, r.StackDisabled)
@@ -212,6 +218,8 @@ func (s *Store) Containers(ctx context.Context) ([]ContainerRow, error) {
 
 // StackRow summarises a stack for the Stacks screen.
 type StackRow struct {
+	HostID     int64
+	Host       string // the host's name
 	Project    string
 	Disabled   bool // the stack-wide setting
 	Containers int
@@ -229,13 +237,17 @@ func (r StackRow) Status() string {
 	return "none"
 }
 
-// Stacks returns every Compose project with its setting and container counts.
+// Stacks returns every Compose project with its setting and container
+// counts, ordered by host then project.
 func (s *Store) Stacks(ctx context.Context) ([]StackRow, error) {
 	cs, err := s.Containers(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT project, disable_on_failover FROM stacks ORDER BY project`)
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT st.host_id, COALESCE(h.name, ''), st.project, st.disable_on_failover
+		FROM stacks st LEFT JOIN hosts h ON h.id = st.host_id
+		ORDER BY st.host_id, st.project`)
 	if err != nil {
 		return nil, err
 	}
@@ -243,11 +255,11 @@ func (s *Store) Stacks(ctx context.Context) ([]StackRow, error) {
 	var out []StackRow
 	for rows.Next() {
 		var r StackRow
-		if err := rows.Scan(&r.Project, &r.Disabled); err != nil {
+		if err := rows.Scan(&r.HostID, &r.Host, &r.Project, &r.Disabled); err != nil {
 			return nil, err
 		}
 		for _, c := range cs {
-			if c.Project == r.Project {
+			if c.HostID == r.HostID && c.Project == r.Project {
 				r.Containers++
 				if c.Effective == Disable {
 					r.Disabling++

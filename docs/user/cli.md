@@ -11,7 +11,7 @@ Without a command, it runs the server (that is what the container does).
 
 Commands that read or change settings work directly on the database in
 `DRAWBRIDGE_DB_DIR`, so they work whether or not the server is running. Each
-one first refreshes the container list from Docker; if Docker cannot be
+one first refreshes the container list from the local Docker; if it cannot be
 reached it prints a warning and uses the stored list.
 
 Output is aligned text meant for people; exit status is 0 on success and 1 on
@@ -46,8 +46,8 @@ state        failover (since 2026-10-11 16:48:33)
 current ASN  64510
 primary ISP  1 (pinned: true)
 open run     #1 since 2026-10-11 16:48:33
-  media-db-1     was running: true, stopped: true
-  media-indexer-1       was running: true, stopped: true
+  media-db-1       on local, was running: true, stopped: true
+  media-indexer-1  on local, was running: true, stopped: true
 ```
 
 The saved state, the ISP of the last conclusive check, the primary ISP's ID,
@@ -61,23 +61,24 @@ check old.
 
 ```sh
 $ /drawbridge stacks
-STACK  STATUS    DISABLING  CONTAINERS
-media  partial   4          5
-proxy  none      0          2
+HOST   STACK  STATUS    DISABLING  CONTAINERS
+local  media  partial   4          5
+local  proxy  none      0          2
 ```
 
-`STATUS` is `disabled` (stack switch on), `partial` (some containers stop) or
+`HOST` is the host the stack is on (`local` for the Docker socket Drawbridge
+mounts). `STATUS` is `disabled` (stack switch on), `partial` (some containers stop) or
 `none`. `DISABLING` counts containers whose effective setting is to stop.
 
 ## containers
 
 ```sh
 $ /drawbridge containers
-KEY                 STACK  POLICY   EFFECTIVE  NOTE
-media/player          media  keep     keep
-media/db      media  disable  disable
-automation              inherit  keep
-dns                     inherit  keep
+HOST   KEY           STACK  POLICY   EFFECTIVE  NOTE
+local  media/player  media  keep     keep
+local  media/db      media  disable  disable
+local  automation           inherit  keep
+local  dns                  inherit  keep
 ```
 
 `POLICY` is the container's own setting (`inherit`, `disable`, `keep`);
@@ -94,7 +95,9 @@ stack media: disable on failover on; its containers now follow the stack
 ```
 
 `on` or `off`. Like the switch on the Stacks page, it resets every container
-in the stack to follow it.
+in the stack to follow it. The stack is on the local host; for a stack on
+another host, put the host's name in front: `set-stack nas:media on`. An
+unknown host name is an error (`no host named "…"`).
 
 ## set-container
 
@@ -106,7 +109,8 @@ the stack-wide setting was removed; the other containers in the stack stay disab
 
 Policies: `inherit`, `disable`, `keep`. The key is `project/service` for
 Compose containers or the container name for standalone ones (see the
-`containers` command). The second line appears when the change
+`containers` command), on the local host; for another host, put its name in
+front: `set-container nas:media/player keep`. The second line appears when the change
 [converted the stack](stacks-and-containers.md#rule-2-overriding-one-container).
 
 ## isps

@@ -150,6 +150,27 @@ crash in the middle of stopping containers):
   checks. If the restart took longer than 3 check intervals, the pending
   change is abandoned and re-detected.
 
+## Hosts that cannot be reached
+
+Drawbridge stops and starts the containers of every host it controls at the
+same time. If a host does not answer within 10 seconds when a failover or
+failback runs:
+
+- **At the failover**, the other hosts are stopped as usual, and the run is
+  reported with "cannot reach host *name*; its containers are stopped when it
+  is back". Every minute Drawbridge tries again, and stops that host's
+  selected containers as soon as it answers.
+- **At the failback**, the other hosts are started as usual and the failover
+  ends. The containers owed to the unreachable host are kept as **pending**:
+  the dashboard shows "N containers on *host* will be started again once
+  Drawbridge can reach it", and every minute Drawbridge tries again until
+  they are started.
+- If a new failover begins before the host is back, the pending containers
+  join it: they are started at its failback rather than in the middle of it.
+- Nothing is retried while automation is paused.
+- A host that cannot be reached keeps its containers and their settings on
+  the Stacks and Containers pages, shown as "unknown".
+
 ## Paused automation
 
 **Pause automation** on the dashboard keeps Drawbridge checking, logging and

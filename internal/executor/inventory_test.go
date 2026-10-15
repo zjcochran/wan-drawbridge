@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
 // fakeEvents replays events once, then ends the stream; later calls block
@@ -72,7 +74,7 @@ func TestFailedStopIsRecorded(t *testing.T) {
 	f.add("db", "app", "db", true, "")
 	f.add("web", "app", "web", true, "")
 	e, st := setup(t, f)
-	if err := st.SetStackPolicy(ctx, "app", true, "test", time.Now()); err != nil {
+	if err := st.SetStackPolicy(ctx, store.LocalHost, "app", true, "test", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	err := e.Stop(ctx, "auto", 2)

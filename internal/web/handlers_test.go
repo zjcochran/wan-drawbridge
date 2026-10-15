@@ -110,7 +110,7 @@ func TestISPManagement(t *testing.T) {
 func TestBulkContainerPolicy(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
-	resp, body := c.htmx("/containers/bulk", url.Values{"keys": {"media/player", "dns"}, "bulk_policy": {"disable"}})
+	resp, body := c.htmx("/containers/bulk", url.Values{"keys": {"1:media/player", "1:dns"}, "bulk_policy": {"disable"}})
 	if resp.StatusCode != http.StatusOK || !strings.Contains(body, "media-player-1") {
 		t.Fatalf("bulk: %d", resp.StatusCode)
 	}
@@ -130,7 +130,7 @@ func TestBulkContainerPolicy(t *testing.T) {
 	if resp, _ := c.htmx("/containers/bulk", url.Values{"bulk_policy": {"disable"}}); resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Errorf("bulk with nothing selected: %d", resp.StatusCode)
 	}
-	if resp, _ := c.htmx("/containers/bulk", url.Values{"keys": {"dns"}, "bulk_policy": {"sometimes"}}); resp.StatusCode != http.StatusUnprocessableEntity {
+	if resp, _ := c.htmx("/containers/bulk", url.Values{"keys": {"1:dns"}, "bulk_policy": {"sometimes"}}); resp.StatusCode != http.StatusUnprocessableEntity {
 		t.Errorf("bulk with a bad policy: %d", resp.StatusCode)
 	}
 }
@@ -478,24 +478,24 @@ func TestHandlersReportDatabaseErrors(t *testing.T) {
 	e.st.SetSetting(context.Background(), store.SettingSetupComplete, true)
 	c.get("/settings")
 	e.breakTables("run_actions", "runs", "containers", "stacks", "checks", "asn_daily", "asns", "isps", "events", "oidc_identities")
-	for _, path := range []string{"/", "/partials/status", "/partials/timeline", "/stacks", "/stacks/media/containers",
+	for _, path := range []string{"/", "/partials/status", "/partials/timeline", "/stacks", "/stacks/1/media/containers",
 		"/containers", "/isps", "/events", "/events.csv", "/settings"} {
 		if resp, _ := c.do("GET", path, nil); resp.StatusCode != http.StatusInternalServerError {
 			t.Errorf("GET %s: %d", path, resp.StatusCode)
 		}
 	}
 	for path, form := range map[string]url.Values{
-		"/stacks/media/policy": {"disable": {"on"}},
-		"/containers/policy":   {"key": {"dns"}, "policy": {"disable"}},
-		"/isps/1/role":         {"role": {"primary"}},
-		"/isps/1/rename":       {"name": {"x"}},
-		"/isps/1/metered":      {"metered": {"on"}},
-		"/asns/64500/move":     {"to": {"new"}},
-		"/setup/check":         {},
-		"/setup/primary":       {"choice": {"pin"}, "isp": {"1"}},
-		"/settings/sso/unlink": {},
-		"/actions/failover":    {},
-		"/settings/sso":        {"issuer": {"https://id.example"}, "client_id": {"x"}},
+		"/stacks/1/media/policy": {"disable": {"on"}},
+		"/containers/policy":     {"key": {"dns"}, "policy": {"disable"}},
+		"/isps/1/role":           {"role": {"primary"}},
+		"/isps/1/rename":         {"name": {"x"}},
+		"/isps/1/metered":        {"metered": {"on"}},
+		"/asns/64500/move":       {"to": {"new"}},
+		"/setup/check":           {},
+		"/setup/primary":         {"choice": {"pin"}, "isp": {"1"}},
+		"/settings/sso/unlink":   {},
+		"/actions/failover":      {},
+		"/settings/sso":          {"issuer": {"https://id.example"}, "client_id": {"x"}},
 	} {
 		if resp, _ := c.htmx(path, form); resp.StatusCode < 400 {
 			t.Errorf("POST %s: %d", path, resp.StatusCode)
@@ -609,7 +609,7 @@ func TestEveryThemeHasColours(t *testing.T) {
 
 func TestContainersShowLabels(t *testing.T) {
 	e := newEnv(t)
-	e.st.SyncInventory(context.Background(), []store.InventoryItem{
+	e.st.SyncInventory(context.Background(), store.LocalHost, []store.InventoryItem{
 		{Key: "media/player", Project: "media", Service: "player", Name: "media-player-1", Label: store.Disable},
 	}, time.Now())
 	_, page := e.admin().get("/containers")
@@ -621,12 +621,12 @@ func TestContainersShowLabels(t *testing.T) {
 func TestGoneContainersAreNotListed(t *testing.T) {
 	e := newEnv(t)
 	// In the inventory but no longer in Docker.
-	e.st.SyncInventory(context.Background(), []store.InventoryItem{
+	e.st.SyncInventory(context.Background(), store.LocalHost, []store.InventoryItem{
 		{Key: "runner-1-build", Name: "runner-1-build"},
 		{Key: "media/old", Project: "media", Service: "old", Name: "media-old-1"},
 	}, time.Now())
 	c := e.admin()
-	for _, path := range []string{"/containers", "/containers?state=gone", "/stacks/media/containers"} {
+	for _, path := range []string{"/containers", "/containers?state=gone", "/stacks/1/media/containers"} {
 		if _, page := c.get(path); strings.Contains(page, "runner-1-build") || strings.Contains(page, "media-old-1") {
 			t.Errorf("%s lists a container that is gone", path)
 		}

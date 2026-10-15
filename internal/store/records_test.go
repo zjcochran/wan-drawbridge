@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -36,11 +37,11 @@ func TestRunLifecycle(t *testing.T) {
 	db.WasRunning = false
 	s.AddRunAction(ctx, run.ID, db)
 
-	s.MarkStopped(ctx, run.ID, "c1", "", t0)
-	s.MarkStopped(ctx, run.ID, "c2", "timeout", t0)
-	s.MarkStarted(ctx, run.ID, "c1", "", t0)
-	s.MarkStopped(ctx, run.ID, "c1", "", t0) // disabled again: the earlier start is cleared
-	s.MarkStarted(ctx, run.ID, "c2", "no such container", t0)
+	s.MarkStopped(ctx, run.ID, 0, "c1", nil, "", t0)
+	s.MarkStopped(ctx, run.ID, 0, "c2", nil, "timeout", t0)
+	s.MarkStarted(ctx, run.ID, 0, "c1", "", t0)
+	s.MarkStopped(ctx, run.ID, 0, "c1", nil, "", t0) // disabled again: the earlier start is cleared
+	s.MarkStarted(ctx, run.ID, 0, "c2", "no such container", t0)
 
 	actions, err := s.RunActions(ctx, run.ID)
 	if err != nil || len(actions) != 2 {
@@ -50,7 +51,7 @@ func TestRunLifecycle(t *testing.T) {
 		{ContainerID: "c1", Key: "app/db", Name: "db", WasRunning: true, Stopped: true},
 		{ContainerID: "c2", Key: "app/web", Name: "web", WasRunning: true, Error: "no such container"},
 	}
-	if !slices.Equal(actions, want) {
+	if !reflect.DeepEqual(actions, want) {
 		t.Fatalf("actions\n got %+v\nwant %+v", actions, want)
 	}
 
@@ -281,8 +282,8 @@ func TestClosedStoreReturnsErrors(t *testing.T) {
 		"CreateRun":     func() error { _, err := s.CreateRun(ctx, "auto", 1, t0); return err },
 		"AddRunAction":  func() error { return s.AddRunAction(ctx, 1, RunAction{}) },
 		"RunActions":    func() error { _, err := s.RunActions(ctx, 1); return err },
-		"MarkStopped":   func() error { return s.MarkStopped(ctx, 1, "c", "", t0) },
-		"MarkStarted":   func() error { return s.MarkStarted(ctx, 1, "c", "", t0) },
+		"MarkStopped":   func() error { return s.MarkStopped(ctx, 1, 0, "c", nil, "", t0) },
+		"MarkStarted":   func() error { return s.MarkStarted(ctx, 1, 0, "c", "", t0) },
 		"CloseRun":      func() error { return s.CloseRun(ctx, 1, "completed", t0) },
 		"SeeASN":        func() error { _, _, err := s.SeeASN(ctx, 1, "X", t0); return err },
 		"ISPOfASN":      func() error { _, err := s.ISPOfASN(ctx, 1); return err },
@@ -297,7 +298,7 @@ func TestClosedStoreReturnsErrors(t *testing.T) {
 		"ClearPrimary":  func() error { return s.ClearPrimary(ctx) },
 		"Containers":    func() error { _, err := s.Containers(ctx); return err },
 		"Stacks":        func() error { _, err := s.Stacks(ctx); return err },
-		"SetStack":      func() error { return s.SetStackPolicy(ctx, "p", true, "x", t0) },
+		"SetStack":      func() error { return s.SetStackPolicy(ctx, LocalHost, "p", true, "x", t0) },
 		"CountUsers":    func() error { _, err := s.CountUsers(ctx); return err },
 		"CreateUser":    func() error { _, err := s.CreateUser(ctx, "u", "long enough password", RoleAdmin, t0); return err },
 		"Authenticate":  func() error { _, err := s.Authenticate(ctx, "u", "p", t0); return err },

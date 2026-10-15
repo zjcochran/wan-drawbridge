@@ -87,7 +87,14 @@ Lists every container in the current failover run and what happened to it:
 | waiting | Not processed yet. |
 | *error text* in red | Stopping or starting it failed; the Docker error is shown. |
 
-"Nothing. Every container is as you left it." means there is no open run.
+With more than one host, each entry also names its host ("media-db-1 on
+nas"). "N containers on *host* will be started again once Drawbridge can
+reach it" lists starts owed to a host that could not be reached at the
+failback; Drawbridge tries again every minute (see [hosts that cannot be
+reached](during-an-outage.md#hosts-that-cannot-be-reached)).
+
+"Nothing. Every container is as you left it." means there is no open run and
+no start is owed.
 
 ### Last 24 hours
 
@@ -111,12 +118,13 @@ them. See [new containers](stacks-and-containers.md#new-containers).
 
 ![Stacks page](../images/stacks.jpg)
 
-One row per Docker Compose project:
+One row per Docker Compose project on each host:
 
 | Column | Meaning |
 | --- | --- |
 | Stack | The Compose project name. |
-| Containers | "3 running of 5". |
+| Host | The host it is on. Shown only when Drawbridge has more than one host; click it to show that host's stacks only. |
+| Containers | "3 running of 5", or "host offline" (the row dimmed) when its host cannot be reached. |
 | On failover | **Stops (stack rule)**: the stack switch is on. **Partial · 4 of 5**: some containers stop through their own settings. **Not affected**: nothing in it stops. |
 | Stop whole stack | The switch (admins). |
 | Show containers | Expands the stack's containers with their state and whether each stops; it then reads Hide containers, which collapses them again. |
@@ -124,27 +132,34 @@ One row per Docker Compose project:
 Flipping the switch **resets every container in the stack** to follow it, on or
 off. Exceptions are made on the Containers page.
 
+With more than one host, a **host filter** above the table shows all hosts or
+one; the URL keeps it (`/stacks?host=<id>`). The same project on two hosts is
+two rows with their own switches.
+
 ![A stack after one container was overridden](../images/stacks-partial.jpg)
 
 ## Containers
 
 ![Containers page](../images/containers-override.jpg)
 
-Every container in Docker, except Drawbridge itself.
+Every container on every host, except Drawbridge itself.
 
 **Filters** (combine freely; the URL keeps them, so you can bookmark a view):
 
 - Search by name or key.
-- Stack: all, standalone only, or one stack.
-- State: running or stopped. "unknown" is shown when Docker cannot be
-  reached; then the list also includes containers removed in the last 10
+- Host: all hosts or one. Shown only when Drawbridge has more than one host;
+  the stack list then shows that host's stacks.
+- Stack: all, standalone only, or one stack (on every host shown).
+- State: running or stopped. "unknown" is shown when a host cannot be
+  reached ("host offline", the row dimmed, when there is more than one
+  host); then the list also includes its containers removed in the last 10
   minutes.
 - Setting: stops on failover, keeps running, or "New, not configured".
 
 **Columns:** container name (and its key, `project/service`, when different),
-stack, state, what happens on failover (with where that comes from: "from
-stack", "own setting", "default", or "new, not configured"), and the setting
-(admins).
+host (only with more than one host; click it to filter by it), stack, state,
+what happens on failover (with where that comes from: "from stack", "own
+setting", "default", or "new, not configured"), and the setting (admins).
 
 **Setting** for a container in a stack: *Follow stack*, *Stop on failover* or
 *Keep running*. For a standalone container, *Default (keep running)* replaces
@@ -207,6 +222,9 @@ now**), including the failback pending wait. Failover tests are not outages.
   used. Who used **Fail over now** or **Restore now** is shown under the time.
   Click a start time for the outage's page, `/reports/outages/{id}`, with the
   data used by each container.
+
+With more than one host, both container tables have a **Host** column: the
+same container key on two hosts is counted separately.
 
 ### How data is measured
 

@@ -25,7 +25,7 @@ type Snapshot struct {
 // ConfigTables are copied whole, in an order that satisfies the foreign keys.
 // Runtime state (wan_state, runs, run_actions, sessions) is never copied: it
 // belongs to the running instance.
-var ConfigTables = []string{"settings", "isps", "asns", "stacks", "containers", "users", "oidc_identities", "recovery_codes"}
+var ConfigTables = []string{"settings", "isps", "asns", "hosts", "stacks", "containers", "users", "oidc_identities", "recovery_codes"}
 
 // historyTables are filtered by time: column holds a Unix time or, for
 // asn_daily, a YYYY-MM-DD day.
@@ -132,7 +132,7 @@ func (s *Store) Import(ctx context.Context, snap Snapshot) error {
 	}
 	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
 	// Children first, so the foreign keys hold at every step.
-	tables := []string{"sessions", "recovery_codes", "oidc_identities", "users", "asns", "isps", "stacks", "containers", "settings"}
+	tables := []string{"sessions", "recovery_codes", "oidc_identities", "users", "asns", "isps", "stacks", "containers", "hosts", "settings"}
 	if snap.History != nil {
 		for _, h := range historyTables {
 			tables = append(tables, h.name)
@@ -155,11 +155,8 @@ func (s *Store) Import(ctx context.Context, snap Snapshot) error {
 			return err
 		}
 	}
-	if _, ok := snap.History["outages"]; snap.History != nil && !ok {
-		// A backup from before outages were recorded: recreate them from its events.
-		if err := rebuildOutages(ctx, tx); err != nil {
-			return err
-		}
+	if err := upgradeOld(ctx, tx, snap); err != nil {
+		return err
 	}
 	var admins int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE role = ? AND disabled = 0`, RoleAdmin).Scan(&admins); err != nil {
@@ -169,6 +166,22 @@ func (s *Store) Import(ctx context.Context, snap Snapshot) error {
 		return ErrNoAdmin
 	}
 	return tx.Commit()
+}
+
+// upgradeOld fills in what a backup from an older version lacks.
+func upgradeOld(ctx context.Context, tx *sql.Tx, snap Snapshot) error {
+	if _, ok := snap.Config["hosts"]; !ok {
+		// A backup from before hosts: everything in it is on the local host.
+		if _, err := tx.ExecContext(ctx, `INSERT INTO hosts (id, name, kind, platform, status, created_at)
+			VALUES (?, 'local', 'local', 'docker', 'online', unixepoch())`, LocalHost); err != nil {
+			return err
+		}
+	}
+	if _, ok := snap.History["outages"]; snap.History != nil && !ok {
+		// A backup from before outages were recorded: recreate them from its events.
+		return rebuildOutages(ctx, tx)
+	}
+	return nil
 }
 
 func loadRows(ctx context.Context, tx *sql.Tx, table string, rows []Row) error {

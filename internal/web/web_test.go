@@ -4,6 +4,7 @@ package web
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
+	"github.com/zjcochran/wan-drawbridge/internal/hosts"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
@@ -115,13 +117,29 @@ type fakeDocker struct{ cs []docker.Container }
 
 func (f fakeDocker) List(context.Context) ([]docker.Container, error) { return f.cs, nil }
 func (f fakeDocker) Ping(context.Context) (string, error)             { return "28.0.0", nil }
+func (f fakeDocker) Inspect(context.Context, string) (bool, docker.Health, error) {
+	return true, "", nil
+}
+func (f fakeDocker) Stop(context.Context, string, time.Duration) error { return nil }
+func (f fakeDocker) Start(context.Context, string) error               { return nil }
+func (f fakeDocker) Stats(context.Context, string) (int64, int64, bool, error) {
+	return 0, 0, false, nil
+}
+
+// downDocker is a host that cannot be reached.
+type downDocker struct{ fakeDocker }
+
+func (downDocker) List(context.Context) ([]docker.Container, error) {
+	return nil, errors.New("connection refused")
+}
 
 type noSync struct{}
 
 func (noSync) Sync(context.Context) error { return nil }
 
-func container(project, service string, running bool) docker.Container {
-	return docker.Container{ID: "id-" + service, Name: project + "-" + service + "-1", Project: project, Service: service, Running: running}
+// container is a container of the "media" stack.
+func container(service string, running bool) docker.Container {
+	return docker.Container{ID: "id-" + service, Name: "media-" + service + "-1", Project: "media", Service: service, Running: running}
 }
 
 type env struct {
@@ -145,7 +163,7 @@ func newEnv(t *testing.T) *env {
 	}
 	t.Cleanup(func() { st.Close() })
 	now := time.Now()
-	st.SyncInventory(ctx, []store.InventoryItem{
+	st.SyncInventory(ctx, store.LocalHost, []store.InventoryItem{
 		{Key: "media/player", Project: "media", Service: "player", Name: "media-player-1"},
 		{Key: "media/indexer", Project: "media", Service: "indexer", Name: "media-indexer-1"},
 		{Key: "dns", Name: "dns"},
@@ -155,10 +173,12 @@ func newEnv(t *testing.T) *env {
 
 	mon := &fakeMon{det: config.DefaultDetection()}
 	box, _ := secrets.New("test-key")
+	fd := fakeDocker{cs: []docker.Container{container("player", true), container("indexer", true),
+		{ID: "id-dns", Name: "dns", Running: true}}}
+	reg := hosts.NewRegistry(hosts.Host{ID: store.LocalHost, Name: "local", Runtime: hosts.Local{Docker: fd}})
 	ui, err := New(Server{
 		Store: st, Mon: mon, Sync: noSync{}, Hub: NewHub(), Secrets: box,
-		Docker: fakeDocker{cs: []docker.Container{container("media", "player", true), container("media", "indexer", true),
-			{ID: "id-dns", Name: "dns", Running: true}}},
+		Docker: fd, Hosts: reg,
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), DBPath: "/data/db/drawbridge.db",
 	})
 	if err != nil {
@@ -283,24 +303,24 @@ func TestEveryPageRenders(t *testing.T) {
 	c := e.admin()
 	e.st.SetSetting(context.Background(), store.SettingSetupComplete, true)
 	pages := map[string]string{
-		"/":                         "Dashboard",
-		"/partials/status":          "On primary",
-		"/partials/timeline":        "Last 24 hours",
-		"/stacks":                   "media",
-		"/stacks/media/containers":  "media-player-1",
-		"/containers":               "media-indexer-1",
-		"/containers?stack=-":       "dns",
-		"/containers?policy=review": "No containers match",
-		"/isps":                     "EXAMPLENET",
-		"/events":                   "state_changed",
-		"/settings":                 "Check interval",
-		"/settings/detection":       "Check interval",
-		"/settings/notifications":   "Add a channel",
-		"/settings/backup":          "Scheduled backups",
-		"/settings/users":           "Add a user",
-		"/settings/sso":             "Issuer URL",
-		"/settings/account":         "Change password",
-		"/settings/system":          "Database",
+		"/":                          "Dashboard",
+		"/partials/status":           "On primary",
+		"/partials/timeline":         "Last 24 hours",
+		"/stacks":                    "media",
+		"/stacks/1/media/containers": "media-player-1",
+		"/containers":                "media-indexer-1",
+		"/containers?stack=-":        "dns",
+		"/containers?policy=review":  "No containers match",
+		"/isps":                      "EXAMPLENET",
+		"/events":                    "state_changed",
+		"/settings":                  "Check interval",
+		"/settings/detection":        "Check interval",
+		"/settings/notifications":    "Add a channel",
+		"/settings/backup":           "Scheduled backups",
+		"/settings/users":            "Add a user",
+		"/settings/sso":              "Issuer URL",
+		"/settings/account":          "Change password",
+		"/settings/system":           "Database",
 	}
 	// Users moved into Settings; bookmarks of /users still work.
 	if resp, _ := c.get("/users"); resp.StatusCode != http.StatusMovedPermanently || resp.Header.Get("Location") != "/settings/users" {
@@ -355,14 +375,14 @@ func TestLoginRedirectStaysLocal(t *testing.T) {
 func TestCSRFAndCrossOrigin(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
-	if resp, _ := c.do("POST", "/stacks/media/policy", url.Values{"disable": {"on"}}, "HX-Request", "true"); resp.StatusCode != http.StatusForbidden {
+	if resp, _ := c.do("POST", "/stacks/1/media/policy", url.Values{"disable": {"on"}}, "HX-Request", "true"); resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("no token: %d", resp.StatusCode)
 	}
-	if resp, _ := c.do("POST", "/stacks/media/policy", url.Values{"disable": {"on"}},
+	if resp, _ := c.do("POST", "/stacks/1/media/policy", url.Values{"disable": {"on"}},
 		"X-CSRF-Token", c.csrf, "Sec-Fetch-Site", "cross-site"); resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-site: %d", resp.StatusCode)
 	}
-	if resp, _ := c.htmx("/stacks/media/policy", url.Values{"disable": {"on"}}); resp.StatusCode != http.StatusOK {
+	if resp, _ := c.htmx("/stacks/1/media/policy", url.Values{"disable": {"on"}}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("with token: %d", resp.StatusCode)
 	}
 }
@@ -381,7 +401,7 @@ func TestViewerIsReadOnly(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || strings.Contains(body, `hx-post="/containers/policy"`) {
 		t.Fatalf("viewer sees policy controls: %d", resp.StatusCode)
 	}
-	for _, p := range []string{"/stacks/media/policy", "/actions/failover", "/settings/detection", "/settings/users"} {
+	for _, p := range []string{"/stacks/1/media/policy", "/actions/failover", "/settings/detection", "/settings/users"} {
 		if resp, _ := v.htmx(p, url.Values{}); resp.StatusCode != http.StatusForbidden {
 			t.Errorf("viewer POST %s: %d", p, resp.StatusCode)
 		}
@@ -409,7 +429,7 @@ func TestViewerIsReadOnly(t *testing.T) {
 func TestContainerOverrideConvertsStack(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
-	c.htmx("/stacks/media/policy", url.Values{"disable": {"on"}})
+	c.htmx("/stacks/1/media/policy", url.Values{"disable": {"on"}})
 	_, body := c.get("/containers")
 	if !strings.Contains(body, "This removes the stack-wide setting from media. The other 1 containers") {
 		t.Fatal("conversion confirmation missing")

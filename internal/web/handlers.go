@@ -19,6 +19,9 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
+// liveTimeout is how long the UI waits for a host to list its containers.
+const liveTimeout = 5 * time.Second
+
 type timeDuration = time.Duration
 
 func withSession(ctx context.Context, s *store.Session) context.Context {
@@ -35,26 +38,43 @@ func atoi(s string, def int) int {
 
 // ---- live container state ----
 
-// liveState maps container keys to "running" / "stopped", from Docker. If
-// Docker cannot be reached the map is nil and the UI shows "unknown".
-func (s *Server) liveState(ctx context.Context) map[string]string {
-	cs, err := s.Docker.List(ctx)
-	if err != nil {
-		s.Log.Warn("cannot list containers", "err", err)
-		return nil
-	}
-	out := map[string]string{}
-	for _, c := range cs {
-		st := "stopped"
-		if c.Running {
-			st = "running"
+// liveKey identifies a container across hosts.
+type liveKey struct {
+	host int64
+	key  string
+}
+
+// liveState maps containers to "running" / "stopped", from every host that
+// can be reached. down holds the hosts that cannot be, whose containers the
+// UI shows as "unknown".
+func (s *Server) liveState(ctx context.Context) (live map[liveKey]string, down map[int64]bool) {
+	live, down = map[liveKey]string{}, map[int64]bool{}
+	for _, l := range s.Hosts.List(ctx, liveTimeout) {
+		if l.Err != nil {
+			s.Log.Warn("cannot list containers", "host", l.Host.Name, "err", l.Err)
+			down[l.Host.ID] = true
+			continue
 		}
-		// Scaled services share a key; any running replica counts as running.
-		if out[c.Key()] != "running" {
-			out[c.Key()] = st
+		for _, w := range l.Workloads {
+			st := "stopped"
+			if w.Running {
+				st = "running"
+			}
+			// Scaled services share a key; any running replica counts as running.
+			k := liveKey{w.Host, w.Key()}
+			if live[k] != "running" {
+				live[k] = st
+			}
 		}
 	}
-	return out
+	return live, down
+}
+
+// multiHost reports whether there is more than one host, so pages show
+// which host each container is on.
+func (s *Server) multiHost(ctx context.Context) (bool, []store.HostRow, error) {
+	hs, err := s.Store.Hosts(ctx)
+	return len(hs) > 1, hs, err
 }
 
 type containerRow struct {
@@ -82,13 +102,13 @@ func (s *Server) containerRows(ctx context.Context) ([]containerRow, error) {
 	if err != nil {
 		return nil, err
 	}
-	live := s.liveState(ctx)
+	live, down := s.liveState(ctx)
 	out := make([]containerRow, 0, len(rows))
 	for _, r := range rows {
 		st := "unknown"
-		if live != nil {
-			if st = live[r.Key]; st == "" {
-				continue // removed from Docker; its row is deleted after store.GoneAfter
+		if _, ok := s.Hosts.Get(r.HostID); ok && !down[r.HostID] {
+			if st = live[liveKey{r.HostID, r.Key}]; st == "" {
+				continue // removed from its host; its row is deleted after store.GoneAfter
 			}
 		}
 		out = append(out, containerRow{r, st})
@@ -112,8 +132,10 @@ type statusData struct {
 	Run       *store.Run
 	Actions   []store.RunAction
 	Stopped   int
+	Owed      map[string]int // per host: containers to start once it is back
 	IsAdmin   bool
 	NoPrimary bool
+	MultiHost bool
 }
 
 func (s *Server) statusData(r *http.Request) (statusData, error) {
@@ -127,8 +149,21 @@ func (s *Server) statusData(r *http.Request) (statusData, error) {
 		S: st, ISPName: names[st.ISP], Primary: names[st.PrimaryISP],
 		IsAdmin: sessionFrom(r).User.IsAdmin(), NoPrimary: st.PrimaryISP == 0,
 	}
+	if d.MultiHost, _, err = s.multiHost(ctx); err != nil {
+		return d, err
+	}
 	if d.Run, err = s.Store.OpenRun(ctx); err != nil {
 		return d, err
+	}
+	owed, err := s.Store.PendingStarts(ctx)
+	if err != nil {
+		return d, err
+	}
+	for _, p := range owed {
+		if d.Owed == nil {
+			d.Owed = map[string]int{}
+		}
+		d.Owed[p.Host]++
 	}
 	if d.Run != nil {
 		if d.Actions, err = s.Store.RunActions(ctx, d.Run.ID); err != nil {
@@ -358,43 +393,58 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 type stackRow struct {
 	store.StackRow
 	Running int
+	Down    bool // its host cannot be reached
 }
 
-func (s *Server) stackRows(r *http.Request) ([]stackRow, error) {
+func (s *Server) stacksData(r *http.Request, host string) (stacksData, error) {
 	ctx := r.Context()
+	d := stacksData{Host: host, IsAdmin: sessionFrom(r).User.IsAdmin()}
+	var err error
+	if d.MultiHost, d.Hosts, err = s.multiHost(ctx); err != nil {
+		return d, err
+	}
 	stacks, err := s.Store.Stacks(ctx)
 	if err != nil {
-		return nil, err
+		return d, err
 	}
 	cs, err := s.containerRows(ctx)
 	if err != nil {
-		return nil, err
+		return d, err
 	}
-	out := make([]stackRow, 0, len(stacks))
 	for _, st := range stacks {
+		if host != "" && strconv.FormatInt(st.HostID, 10) != host {
+			continue
+		}
 		row := stackRow{StackRow: st}
 		for _, c := range cs {
-			if c.Project == st.Project && c.State == "running" {
-				row.Running++
+			if c.HostID == st.HostID && c.Project == st.Project {
+				switch c.State {
+				case "running":
+					row.Running++
+				case "unknown":
+					row.Down = true
+				}
 			}
 		}
-		out = append(out, row)
+		d.Stacks = append(d.Stacks, row)
 	}
-	return out, nil
+	return d, nil
 }
 
 type stacksData struct {
-	Stacks  []stackRow
-	IsAdmin bool
+	Stacks    []stackRow
+	Hosts     []store.HostRow
+	Host      string // the host filter: "" for all, else a host ID
+	MultiHost bool
+	IsAdmin   bool
 }
 
 func (s *Server) stacksPage(w http.ResponseWriter, r *http.Request) {
-	rows, err := s.stackRows(r)
+	d, err := s.stacksData(r, r.URL.Query().Get("host"))
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	d := stacksData{Stacks: rows, IsAdmin: sessionFrom(r).User.IsAdmin()}
 	if isHTMX(r) && r.URL.Query().Get("partial") == "1" {
 		s.partial(w, r, "stacks", "stacks-table", d)
 		return
@@ -402,7 +452,18 @@ func (s *Server) stacksPage(w http.ResponseWriter, r *http.Request) {
 	s.page(w, r, "stacks", "Stacks", d)
 }
 
+// pathHost reads the {host} route value.
+func pathHost(r *http.Request) (int64, bool) {
+	id, err := strconv.ParseInt(r.PathValue("host"), 10, 64)
+	return id, err == nil
+}
+
 func (s *Server) stackContainers(w http.ResponseWriter, r *http.Request) {
+	host, ok := pathHost(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	cs, err := s.containerRows(r.Context())
 	if err != nil {
 		s.fail(w, r, err)
@@ -411,7 +472,7 @@ func (s *Server) stackContainers(w http.ResponseWriter, r *http.Request) {
 	project := r.PathValue("project")
 	var rows []containerRow
 	for _, c := range cs {
-		if c.Project == project {
+		if c.HostID == host && c.Project == project {
 			rows = append(rows, c)
 		}
 	}
@@ -419,41 +480,60 @@ func (s *Server) stackContainers(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) setStackPolicy(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	host, ok := pathHost(r)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	project := r.PathValue("project")
 	on := r.PostFormValue("disable") == "on"
-	if err := s.Store.SetStackPolicy(r.Context(), project, on, actorName(r), s.now()); err != nil {
+	if err := s.Store.SetStackPolicy(ctx, host, project, on, actorName(r), s.now()); err != nil {
 		invalid(w, err.Error())
 		return
 	}
-	s.event(r.Context(), "stack_policy", map[string]any{"stack": project, "disable": on, "by": actorName(r)})
-	s.Mon.PoliciesChanged()
-	s.Hub.Publish(TopicInventory)
-	rows, err := s.stackRows(r)
+	names, err := s.Store.HostNames(ctx)
 	if err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	s.partial(w, r, "stacks", "stacks-table", stacksData{Stacks: rows, IsAdmin: true})
+	s.event(ctx, "stack_policy", map[string]any{"host": names[host], "stack": project, "disable": on, "by": actorName(r)})
+	s.Mon.PoliciesChanged()
+	s.Hub.Publish(TopicInventory)
+	d, err := s.stacksData(r, r.PostFormValue("host"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	s.partial(w, r, "stacks", "stacks-table", d)
 }
 
 // ---- containers ----
 
 type containersData struct {
-	Rows     []containerRow
-	Stacks   []string
-	Filter   containerFilter
-	IsAdmin  bool
-	Total    int
-	Disabled map[string]int // per stack: containers following a disabled stack
+	Rows      []containerRow
+	Stacks    []string
+	Hosts     []store.HostRow
+	MultiHost bool
+	Filter    containerFilter
+	IsAdmin   bool
+	Total     int
+	disabled  map[liveKey]int // per host and stack: containers following a disabled stack
+}
+
+// DisabledIn counts the containers following a disabled stack.
+func (d containersData) DisabledIn(host int64, project string) int {
+	return d.disabled[liveKey{host, project}]
 }
 
 type containerFilter struct {
-	Stack, State, Policy, Q string
+	Host, Stack, State, Policy, Q string
 }
 
 func (f containerFilter) match(c containerRow) bool {
 	switch {
-	case f.Stack == "-" && c.Project != "",
+	case f.Host != "" && strconv.FormatInt(c.HostID, 10) != f.Host,
+		f.Stack == "-" && c.Project != "",
 		f.Stack != "" && f.Stack != "-" && c.Project != f.Stack,
 		f.State != "" && c.State != f.State,
 		f.Policy == "review" && !c.NeedsReview,
@@ -469,15 +549,19 @@ func (s *Server) containersData(r *http.Request, f containerFilter) (containersD
 	if err != nil {
 		return containersData{}, err
 	}
-	d := containersData{Filter: f, IsAdmin: sessionFrom(r).User.IsAdmin(), Total: len(cs), Disabled: map[string]int{}}
+	d := containersData{Filter: f, IsAdmin: sessionFrom(r).User.IsAdmin(), Total: len(cs), disabled: map[liveKey]int{}}
+	if d.MultiHost, d.Hosts, err = s.multiHost(r.Context()); err != nil {
+		return d, err
+	}
 	seen := map[string]bool{}
 	for _, c := range cs {
-		if c.Project != "" && !seen[c.Project] {
+		inHost := f.Host == "" || strconv.FormatInt(c.HostID, 10) == f.Host
+		if c.Project != "" && !seen[c.Project] && inHost {
 			seen[c.Project] = true
 			d.Stacks = append(d.Stacks, c.Project)
 		}
 		if c.StackDisabled && c.Policy == store.Inherit {
-			d.Disabled[c.Project]++
+			d.disabled[liveKey{c.HostID, c.Project}]++
 		}
 		if f.match(c) {
 			d.Rows = append(d.Rows, c)
@@ -488,7 +572,7 @@ func (s *Server) containersData(r *http.Request, f containerFilter) (containersD
 }
 
 func filterFrom(get func(string) string) containerFilter {
-	return containerFilter{Stack: get("stack"), State: get("state"), Policy: get("policy"), Q: strings.TrimSpace(get("q"))}
+	return containerFilter{Host: get("host"), Stack: get("stack"), State: get("state"), Policy: get("policy"), Q: strings.TrimSpace(get("q"))}
 }
 
 func (s *Server) containersPage(w http.ResponseWriter, r *http.Request) {
@@ -505,7 +589,25 @@ func (s *Server) containersPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) setContainerPolicy(w http.ResponseWriter, r *http.Request) {
-	s.applyPolicies(w, r, []string{r.PostFormValue("key")}, r.PostFormValue("policy"))
+	host, err := strconv.ParseInt(r.PostFormValue("container_host"), 10, 64)
+	if err != nil {
+		host = store.LocalHost
+	}
+	s.applyPolicies(w, r, []liveKey{{host, r.PostFormValue("key")}}, r.PostFormValue("policy"))
+}
+
+// parseKeys reads bulk selections, each "<host ID>:<container key>".
+func parseKeys(vals []string) ([]liveKey, bool) {
+	out := make([]liveKey, 0, len(vals))
+	for _, v := range vals {
+		h, k, ok := strings.Cut(v, ":")
+		id, err := strconv.ParseInt(h, 10, 64)
+		if !ok || err != nil || k == "" {
+			return nil, false
+		}
+		out = append(out, liveKey{id, k})
+	}
+	return out, true
 }
 
 func (s *Server) bulkContainerPolicy(w http.ResponseWriter, r *http.Request) {
@@ -513,7 +615,11 @@ func (s *Server) bulkContainerPolicy(w http.ResponseWriter, r *http.Request) {
 		invalid(w, "Could not read the form.")
 		return
 	}
-	keys := r.PostForm["keys"]
+	keys, ok := parseKeys(r.PostForm["keys"])
+	if !ok {
+		invalid(w, "Could not read the selection.")
+		return
+	}
 	if len(keys) == 0 {
 		invalid(w, "Select at least one container.")
 		return
@@ -521,16 +627,21 @@ func (s *Server) bulkContainerPolicy(w http.ResponseWriter, r *http.Request) {
 	s.applyPolicies(w, r, keys, r.PostFormValue("bulk_policy"))
 }
 
-func (s *Server) applyPolicies(w http.ResponseWriter, r *http.Request, keys []string, policy string) {
+func (s *Server) applyPolicies(w http.ResponseWriter, r *http.Request, keys []liveKey, policy string) {
 	ctx, now, who := r.Context(), s.now(), actorName(r)
-	for _, key := range keys {
-		converted, err := s.Store.SetContainerPolicy(ctx, key, policy, who, now)
+	names, err := s.Store.HostNames(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	for _, k := range keys {
+		converted, err := s.Store.SetContainerPolicy(ctx, k.host, k.key, policy, who, now)
 		if err != nil {
 			invalid(w, err.Error())
 			return
 		}
 		s.event(ctx, "container_policy", map[string]any{
-			"container": key, "policy": policy, "converted_stack": converted, "by": who,
+			"host": names[k.host], "container": k.key, "policy": policy, "converted_stack": converted, "by": who,
 		})
 	}
 	s.Mon.PoliciesChanged()

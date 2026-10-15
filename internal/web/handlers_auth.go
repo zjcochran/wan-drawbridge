@@ -190,10 +190,12 @@ func (s *Server) setupPage(w http.ResponseWriter, r *http.Request) {
 			data.ISPName = names[st.ISP]
 		}
 	case 6:
-		if data.Stacks, err = s.stackRows(r); err != nil {
+		sd, err := s.stacksData(r, "")
+		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
+		data.Stacks = sd.Stacks
 	}
 	s.page(w, r, "setup", "Set up Drawbridge", data)
 }

@@ -72,8 +72,11 @@ records the decisions behind it and how to work in the repo.
 - `internal/probe` (public IP quorum), `internal/asn` (iptoasn plus the ipinfo fallback),
   `internal/learner`.
 - `internal/docker`: a minimal Engine API client.
-- `internal/executor`: stop/start runs in dependency layers. Runs are persisted so it can
-  recover after a crash.
+- `internal/hosts`: the hosts Drawbridge controls. Each has a `Runtime` (list,
+  inspect, stop, start, stats); host 1 is the local Docker socket.
+- `internal/executor`: stop/start runs in dependency layers, on every host at once. Runs
+  are persisted so it can recover after a crash; starts owed to an unreachable host stay
+  pending and `Retry` does them when it is back.
 - `internal/store`: SQLite, with goose migrations in `migrations/`. Add new migrations;
   never edit old ones. Backup files carry tables by column name (`backup.go`): a
   migration that renames or drops a backed-up column must also translate older backups.

@@ -29,12 +29,13 @@ type reportMonth struct {
 }
 
 type reportsData struct {
-	Now     time.Time
-	Periods []reportPeriod
-	Months  []reportMonth // the last 12, newest first
-	Top     []store.Usage // containers by traffic, last 30 days
-	Outages []store.Outage
-	Next    int64 // BeforeID for the next page, 0 if none
+	Now       time.Time
+	Periods   []reportPeriod
+	Months    []reportMonth // the last 12, newest first
+	Top       []store.Usage // containers by traffic, last 30 days
+	Outages   []store.Outage
+	Next      int64 // BeforeID for the next page, 0 if none
+	MultiHost bool  // show the host of each container
 }
 
 const (
@@ -46,6 +47,11 @@ func (s *Server) reportsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	now := s.now()
 	d := reportsData{Now: now}
+	var err error
+	if d.MultiHost, _, err = s.multiHost(ctx); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	year := monthStart(now).AddDate(0, -11, 0)
 	recent, err := s.Store.Outages(ctx, store.OutageFilter{Since: year.Add(-24 * time.Hour)})
 	if err != nil {
@@ -131,9 +137,10 @@ func months(os []store.Outage, first, now time.Time) []reportMonth {
 }
 
 type outageData struct {
-	Now    time.Time
-	Outage store.Outage
-	Usage  []store.Usage
+	Now       time.Time
+	Outage    store.Outage
+	Usage     []store.Usage
+	MultiHost bool // show the host of each container
 }
 
 func (s *Server) outagePage(w http.ResponseWriter, r *http.Request) {
@@ -148,6 +155,10 @@ func (s *Server) outagePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := outageData{Now: s.now(), Outage: o}
+	if d.MultiHost, _, err = s.multiHost(r.Context()); err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if d.Usage, err = s.Store.OutageUsage(r.Context(), id); err != nil {
 		s.fail(w, r, err)
 		return

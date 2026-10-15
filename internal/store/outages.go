@@ -38,6 +38,8 @@ func (o Outage) Duration(now time.Time) time.Duration {
 
 // Usage is the network traffic of one container during outages.
 type Usage struct {
+	HostID    int64
+	Host      string // the host's name
 	Container string
 	RX, TX    int64
 }
@@ -186,15 +188,18 @@ func scanOutage(row interface{ Scan(...any) error }) (Outage, error) {
 // OutageUsage returns each container's traffic during one outage, the
 // biggest first.
 func (s *Store) OutageUsage(ctx context.Context, id int64) ([]Usage, error) {
-	return s.usage(ctx, `SELECT container, rx, tx FROM outage_usage WHERE outage_id = ? ORDER BY rx + tx DESC, container`, id)
+	return s.usage(ctx, `SELECT u.host_id, COALESCE(h.name, ''), u.container, u.rx, u.tx
+		FROM outage_usage u LEFT JOIN hosts h ON h.id = u.host_id
+		WHERE u.outage_id = ? ORDER BY u.rx + u.tx DESC, u.host_id, u.container`, id)
 }
 
 // UsageSince returns each container's traffic during the outages that lasted
 // past since, the biggest first.
 func (s *Store) UsageSince(ctx context.Context, since time.Time) ([]Usage, error) {
-	return s.usage(ctx, `SELECT u.container, SUM(u.rx), SUM(u.tx) FROM outage_usage u
-		JOIN outages o ON o.id = u.outage_id WHERE o.ended IS NULL OR o.ended >= ?
-		GROUP BY u.container ORDER BY SUM(u.rx) + SUM(u.tx) DESC, u.container`, since.Unix())
+	return s.usage(ctx, `SELECT u.host_id, COALESCE(h.name, ''), u.container, SUM(u.rx), SUM(u.tx)
+		FROM outage_usage u JOIN outages o ON o.id = u.outage_id LEFT JOIN hosts h ON h.id = u.host_id
+		WHERE o.ended IS NULL OR o.ended >= ?
+		GROUP BY u.host_id, u.container ORDER BY SUM(u.rx) + SUM(u.tx) DESC, u.host_id, u.container`, since.Unix())
 }
 
 func (s *Store) usage(ctx context.Context, q string, arg any) ([]Usage, error) {
@@ -206,7 +211,7 @@ func (s *Store) usage(ctx context.Context, q string, arg any) ([]Usage, error) {
 	var out []Usage
 	for rows.Next() {
 		var u Usage
-		if err := rows.Scan(&u.Container, &u.RX, &u.TX); err != nil {
+		if err := rows.Scan(&u.HostID, &u.Host, &u.Container, &u.RX, &u.TX); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -219,15 +224,15 @@ func (s *Store) usage(ctx context.Context, q string, arg any) ([]Usage, error) {
 // start: the first sample only sets the baseline, and when the container was
 // re-created or restarted (new ID, or counters lower than before) the new
 // counters count in full.
-func (s *Store) RecordUsage(ctx context.Context, outageID int64, key, containerID string, rx, tx int64, now time.Time) error {
+func (s *Store) RecordUsage(ctx context.Context, outageID, hostID int64, key, containerID string, rx, tx int64, now time.Time) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO outage_usage (outage_id, container, container_id, last_rx, last_tx, ts) VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT (outage_id, container) DO UPDATE SET
+		INSERT INTO outage_usage (outage_id, host_id, container, container_id, last_rx, last_tx, ts) VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (outage_id, host_id, container) DO UPDATE SET
 			rx = rx + CASE WHEN container_id = excluded.container_id AND excluded.last_rx >= last_rx AND excluded.last_tx >= last_tx
 				THEN excluded.last_rx - last_rx ELSE excluded.last_rx END,
 			tx = tx + CASE WHEN container_id = excluded.container_id AND excluded.last_rx >= last_rx AND excluded.last_tx >= last_tx
 				THEN excluded.last_tx - last_tx ELSE excluded.last_tx END,
 			container_id = excluded.container_id, last_rx = excluded.last_rx, last_tx = excluded.last_tx, ts = excluded.ts`,
-		outageID, key, containerID, rx, tx, now.Unix())
+		outageID, hostID, key, containerID, rx, tx, now.Unix())
 	return err
 }

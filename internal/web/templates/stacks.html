@@ -1,5 +1,11 @@
 {{define "content"}}
 <h1>Stacks</h1>
 <p class="lead">A stack is a Docker Compose project. Turn one on to stop all of its containers while traffic runs over a backup ISP.</p>
+{{if .Data.MultiHost}}
+<form id="stack-filters" class="filters" hx-get="/stacks" hx-target="#stacks-table" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+  <input type="hidden" name="partial" value="1">
+  {{template "host-filter" .Data}}
+</form>
+{{end}}
 <section class="card">{{template "stacks-table" .Data}}</section>
 {{end}}

@@ -29,9 +29,9 @@ func fill(t *testing.T, s *Store) {
 	must(s.SetRole(ctx, isp, RolePrimary, true))
 	must(s.SetSetting(ctx, SettingDetection, map[string]any{"quorum": 2}))
 	must(s.SetSetting(ctx, SettingSetupComplete, true))
-	_, err = s.SyncInventory(ctx, []InventoryItem{{Key: "media/player", Project: "media", Service: "player", Name: "media-player-1"}}, t0)
+	_, err = s.SyncInventory(ctx, LocalHost, []InventoryItem{{Key: "media/player", Project: "media", Service: "player", Name: "media-player-1"}}, t0)
 	must(err)
-	must(s.SetStackPolicy(ctx, "media", true, "alice", t0))
+	must(s.SetStackPolicy(ctx, LocalHost, "media", true, "alice", t0))
 	u, err := s.CreateUser(ctx, "alice", "test-password-123", RoleAdmin, t0)
 	must(err)
 	_, err = s.CreateUser(ctx, "viewer", "test-password-123", RoleViewer, t0)
@@ -233,4 +233,33 @@ func withoutNewISP(rows []Row) []Row {
 		}
 	}
 	return out
+}
+
+// A backup from before hosts has no hosts table and no host_id columns:
+// everything in it lands on the local host.
+func TestImportBackupWithoutHosts(t *testing.T) {
+	ctx := context.Background()
+	src, dst := open(t), open(t)
+	fill(t, src)
+	snap, err := src.Export(ctx, false, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	delete(snap.Config, "hosts")
+	for _, table := range []string{"stacks", "containers"} {
+		for _, r := range snap.Config[table] {
+			delete(r, "host_id")
+		}
+	}
+	if err := dst.Import(ctx, viaJSON(t, snap)); err != nil {
+		t.Fatal(err)
+	}
+	hs, err := dst.Hosts(ctx)
+	if err != nil || len(hs) != 1 || hs[0].ID != LocalHost || hs[0].Name != "local" {
+		t.Fatalf("hosts = %+v, %v", hs, err)
+	}
+	stacks, _ := dst.Stacks(ctx)
+	if len(stacks) != 1 || stacks[0].HostID != LocalHost || !stacks[0].Disabled || stacks[0].Containers != 1 {
+		t.Errorf("stacks = %+v", stacks)
+	}
 }

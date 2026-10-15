@@ -35,6 +35,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 11 | `00011_metered.sql` | `isps` gains `metered` (default 1) |
 | 12 | `00012_api_tokens.sql` | api_tokens |
 | 13 | `00013_two_factor.sql` | `users` gains `totp_secret` and `totp_step`; recovery_codes |
+| 14 | `00014_hosts.sql` | hosts, with host 1 "local". `containers`, `stacks`, `run_actions` and `outage_usage` are rebuilt with a `host_id` in their primary key, existing rows on host 1; `run_actions` gains `restore` and `pending` |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -45,7 +46,9 @@ backups from the same or an older schema: columns added since then take their
 defaults. A migration that renames or drops a column of a backed-up table
 (`store.ConfigTables`, `checks`, `events`, `asn_daily`, `outages`,
 `outage_usage`) must also teach
-`store.Import` to translate older backups.
+`store.Import` to translate older backups. A backup from before hosts has no
+`hosts` table and no `host_id` columns: its rows take `host_id` 1, and the
+local host is created.
 
 ## Tables
 
@@ -183,34 +186,56 @@ Network traffic per container and outage, written by
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `outage_id` | INTEGER | PK with `container`. No foreign key |
+| `outage_id` | INTEGER | PK with `host_id` and `container`. No foreign key |
+| `host_id` | INTEGER | The container's host; default 1. No foreign key |
 | `container` | TEXT | Container key: `project/service` or the name |
 | `container_id` | TEXT | Docker ID at the last reading; a new one counts in full |
 | `rx`, `tx` | INTEGER | Bytes received and sent during the outage |
 | `last_rx`, `last_tx` | INTEGER | Docker's counters at the last reading |
 | `ts` | INTEGER | Last reading |
 
+### hosts
+
+The places Drawbridge controls. Host 1 is the local Docker socket and always
+exists.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | INTEGER PK | |
+| `name` | TEXT UNIQUE | `local` for host 1 |
+| `kind` | TEXT | `local` or `agent` |
+| `platform` | TEXT | `docker` |
+| `status` | TEXT | `pending`, `online`, `offline`, `revoked`, `disabled`. The executor sets `online` or `offline` each time it lists the host; it never changes `revoked` or `disabled` |
+| `last_seen` | INTEGER | The last time the host answered; NULL if never |
+| `last_error` | TEXT | Why the host could not be listed the last time; `''` when it answered |
+| `created_at`, `created_by` | INTEGER, TEXT | |
+
 ### stacks
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `project` | TEXT PK | Compose project name |
+| `host_id` | INTEGER | PK with `project`; default 1. No foreign key |
+| `project` | TEXT | Compose project name |
 | `disable_on_failover` | INTEGER | The stack switch |
 | `updated_at`, `updated_by` | INTEGER, TEXT | |
 
-Deleted by the inventory sync once no container has its `project`.
+Deleted by the inventory sync of its host once no container on that host has
+its `project`. The same project on two hosts is two stacks.
 
 ### containers
 
 | Column | Type | Notes |
 | --- | --- | --- |
-| `key` | TEXT PK | `project/service` or container name |
+| `host_id` | INTEGER | PK with `key`; default 1. No foreign key |
+| `key` | TEXT | `project/service` or container name |
 | `project`, `service` | TEXT | `''` for standalone containers |
 | `name` | TEXT | Latest container name |
 | `policy` | TEXT | `inherit` (default), `disable`, `keep` |
 | `label_policy` | TEXT | From the `drawbridge.on-failover` label at the last sync: `''`, `disable` or `keep` |
 | `needs_review` | INTEGER | New container without a label in a stack with per-container settings |
-| `first_seen`, `last_seen` | INTEGER | The inventory sync deletes rows with `last_seen` over 10 minutes old (`store.GoneAfter`) |
+| `first_seen`, `last_seen` | INTEGER | The inventory sync of the host deletes its rows with `last_seen` over 10 minutes old (`store.GoneAfter`); a host that cannot be reached keeps its rows |
+
+Index `containers_project` on `(host_id, project)`.
 
 ### runs
 
@@ -229,14 +254,18 @@ Index `runs_one_open`: unique on `status` where `status = 'open'`.
 | Column | Type | Notes |
 | --- | --- | --- |
 | `run_id` | INTEGER → runs | |
+| `host_id` | INTEGER | The container's host; default 1. No foreign key |
 | `container_id` | TEXT | The ID stopped |
 | `container_key` | TEXT | For finding a re-created container |
 | `name` | TEXT | |
 | `was_running` | INTEGER | Running when first recorded; never overwritten |
 | `stopped_at`, `started_at` | INTEGER | NULL until done |
 | `error` | TEXT | Last error; `''` after a success |
+| `restore` | TEXT | What starting it again needs, from the host's runtime; `''` for Docker containers |
+| `pending` | INTEGER | 1: a start owed to a host that could not be reached when the run ended. Cleared when it is started (or fails), or when a new run takes it over |
 
-Primary key `(run_id, container_id)`.
+Primary key `(run_id, host_id, container_id)`. Index `run_actions_pending` on
+`pending` where `pending = 1`.
 
 ### users
 

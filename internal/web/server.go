@@ -22,6 +22,7 @@ import (
 
 	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
+	"github.com/zjcochran/wan-drawbridge/internal/hosts"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
@@ -69,6 +70,7 @@ type Server struct {
 	Store   *store.Store
 	Mon     Monitor
 	Docker  Docker
+	Hosts   *hosts.Registry // every host, for live container state
 	Sync    Syncer
 	Hub     *Hub
 	Log     *slog.Logger
@@ -164,8 +166,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /actions/{action}", s.admin(s.action))
 
 	mux.Handle("GET /stacks", s.auth(s.stacksPage))
-	mux.Handle("GET /stacks/{project}/containers", s.auth(s.stackContainers))
-	mux.Handle("POST /stacks/{project}/policy", s.admin(s.setStackPolicy))
+	mux.Handle("GET /stacks/{host}/{project}/containers", s.auth(s.stackContainers))
+	mux.Handle("POST /stacks/{host}/{project}/policy", s.admin(s.setStackPolicy))
 
 	mux.Handle("GET /containers", s.auth(s.containersPage))
 	mux.Handle("POST /containers/policy", s.admin(s.setContainerPolicy))

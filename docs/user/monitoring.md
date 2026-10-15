@@ -50,6 +50,7 @@ expects.
 | `drawbridge_failback_hold_seconds` | gauge | | How long the primary must currently be stable before failback; grows while it flaps. |
 | `drawbridge_pending_due_timestamp_seconds` | gauge | | When a pending failover or failback completes if nothing interrupts it; 0 when none is pending. |
 | `drawbridge_containers_stopped` | gauge | | Containers Drawbridge stopped and has not started yet. |
+| `drawbridge_host_up` | gauge | `host` | 1 when the host answered the last time Drawbridge listed it (every 30 seconds and before every failover and failback), 0 when it did not. |
 | `drawbridge_backup_last_success_timestamp_seconds` | gauge | | When the last [scheduled backup](backup-and-restore.md#scheduled-backups) was written; 0 if none yet. |
 | `drawbridge_notifications_total` | counter | `result` = `sent`, `failed` | Notification deliveries; `failed` counts those that failed after every retry. |
 | `drawbridge_syslog_messages_total` | counter | `result` = `sent`, `dropped` | Only when [syslog](#sending-the-log-to-a-syslog-server) is on: log lines sent, and lines dropped because the queue was full. |
@@ -137,6 +138,10 @@ $ curl -H "Authorization: Bearer dbt_..." http://drawbridge:8080/api/status
   "failover_test_until": null,
   "busy": "",
   "stopped": ["media-db-1", "media-downloader-1"],
+  "hosts": [
+    { "name": "local", "platform": "docker", "status": "online",
+      "last_seen": "2026-10-14T15:18:30Z", "containers": 14, "stopped": 2 }
+  ],
   "version": "0.13.0"
 }
 ```
@@ -156,6 +161,7 @@ $ curl -H "Authorization: Bearer dbt_..." http://drawbridge:8080/api/status
 | `failover_test_until` | When a running failover test ends, or `null` |
 | `busy` | `stopping`, `starting` or `applying` while containers are being changed, else `""` |
 | `stopped` | Names of the containers Drawbridge has stopped and not yet started again; `[]` when none |
+| `hosts` | Every host: `name`, `platform` (`docker`), `status` (`online` when it answered the last time Drawbridge listed it, `offline` when not), `last_seen` (when it last answered, or `null`), `containers` (known containers on it) and `stopped` (those Drawbridge has stopped and not yet started again) |
 | `version` | Drawbridge's version |
 
 Times are RFC 3339 in UTC. The response has `Cache-Control: no-store`.
@@ -219,8 +225,8 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `api_token_created`, `api_token_deleted` | An API token was made or revoked in Settings → API tokens | `name`, `by` |
 | `isp_metered` | An ISP's Metered switch was changed in the UI | `isp`, `metered`, `by` |
 | `asn_moved` | An ASN was moved to another ISP in the UI | `asn`, `isp`, `by` |
-| `stack_policy` | A stack switch was flipped | `stack`, `disable`, `by` |
-| `container_policy` | A container setting changed | `container`, `policy`, `converted_stack`, `by` |
+| `stack_policy` | A stack switch was flipped | `host`, `stack`, `disable`, `by` |
+| `container_policy` | A container setting changed | `host`, `container`, `policy`, `converted_stack`, `by` |
 | `settings_changed` | Detection settings saved in Settings | `by` |
 | `user_created` | A user was added: in the setup wizard (`by` = `setup`), by an admin, or by single sign-on (`by` = `sso`) | `user`, `role`, `by` |
 | `user_disable`, `user_enable`, `user_delete`, `user_password` | User operations in Settings → Users | `user_id`, `by` |

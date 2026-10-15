@@ -6,6 +6,7 @@
       hx-trigger="change, input changed delay:300ms from:input[name=q]">
   <input type="hidden" name="partial" value="1">
   <input type="search" name="q" value="{{$d.Filter.Q}}" placeholder="Search containers" aria-label="Search containers">
+  {{if $d.MultiHost}}{{template "host-filter" (dict "Hosts" $d.Hosts "Host" $d.Filter.Host)}}{{end}}
   <select name="stack" aria-label="Stack">
     <option value="">All stacks</option>
     <option value="-" {{if eq $d.Filter.Stack "-"}}selected{{end}}>Standalone only</option>
@@ -44,25 +45,27 @@
 <table>
   <thead><tr>
     {{if .IsAdmin}}<th class="check"><input type="checkbox" data-select-all="keys" aria-label="Select all"></th>{{end}}
-    <th>Container</th><th>Stack</th><th>State</th><th>On failover</th>{{if .IsAdmin}}<th>Setting</th>{{end}}
+    <th>Container</th>{{if .MultiHost}}<th>Host</th>{{end}}<th>Stack</th><th>State</th><th>On failover</th>{{if .IsAdmin}}<th>Setting</th>{{end}}
   </tr></thead>
   <tbody>
   {{range .Rows}}
-  <tr>
-    {{if $.IsAdmin}}<td class="check"><input type="checkbox" name="keys" value="{{.Key}}" aria-label="Select {{.Name}}"></td>{{end}}
+  <tr{{if eq .State "unknown"}} class="dim"{{end}}>
+    {{if $.IsAdmin}}<td class="check"><input type="checkbox" name="keys" value="{{.HostID}}:{{.Key}}" aria-label="Select {{.Name}}"></td>{{end}}
     <td><strong>{{.Name}}</strong>{{if ne .Name .Key}}<div class="sub">{{.Key}}</div>{{end}}</td>
-    <td>{{if .Project}}<a href="/containers?stack={{query .Project}}">{{.Project}}</a>{{else}}<span class="muted">standalone</span>{{end}}</td>
-    <td><span class="dot {{.State}}"></span>{{.State}}</td>
+    {{if $.MultiHost}}<td><a href="/containers?host={{.HostID}}">{{.Host}}</a></td>{{end}}
+    <td>{{if .Project}}<a href="/containers?{{if $.MultiHost}}host={{.HostID}}&amp;{{end}}stack={{query .Project}}">{{.Project}}</a>{{else}}<span class="muted">standalone</span>{{end}}</td>
+    <td><span class="dot {{.State}}"></span>{{if and (eq .State "unknown") $.MultiHost}}host offline{{else}}{{.State}}{{end}}</td>
     <td>
       {{if eq .Effective "disable"}}<span class="badge bad">Stops</span>{{else}}<span class="badge ok">Keeps running</span>{{end}}
       <div class="sub {{if .NeedsReview}}warn-text{{end}}">{{.Source}}</div>
     </td>
     {{if $.IsAdmin}}
     <td>
+      <input type="hidden" name="container_host" value="{{.HostID}}">
       <input type="hidden" name="key" value="{{.Key}}">
       <select name="policy" aria-label="Setting for {{.Name}}"
               hx-post="/containers/policy" hx-include="closest td, #filters" hx-target="#containers-table" hx-swap="outerHTML"
-              {{if and .StackDisabled (eq .Policy "inherit") (not .Label)}}hx-confirm="This removes the stack-wide setting from {{.Project}}. The other {{sub (index $.Disabled .Project) 1}} containers in it will stay disabled individually."{{end}}>
+              {{if and .StackDisabled (eq .Policy "inherit") (not .Label)}}hx-confirm="This removes the stack-wide setting from {{.Project}}. The other {{sub ($.DisabledIn .HostID .Project) 1}} containers in it will stay disabled individually."{{end}}>
         <option value="inherit" {{if eq .Policy "inherit"}}selected{{end}}>{{if eq .Label "disable"}}Follow label (stop){{else if eq .Label "keep"}}Follow label (keep running){{else if .Project}}Follow stack{{else}}Default (keep running){{end}}</option>
         <option value="disable" {{if eq .Policy "disable"}}selected{{end}}>Stop on failover</option>
         <option value="keep" {{if eq .Policy "keep"}}selected{{end}}>Keep running</option>
@@ -71,7 +74,7 @@
     {{end}}
   </tr>
   {{else}}
-  <tr><td colspan="6" class="empty">No containers match.</td></tr>
+  <tr><td colspan="7" class="empty">No containers match.</td></tr>
   {{end}}
   </tbody>
 </table>

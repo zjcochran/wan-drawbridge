@@ -3,6 +3,7 @@
 package web
 
 import (
+	"context"
 	"crypto/subtle"
 	"fmt"
 	"net/http"
@@ -131,6 +132,7 @@ func (s *Server) metrics(w http.ResponseWriter, r *http.Request) {
 			keep++
 		}
 	}
+	s.hostMetrics(ctx, &b)
 	metric("drawbridge_containers", "Known containers by what happens to them on failover.", "gauge")
 	fmt.Fprintf(&b, "drawbridge_containers{on_failover=\"stop\"} %d\n", stop)
 	fmt.Fprintf(&b, "drawbridge_containers{on_failover=\"keep\"} %d\n", keep)
@@ -147,4 +149,20 @@ func label(v string) string {
 		}
 		return r
 	}, v)
+}
+
+// hostMetrics writes whether each host answered.
+func (s *Server) hostMetrics(ctx context.Context, b *strings.Builder) {
+	hs, err := s.Store.Hosts(ctx)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(b, "# HELP drawbridge_host_up 1 when the host answered the last time Drawbridge listed it.\n# TYPE drawbridge_host_up gauge\n")
+	for _, h := range hs {
+		up := 0
+		if h.Status == store.HostOnline {
+			up = 1
+		}
+		fmt.Fprintf(b, "drawbridge_host_up{host=%q} %d\n", label(h.Name), up)
+	}
 }

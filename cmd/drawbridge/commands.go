@@ -85,9 +85,28 @@ func (c cmdEnv) status([]string) error {
 	}
 	fmt.Fprintf(c.w, "open run\t#%d since %s\n", run.ID, run.StartedAt.Format(time.DateTime))
 	for _, a := range actions {
-		fmt.Fprintf(c.w, "  %s\twas running: %v, stopped: %v %s\n", a.Name, a.WasRunning, a.Stopped, a.Error)
+		fmt.Fprintf(c.w, "  %s\ton %s, was running: %v, stopped: %v %s\n", a.Name, a.Host, a.WasRunning, a.Stopped, a.Error)
 	}
 	return nil
+}
+
+// onHost splits "<host>:<name>" into the host's ID and the name. Without a
+// known host name in front, the name is on the local host.
+func (c cmdEnv) onHost(arg string) (int64, string, error) {
+	name, rest, ok := strings.Cut(arg, ":")
+	if !ok {
+		return store.LocalHost, arg, nil
+	}
+	hs, err := c.st.Hosts(c.ctx)
+	if err != nil {
+		return 0, "", err
+	}
+	for _, h := range hs {
+		if h.Name == name {
+			return h.ID, rest, nil
+		}
+	}
+	return 0, "", fmt.Errorf("no host named %q", name)
 }
 
 func (c cmdEnv) stacks([]string) error {
@@ -95,9 +114,9 @@ func (c cmdEnv) stacks([]string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(c.w, "STACK\tSTATUS\tDISABLING\tCONTAINERS")
+	fmt.Fprintln(c.w, "HOST\tSTACK\tSTATUS\tDISABLING\tCONTAINERS")
 	for _, r := range rows {
-		fmt.Fprintf(c.w, "%s\t%s\t%d\t%d\n", r.Project, r.Status(), r.Disabling, r.Containers)
+		fmt.Fprintf(c.w, "%s\t%s\t%s\t%d\t%d\n", r.Host, r.Project, r.Status(), r.Disabling, r.Containers)
 	}
 	return nil
 }
@@ -107,7 +126,7 @@ func (c cmdEnv) containers([]string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(c.w, "KEY\tSTACK\tPOLICY\tEFFECTIVE\tNOTE")
+	fmt.Fprintln(c.w, "HOST\tKEY\tSTACK\tPOLICY\tEFFECTIVE\tNOTE")
 	for _, r := range rows {
 		note := ""
 		switch {
@@ -118,17 +137,21 @@ func (c cmdEnv) containers([]string) error {
 		case r.Policy == store.Inherit && r.StackDisabled:
 			note = "from stack"
 		}
-		fmt.Fprintf(c.w, "%s\t%s\t%s\t%s\t%s\n", r.Key, r.Project, r.Policy, r.Effective, note)
+		fmt.Fprintf(c.w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Host, r.Key, r.Project, r.Policy, r.Effective, note)
 	}
 	return nil
 }
 
 func (c cmdEnv) setStack(args []string) error {
-	project, onOff := args[0], args[1]
+	host, project, err := c.onHost(args[0])
+	if err != nil {
+		return err
+	}
+	onOff := args[1]
 	if onOff != "on" && onOff != "off" {
 		return errUsage
 	}
-	if err := c.st.SetStackPolicy(c.ctx, project, onOff == "on", "cli", c.now); err != nil {
+	if err := c.st.SetStackPolicy(c.ctx, host, project, onOff == "on", "cli", c.now); err != nil {
 		return err
 	}
 	fmt.Fprintf(c.w, "stack %s: disable on failover %s; its containers now follow the stack\n", project, onOff)
@@ -136,8 +159,12 @@ func (c cmdEnv) setStack(args []string) error {
 }
 
 func (c cmdEnv) setContainer(args []string) error {
-	key, policy := args[0], args[1]
-	converted, err := c.st.SetContainerPolicy(c.ctx, key, policy, "cli", c.now)
+	host, key, err := c.onHost(args[0])
+	if err != nil {
+		return err
+	}
+	policy := args[1]
+	converted, err := c.st.SetContainerPolicy(c.ctx, host, key, policy, "cli", c.now)
 	if err != nil {
 		return err
 	}
