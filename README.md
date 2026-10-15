@@ -97,3 +97,6 @@ Copyright the WAN Drawbridge contributors. Licensed under the
 (`AGPL-3.0-or-later`). Every page links to the source of the running version,
 as the AGPL requires; set `DRAWBRIDGE_SOURCE_URL` if you run a modified
 version.
+
+The app icon is from Flaticon:
+[Drawbridge icons created by Magnific - Flaticon](https://www.flaticon.com/free-icons/drawbridge).
