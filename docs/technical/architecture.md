@@ -197,7 +197,8 @@ and daily totals, prune expired sessions, refresh the ASN database if it is
 older than a week.
 
 **Concurrency in the database** is handled by SQLite in WAL mode with a 5
-second busy timeout; writes are short transactions. The executor and the web
+second busy timeout; writes are short transactions, each taking the write
+lock when it begins, so writers queue rather than fail. The executor and the web
 server both write, but never to the same rows at the same time in a way that
 matters: policies are read by the executor at the start of each run.
 
@@ -241,7 +242,8 @@ run is recovered on the next start (see
    start-up with all problems listed. With `DRAWBRIDGE_SYSLOG`, start sending
    the log to syslog.
 2. Create `DRAWBRIDGE_DB_DIR` and `DRAWBRIDGE_CACHE_DIR` (mode 0750).
-3. Open `drawbridge.db` (WAL, busy timeout 5 s, foreign keys on) and run
+3. Open `drawbridge.db` (WAL, busy timeout 5 s, foreign keys on,
+   transactions that take the write lock when they begin) and run
    pending migrations.
 4. Create the Docker client from `DOCKER_HOST` (default
    `unix:///var/run/docker.sock`) and ping it. Failure is logged, not fatal.

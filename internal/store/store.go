@@ -35,7 +35,11 @@ func (s *Store) OnEvent(fn func(Event)) { s.onEvent.Store(&fn) }
 
 // Open opens (or creates) the database at path and applies migrations.
 func Open(ctx context.Context, path string) (*Store, error) {
-	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
+	// Transactions take the write lock when they begin (BEGIN IMMEDIATE), so a
+	// second writer waits for the first under busy_timeout. A deferred
+	// transaction that reads before it writes would instead fail at once with
+	// "database is locked" when another writer got in between.
+	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
