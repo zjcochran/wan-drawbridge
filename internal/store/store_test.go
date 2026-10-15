@@ -54,7 +54,7 @@ func TestConcurrentWriters(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := range 30 {
 		wg.Go(func() {
-			_, err := s.SyncInventory(ctx, items, now.Add(time.Duration(i)*time.Second))
+			_, err := s.SyncInventory(ctx, LocalHost, items, now.Add(time.Duration(i)*time.Second))
 			errs <- err
 		})
 		wg.Go(func() {
