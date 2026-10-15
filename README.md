@@ -16,7 +16,8 @@ them again.
   `drawbridge.on-failover` label in your Compose files.
 - Stops dependents first and starts dependencies first, waiting for
   healthchecks; only restarts what it stopped; survives restarts mid-run.
-- Controls more Docker hosts through agents: the same image with
+- Controls more Docker hosts, and Docker Swarms (services scaled to 0 and
+  back), through agents: the same image with
   `command: agent`, which connects to Drawbridge (no open port), enrolls with
   a one-time token, signs every request, only runs commands signed by
   Drawbridge's key, and rotates its key every 30 days. A host that is offline
@@ -85,6 +86,7 @@ Full documentation is in [`docs/`](docs/README.md).
 [Security](docs/technical/security.md) ·
 [HTTP interface](docs/technical/http-interface.md) ·
 [Agent protocol](docs/technical/agent-protocol.md) ·
+[Platforms](docs/technical/platforms.md) ·
 [Configuration reference](docs/technical/configuration-reference.md) ·
 [Testing and CI](docs/technical/testing-and-ci.md) ·
 [Development](docs/technical/development.md)

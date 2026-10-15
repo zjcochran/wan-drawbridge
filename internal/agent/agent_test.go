@@ -244,6 +244,15 @@ func TestConfigFromEnv(t *testing.T) {
 		!slices.Equal(c.Allow, []string{"media", "downloads"}) || c.Version != "v1.2.3" || c.Platform != "docker" {
 		t.Fatalf("config = %+v, %v", c, err)
 	}
+	env["DRAWBRIDGE_AGENT_PLATFORM"] = "swarm"
+	if c, err := ConfigFromEnv(func(k string) string { return env[k] }, ""); err != nil || c.Platform != PlatformSwarm {
+		t.Errorf("swarm platform = %+v, %v", c, err)
+	}
+	env["DRAWBRIDGE_AGENT_PLATFORM"] = "lxc"
+	if _, err := ConfigFromEnv(func(k string) string { return env[k] }, ""); err == nil {
+		t.Error("an unknown platform was accepted")
+	}
+	delete(env, "DRAWBRIDGE_AGENT_PLATFORM")
 	for _, bad := range []string{"", "drawbridge.example.com", "ftp://x", "https://"} {
 		env["DRAWBRIDGE_MANAGER"] = bad
 		if _, err := ConfigFromEnv(func(k string) string { return env[k] }, ""); err == nil {

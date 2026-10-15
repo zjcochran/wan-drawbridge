@@ -155,4 +155,4 @@ supported.
 - Syslog has only been tested against fake UDP, TCP and TLS servers, not a real
   rsyslog, syslog-ng or other receiver.
 - Agents have only been tested in-process against fake Docker engines, not on a
-  real second Docker host or through a real reverse proxy.
+  real second Docker host, a real Docker Swarm, or through a real reverse proxy.

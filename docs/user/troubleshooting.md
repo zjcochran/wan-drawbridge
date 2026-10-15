@@ -138,6 +138,7 @@ Settings → Hosts:
 | `… with the request's time is … from the manager's` | The two clocks differ by more than 5 minutes. Fix the time (NTP) on whichever is wrong. |
 | `… with key older than 90 days` | The agent was off for too long to rotate its key. Make a **New enrollment token**. |
 | `this host was revoked, disabled or removed` | As it says; enable it, or make a new enrollment token. |
+| `DRAWBRIDGE_AGENT_PLATFORM=swarm needs a swarm manager node` | The swarm agent runs on a worker. Constrain it to `node.role == manager`. |
 | Host **Offline**, agent log quiet | The agent's container is not running, or its Docker cannot be reached by it (`cannot reach Docker`). |
 
 The agent's container shows `unhealthy` in `docker ps` while it has not

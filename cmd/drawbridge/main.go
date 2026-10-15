@@ -287,7 +287,18 @@ func runAgent(ctx context.Context, stderr io.Writer) error {
 		log.Info("connected to Docker", "version", engine)
 	}
 	self, _ := os.Hostname()
-	return agent.New(cfg, hosts.Local{Docker: dc, SelfID: self}, dc, log).Run(ctx)
+	var rt hosts.Runtime = hosts.Local{Docker: dc, SelfID: self}
+	if cfg.Platform == agent.PlatformSwarm {
+		info, err := dc.Swarm(ctx)
+		if err != nil {
+			return err
+		}
+		if !info.Manager {
+			return errors.New("DRAWBRIDGE_AGENT_PLATFORM=swarm needs a swarm manager node: place the agent on one (node.role == manager)")
+		}
+		rt = hosts.Swarm{Docker: dc, SelfID: self}
+	}
+	return agent.New(cfg, rt, dc, log).Run(ctx)
 }
 
 // healthcheck asks the running server for /healthz, for Docker's HEALTHCHECK.

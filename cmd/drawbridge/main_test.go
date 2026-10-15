@@ -33,6 +33,8 @@ func fakeDocker(t *testing.T, broken bool) *httptest.Server {
 		switch {
 		case r.URL.Path == "/version":
 			fmt.Fprint(w, `{"Version":"28.5.2"}`)
+		case r.URL.Path == "/info":
+			fmt.Fprint(w, `{"Swarm":{"LocalNodeState":"inactive"}}`)
 		case r.URL.Path == "/containers/json":
 			fmt.Fprint(w, `[
 				{"Id":"p1","Names":["/media-player-1"],"State":"running","Labels":{"com.docker.compose.project":"media","com.docker.compose.service":"player"}},
@@ -485,6 +487,15 @@ func TestAgentMode(t *testing.T) {
 	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "not enrolled yet") {
 		t.Errorf("agent without a token: %d %q", code, errOut)
 	}
+	t.Setenv("DRAWBRIDGE_AGENT_PLATFORM", "swarm")
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "needs a swarm manager node") {
+		t.Errorf("swarm agent on a node that is not a manager: %d %q", code, errOut)
+	}
+	t.Setenv("DRAWBRIDGE_AGENT_PLATFORM", "kubernetes")
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "DRAWBRIDGE_AGENT_PLATFORM must be one of docker, swarm") {
+		t.Errorf("unknown platform: %d %q", code, errOut)
+	}
+	t.Setenv("DRAWBRIDGE_AGENT_PLATFORM", "")
 	t.Setenv("LOG_LEVEL", "loud")
 	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "LOG_LEVEL must be") {
 		t.Errorf("agent with a bad log level: %d %q", code, errOut)

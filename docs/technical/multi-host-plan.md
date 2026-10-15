@@ -380,67 +380,17 @@ container.
 
 - **Detection.** From `GET /info`: `Swarm.LocalNodeState = active` with
   `ControlAvailable`.
-- **Deployment.** One agent controls the whole swarm. It runs as a Swarm
-  service with one replica, pinned to manager nodes, so Swarm moves it to
-  another manager if its node goes down:
-
-  ```yaml
-  # docker stack deploy -c drawbridge-agent.yml drawbridge-agent
-  services:
-    agent:
-      image: ghcr.io/zjcochran/wan-drawbridge:latest
-      command: agent
-      volumes:
-        - /var/run/docker.sock:/var/run/docker.sock
-      environment:
-        DRAWBRIDGE_MANAGER: https://drawbridge.example.com
-        DRAWBRIDGE_MANAGER_KEY: ed25519:...
-        DRAWBRIDGE_ENROLL_TOKEN: dbe_...
-      secrets:
-        - source: drawbridge-agent-key   # the agent's key, so it survives moving nodes
-          target: /data/agent/key
-      deploy:
-        replicas: 1
-        placement:
-          constraints: [node.role == manager]
-  secrets:
-    drawbridge-agent-key:
-      external: true
-  ```
-
-  - **The key must survive a move to another node**, so in Swarm the agent
-    key is a Docker secret, not a file in a local volume.
-    `drawbridge agent keygen` prints a new key for
-    `docker secret create`. On enrollment, the agent registers the public
-    half of that key.
-  - **Key rotation in Swarm.** Docker secrets are read-only, so the agent
-    cannot rotate its own key; the admin does it:
-    1. `drawbridge agent keygen` prints a new private key and its public
-       key;
-    2. on the Hosts page, "Replace key" takes the new public key. The
-       manager then accepts both the old and the new key;
-    3. `docker secret create` with the new private key, then
-       `docker service update --secret-rm` / `--secret-add` swaps it. The
-       restarted agent signs with the new key, and its first request
-       retires the old one.
-
-    The Hosts page reminds you when the key is due (30 days), and the
-    90-day key age limit applies as on other platforms.
-  - **No writable state.** The agent may restart on another manager node
-    with nothing saved, so:
-    - **Its host is found from its key.** After enrolling, the agent signs
-      with `host=0`, and the manager finds the host by its public key. The
-      enrollment token in the stack file is ignored once that key is
-      registered, so leaving it there is harmless; it has also been used.
-    - **The pinned manager key comes from `DRAWBRIDGE_MANAGER_KEY`.** A
-      manager key rotation (2.5) cannot update an environment variable, so
-      for Swarm hosts the Hosts page shows the new key to put in the stack
-      file. The manager signs with both keys until every Swarm host has
-      moved.
-    - **Command IDs are not remembered across restarts.** Commands expire
-      after their deadline (the stop timeout plus 30 seconds), so a replay
-      after a restart is limited to that window, and the manager never sends
-      a command twice.
+- **Deployment (as built in phase 3).** One agent controls the whole swarm.
+  It runs as a one-replica service pinned to **one** manager node
+  (`node.role == manager` and `node.hostname == …`), with its folder in a
+  local volume on that node, like any other agent, and
+  `DRAWBRIDGE_AGENT_PLATFORM=swarm`.
+  - An earlier draft kept the agent's key in a Docker secret so the agent
+    could move between manager nodes. That needs a key the agent cannot
+    rotate, hosts found by key, and the manager key pinned only in the
+    environment. It was dropped as too much machinery for little gain: if
+    the pinned node is down, the swarm host is offline until it is back,
+    and the catch-up of 1.3 applies.
 - **The agent's own service** is excluded from the list, so a failover never
   stops the agent.
 - **What is listed.** Workloads are services, grouped by stack. Containers
@@ -592,7 +542,7 @@ container.
 | --- | --- | --- | --- |
 | 1 | Hosts and workloads | Migration 00014; `internal/hosts` (`Runtime` interface, registry, local runtime); executor fan-out, per-host failures, pending starts and `Retry`; Host column and filter on Stacks and Containers; host on the dashboard, reports, events, `/api/status` and metrics; `<host>:` in `set-stack`/`set-container`; backup translation. With only "local", behaviour is unchanged | minor |
 | 2 | Agent and signatures | Migration 00015; `internal/agentauth` (Ed25519 signing, verification, nonce cache); `drawbridge agent` mode with the Docker backend; `/api/agent/v1/` routes; command queue and long poll; enrollment; key rotation, manager key rotation, revocation; Settings → Hosts; CLI; events, metrics, notifications | minor |
-| 3 | Docker Swarm | Swarm backend in the agent (services, stacks, replicated and global stop/start, health); the agent as a Swarm service with its key in a Docker secret; `drawbridge agent keygen`; rotation by replacing the secret | minor |
+| 3 | Docker Swarm | Swarm runtime (services, stacks, replicated and global stop/start, health); `DRAWBRIDGE_AGENT_PLATFORM=swarm`; migration 16 (`containers.kind`); the agent pinned to one manager node | minor |
 | 4 | Proxmox LXC | Proxmox backend in the agent; TLS pinning; HA handling; start order; usage | minor |
 | 5 | Kubernetes | Small API client; workload kinds; HPA and GitOps warnings; `deploy/kubernetes/` manifest | minor |
 
@@ -614,7 +564,7 @@ changes. This plan is removed once phase 5 is merged.
 
 | Page | Phase | Contents |
 | --- | --- | --- |
-| `docs/user/hosts.md` | 2, extended in 3–5 | What a host is; Settings → Hosts; adding a Docker host step by step (the snippet and each variable; Traefik or direct address); statuses; Rotate now, Revoke, New enrollment token, Disable, Remove, Rotate manager key; what happens to a host that is offline during a failover and the failback; the allowlist. Phases 3–5 add a section each: Swarm (the stack file, creating the key secret with `keygen`, rotating it by replacing the secret); Proxmox (the exact `pveum` commands for the role, user and token, pool setup, the fingerprint, HA); Kubernetes (applying the manifest, choosing namespaces, the Argo CD `ignoreDifferences` rule, HPAs) |
+| `docs/user/hosts.md` | 2, extended in 3–5 | What a host is; Settings → Hosts; adding a Docker host step by step (the snippet and each variable; Traefik or direct address); statuses; Rotate now, Revoke, New enrollment token, Disable, Remove, Rotate manager key; what happens to a host that is offline during a failover and the failback; the allowlist. Phases 3–5 add a section each: Swarm (the stack file, pinned to one manager node); Proxmox (the exact `pveum` commands for the role, user and token, pool setup, the fingerprint, HA); Kubernetes (applying the manifest, choosing namespaces, the Argo CD `ignoreDifferences` rule, HPAs) |
 | `docs/technical/agent-protocol.md` | 2 | Each `/api/agent/v1/` route with request and response bodies and status codes; the long poll and its timeouts; the exact signed text for requests and commands; clock and nonce rules; enrollment; agent and manager key rotation, including how an interrupted rotation recovers; command IDs and expiry; versioning |
 | `docs/technical/platforms.md` | 3–5 | How each platform maps onto workloads, groups and stop/start: Swarm replicas and the global-service constraint; Proxmox shutdown, HA and start order; Kubernetes scale, nodeSelector and suspend. What `restore` holds for each, and which platforms have data-used stats and why not the others |
 | `deploy/kubernetes/README.md` | 5 | The manifest, and each RBAC rule and why it is needed |
@@ -632,7 +582,7 @@ changes. This plan is removed once phase 5 is merged.
 | `docs/user/during-an-outage.md` | 1, 2 | Stops and starts per host in parallel; pending actions for an offline host and when they are sent; "Forget" on pending actions |
 | `docs/user/notifications.md` | 2 | The new events in the failures group |
 | `docs/user/monitoring.md` | 1, 2 | New events and their payloads; `host` in run events; new metrics; `hosts` in `/api/status` and the Home Assistant example |
-| `docs/user/cli.md` | 2, 3 | `agent`, `hosts`, `revoke-host`, `enroll-token`; `agent keygen` (phase 3) |
+| `docs/user/cli.md` | 2, 3 | `agent`, `hosts`, `revoke-host`, `enroll-token`; `DRAWBRIDGE_AGENT_PLATFORM` (phase 3) |
 | `docs/user/backup-and-restore.md` | 1, 2 | Hosts and the manager key are in backups; agents keep working after a restore; older backups load into host "local" |
 | `docs/user/reverse-proxy.md` | 2 | `/api/agent/` goes through the proxy like the rest; the long poll and proxy timeouts (25 s polls fit the defaults); no extra routes or ports |
 | `docs/user/troubleshooting.md` | 2–5 | Agent will not enroll (token used or expired, manager key mismatch, cannot reach `DRAWBRIDGE_MANAGER`); signatures refused (clock skew over 5 minutes, revoked, key expired); host offline; Proxmox permission and fingerprint errors; Kubernetes RBAC errors; a scaled workload coming back (HPA, GitOps) |

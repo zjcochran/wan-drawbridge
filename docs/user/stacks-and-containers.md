@@ -17,6 +17,10 @@ It uses a **key**:
   one.
 - **Standalone containers** (`docker run`): the container name, for example
   `dns`.
+- **Docker Swarm services** (through a [swarm agent](hosts.md#adding-a-docker-swarm)):
+  `stack/service`, from the stack label (`com.docker.stack.namespace`), for
+  example `media/db`; a service outside a stack uses its name. A stack of a
+  swarm is a stack here, with the same switch and rules.
 
 Keys are per **host**: the local Docker socket is the host `local`, and the
 same project on another host is a different stack with its own settings.

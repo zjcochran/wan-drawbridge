@@ -33,10 +33,18 @@ func Effective(policy, label string, stackDisabled bool) string {
 	return Keep
 }
 
-// InventoryItem is one container as seen in Docker.
+// InventoryItem is one container (or Swarm service) as seen on its host.
 type InventoryItem struct {
 	Key, Project, Service, Name string
 	Label                       string // from drawbridge.on-failover: "", Disable or Keep
+	Kind                        string // "container" (when empty) or "service"
+}
+
+func (it InventoryItem) kind() string {
+	if it.Kind == "" {
+		return "container"
+	}
+	return it.Kind
 }
 
 // GoneAfter is how long a container can be missing from Docker before its row
@@ -71,9 +79,9 @@ func (s *Store) SyncInventory(ctx context.Context, hostID int64, items []Invento
 		if exists {
 			// A label added later settles a pending review.
 			if _, err := tx.ExecContext(ctx, `
-				UPDATE containers SET name = ?, last_seen = ?, label_policy = ?,
+				UPDATE containers SET name = ?, last_seen = ?, label_policy = ?, kind = ?,
 					needs_review = needs_review AND ? = ''
-				WHERE host_id = ? AND key = ?`, it.Name, now.Unix(), it.Label, it.Label, hostID, it.Key); err != nil {
+				WHERE host_id = ? AND key = ?`, it.Name, now.Unix(), it.Label, it.kind(), it.Label, hostID, it.Key); err != nil {
 				return nil, err
 			}
 			continue
@@ -87,9 +95,9 @@ func (s *Store) SyncInventory(ctx context.Context, hostID int64, items []Invento
 			}
 		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO containers (host_id, key, project, service, name, label_policy, needs_review, first_seen, last_seen)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			hostID, it.Key, it.Project, it.Service, it.Name, it.Label, review, now.Unix(), now.Unix()); err != nil {
+			INSERT INTO containers (host_id, key, project, service, name, label_policy, needs_review, first_seen, last_seen, kind)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			hostID, it.Key, it.Project, it.Service, it.Name, it.Label, review, now.Unix(), now.Unix(), it.kind()); err != nil {
 			return nil, err
 		}
 		added = append(added, it.Key)
@@ -181,6 +189,7 @@ type ContainerRow struct {
 	HostID                      int64
 	Host                        string // the host's name
 	Key, Project, Service, Name string
+	Kind                        string // "container" or "service"
 	Policy                      string
 	Label                       string // from the drawbridge.on-failover label
 	StackDisabled               bool
@@ -192,7 +201,7 @@ type ContainerRow struct {
 // Containers returns every known container, ordered by host, stack, then key.
 func (s *Store) Containers(ctx context.Context) ([]ContainerRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.host_id, COALESCE(h.name, ''), c.key, c.project, c.service, c.name, c.policy, c.label_policy,
+		SELECT c.host_id, COALESCE(h.name, ''), c.key, c.project, c.service, c.name, c.kind, c.policy, c.label_policy,
 			COALESCE(st.disable_on_failover, 0), c.needs_review, c.last_seen
 		FROM containers c
 		LEFT JOIN stacks st ON st.host_id = c.host_id AND st.project = c.project
@@ -206,7 +215,7 @@ func (s *Store) Containers(ctx context.Context) ([]ContainerRow, error) {
 	for rows.Next() {
 		var r ContainerRow
 		var seen int64
-		if err := rows.Scan(&r.HostID, &r.Host, &r.Key, &r.Project, &r.Service, &r.Name, &r.Policy, &r.Label, &r.StackDisabled, &r.NeedsReview, &seen); err != nil {
+		if err := rows.Scan(&r.HostID, &r.Host, &r.Key, &r.Project, &r.Service, &r.Name, &r.Kind, &r.Policy, &r.Label, &r.StackDisabled, &r.NeedsReview, &seen); err != nil {
 			return nil, err
 		}
 		r.Effective = Effective(r.Policy, r.Label, r.StackDisabled)

@@ -50,6 +50,15 @@ const (
 	heartbeatFile = "heartbeat"
 )
 
+// Platforms an agent can control.
+const (
+	PlatformDocker = "docker"
+	PlatformSwarm  = "swarm"
+)
+
+// Platforms lists the values of DRAWBRIDGE_AGENT_PLATFORM.
+var Platforms = []string{PlatformDocker, PlatformSwarm}
+
 // Config is the agent's settings, from DRAWBRIDGE_* variables.
 type Config struct {
 	Manager    string   // the manager's address, as the web UI is reached
@@ -67,7 +76,13 @@ func ConfigFromEnv(getenv func(string) string, version string) (Config, error) {
 	c := Config{
 		Manager: strings.TrimRight(strings.TrimSpace(getenv("DRAWBRIDGE_MANAGER")), "/"), Token: strings.TrimSpace(getenv("DRAWBRIDGE_ENROLL_TOKEN")),
 		ManagerKey: strings.TrimSpace(getenv("DRAWBRIDGE_MANAGER_KEY")), Dir: getenv("DRAWBRIDGE_AGENT_DIR"),
-		Platform: "docker", Version: version,
+		Platform: strings.TrimSpace(getenv("DRAWBRIDGE_AGENT_PLATFORM")), Version: version,
+	}
+	if c.Platform == "" {
+		c.Platform = PlatformDocker
+	}
+	if !slices.Contains(Platforms, c.Platform) {
+		return c, fmt.Errorf("DRAWBRIDGE_AGENT_PLATFORM must be one of %s", strings.Join(Platforms, ", "))
 	}
 	if c.Dir == "" {
 		c.Dir = "/data/agent"

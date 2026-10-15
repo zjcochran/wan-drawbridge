@@ -45,6 +45,7 @@ mode reads none of the other variables except `DOCKER_HOST` and `LOG_LEVEL`.
 | `DRAWBRIDGE_ENROLL_TOKEN` | unset | One-time `dbe_…` token from Settings → Hosts or `drawbridge enroll-token`. Needed only until the agent has enrolled; ignored afterwards. |
 | `DRAWBRIDGE_MANAGER_KEY` | unset | The manager's `ed25519:…` public key, needed to enroll. Enrollment fails if the manager reached has another key. |
 | `DRAWBRIDGE_AGENT_ALLOW` | unset | Comma-separated stack (Compose project) names. When set, the agent lists and acts on containers of these stacks only; standalone containers are left out. |
+| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` | `docker` for the agent's Docker engine, or `swarm` for the whole swarm from a manager node (anything else stops the agent; `swarm` on a node that is not a manager stops it too). See [Platforms](platforms.md). |
 | `DRAWBRIDGE_AGENT_DIR` | `/data/agent` | Folder for `key`, `key.next`, `state.json` and `heartbeat`; created with mode 0700. |
 
 ## Detection
