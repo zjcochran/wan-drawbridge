@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="auth-card card">
-  <h1><img src="{{static "icon.svg"}}" alt="" width="28" height="28"> WAN Drawbridge</h1>
+  <h1><img src="{{static "icon.png"}}" alt="" width="28" height="28"> WAN Drawbridge</h1>
   {{with .Data.Error}}<div class="banner bad">{{.}}</div>{{end}}
   {{if .Data.Code}}
   <form method="post" action="/login/code" class="stack">

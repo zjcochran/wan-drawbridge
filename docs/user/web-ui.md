@@ -19,7 +19,8 @@ There are two roles:
   are not shown.
 
 Every page footer shows the version and links to the source code, as the AGPL
-requires.
+requires, and credits the app icon (Drawbridge icons created by Magnific -
+Flaticon).
 
 ## Dashboard
 

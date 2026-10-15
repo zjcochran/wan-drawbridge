@@ -222,7 +222,7 @@ func TestStaticFilesAreVersioned(t *testing.T) {
 	admin := e.admin()
 	_, page := e.client().get("/login")
 	v := staticVersion()
-	if len(v) != 12 || !strings.Contains(page, `/static/icon.svg?v=`+v) {
+	if len(v) != 12 || !strings.Contains(page, `/static/icon.png?v=`+v) {
 		t.Fatalf("the sign-in page does not link versioned static files (v=%s)", v)
 	}
 	_, page = admin.get("/settings")
