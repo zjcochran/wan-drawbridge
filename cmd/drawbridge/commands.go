@@ -8,12 +8,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
 
+	"github.com/zjcochran/wan-drawbridge/internal/agents"
 	"github.com/zjcochran/wan-drawbridge/internal/executor"
+	"github.com/zjcochran/wan-drawbridge/internal/hosts"
+	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
@@ -21,7 +25,9 @@ import (
 type cmdEnv struct {
 	ctx    context.Context
 	st     *store.Store
-	w      *tabwriter.Writer // aligned output, flushed after the command
+	box    func() (*secrets.Box, error) // the instance key, loaded when a command needs it
+	base   string                       // DRAWBRIDGE_BASE_URL
+	w      *tabwriter.Writer            // aligned output, flushed after the command
 	stdin  io.Reader
 	stderr io.Writer
 	now    time.Time
@@ -42,11 +48,14 @@ var subcommands = map[string]struct {
 	"move-asn":       {2, (cmdEnv).moveASN},
 	"reset-password": {1, (cmdEnv).resetPassword},
 	"reset-2fa":      {1, (cmdEnv).resetTwoFactor},
+	"hosts":          {0, (cmdEnv).hosts},
+	"revoke-host":    {1, (cmdEnv).revokeHost},
+	"enroll-token":   {1, (cmdEnv).enrollToken},
 }
 
 var errUsage = errors.New(usage)
 
-func command(ctx context.Context, args []string, st *store.Store, ex *executor.Executor,
+func command(ctx context.Context, args []string, st *store.Store, ex *executor.Executor, box func() (*secrets.Box, error), base string,
 	stdin io.Reader, stdout, stderr io.Writer) error {
 	sub, ok := subcommands[args[0]]
 	if !ok || len(args)-1 != sub.args {
@@ -59,7 +68,7 @@ func command(ctx context.Context, args []string, st *store.Store, ex *executor.E
 	}
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	defer w.Flush()
-	return sub.run(cmdEnv{ctx: ctx, st: st, w: w, stdin: stdin, stderr: stderr, now: time.Now()}, args[1:])
+	return sub.run(cmdEnv{ctx: ctx, st: st, box: box, base: base, w: w, stdin: stdin, stderr: stderr, now: time.Now()}, args[1:])
 }
 
 func (c cmdEnv) status([]string) error {
@@ -291,4 +300,88 @@ func (c cmdEnv) resetTwoFactor(args []string) error {
 		return nil
 	}
 	return fmt.Errorf("no user %q", args[0])
+}
+
+func (c cmdEnv) hosts([]string) error {
+	rows, err := c.st.Hosts(c.ctx)
+	if err != nil {
+		return err
+	}
+	as, err := c.st.AgentHosts(c.ctx)
+	if err != nil {
+		return err
+	}
+	version := map[int64]string{}
+	for _, a := range as {
+		version[a.ID] = a.Version
+	}
+	fmt.Fprintln(c.w, "ID\tHOST\tKIND\tSTATUS\tLAST SEEN\tVERSION")
+	for _, h := range rows {
+		seen := "never"
+		if !h.LastSeen.IsZero() {
+			seen = h.LastSeen.Format(time.DateTime)
+		}
+		fmt.Fprintf(c.w, "%d\t%s\t%s\t%s\t%s\t%s\n", h.ID, h.Name, h.Kind, h.Status, seen, version[h.ID])
+	}
+	return nil
+}
+
+// agentByName finds an agent host by name.
+func (c cmdEnv) agentByName(name string) (store.AgentHost, bool, error) {
+	as, err := c.st.AgentHosts(c.ctx)
+	for _, a := range as {
+		if a.Name == name {
+			return a, true, err
+		}
+	}
+	return store.AgentHost{}, false, err
+}
+
+func (c cmdEnv) revokeHost(args []string) error {
+	a, ok, err := c.agentByName(args[0])
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("no agent host named %q", args[0])
+	}
+	if err := c.st.RevokeHost(c.ctx, a.ID); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.w, "host %s revoked: its agent is refused from now on\n", a.Name)
+	return nil
+}
+
+// enrollToken prints a one-time enrollment token for an agent host, adding
+// the host if it does not exist yet.
+func (c cmdEnv) enrollToken(args []string) error {
+	box, err := c.box()
+	if err != nil {
+		return err
+	}
+	mgr := agents.New(c.st, box, nil, hosts.Host{}, slog.New(slog.DiscardHandler))
+	key, err := mgr.ManagerKey(c.ctx)
+	if err != nil {
+		return err
+	}
+	a, ok, err := c.agentByName(args[0])
+	if err != nil {
+		return err
+	}
+	var token string
+	if ok {
+		token, err = c.st.NewEnrollToken(c.ctx, a.ID, c.now)
+	} else {
+		_, token, err = c.st.AddAgentHost(c.ctx, args[0], "cli", c.now)
+	}
+	if err != nil {
+		return err
+	}
+	manager := c.base
+	if manager == "" {
+		manager = "<the address of Drawbridge's web UI>"
+	}
+	fmt.Fprintf(c.w, "DRAWBRIDGE_MANAGER=%s\nDRAWBRIDGE_ENROLL_TOKEN=%s\nDRAWBRIDGE_MANAGER_KEY=%s\n", manager, token, key)
+	fmt.Fprintln(c.w, "# the token works once, within an hour")
+	return nil
 }

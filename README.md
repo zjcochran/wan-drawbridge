@@ -16,6 +16,11 @@ them again.
   `drawbridge.on-failover` label in your Compose files.
 - Stops dependents first and starts dependencies first, waiting for
   healthchecks; only restarts what it stopped; survives restarts mid-run.
+- Controls more Docker hosts through agents: the same image with
+  `command: agent`, which connects to Drawbridge (no open port), enrolls with
+  a one-time token, signs every request, only runs commands signed by
+  Drawbridge's key, and rotates its key every 30 days. A host that is offline
+  during a failover is caught up with when it is back.
 - A failover test stops and restarts the chosen containers on demand or on a
   weekly or monthly schedule, and automation can be paused for a set time or
   until resumed.
@@ -31,8 +36,8 @@ them again.
 - Encrypted backup files of the configuration, downloaded or made daily, with
   optional history, that restore from Settings or straight from the setup
   wizard on a new host.
-- One container, one SQLite database folder, the Docker socket. No Node.js, no
-  external database.
+- One container, one SQLite database folder, the Docker socket (plus an agent
+  container on each other Docker host). No Node.js, no external database.
 
 ## Quick start
 
@@ -60,6 +65,7 @@ Full documentation is in [`docs/`](docs/README.md).
 [Setup wizard](docs/user/setup-wizard.md) ·
 [Using the web UI](docs/user/web-ui.md) ·
 [Choosing what to stop](docs/user/stacks-and-containers.md) ·
+[Hosts and agents](docs/user/hosts.md) ·
 [ISPs](docs/user/isps.md) ·
 [During an outage](docs/user/during-an-outage.md) ·
 [Single sign-on](docs/user/single-sign-on.md) ·
@@ -78,6 +84,7 @@ Full documentation is in [`docs/`](docs/README.md).
 [Data model](docs/technical/data-model.md) ·
 [Security](docs/technical/security.md) ·
 [HTTP interface](docs/technical/http-interface.md) ·
+[Agent protocol](docs/technical/agent-protocol.md) ·
 [Configuration reference](docs/technical/configuration-reference.md) ·
 [Testing and CI](docs/technical/testing-and-ci.md) ·
 [Development](docs/technical/development.md)

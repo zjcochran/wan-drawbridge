@@ -10,7 +10,12 @@ records the decisions behind it and how to work in the repo.
   `/data/db` and nothing else goes there, so the folder can be mounted for backups.
   It also holds `secret.key`.
 - Docker access is through a direct `/var/run/docker.sock` mount. There is no socket proxy.
-- The app is not built for load balancing: one instance, one Docker host.
+- The app is not built for load balancing: one manager instance. It controls many
+  Docker hosts: the local socket plus agents (`drawbridge agent`, same image).
+  Agents connect to the manager over its normal address and REST API; the manager
+  never connects to an agent. Agent requests are signed with the agent's Ed25519
+  key, commands with the manager's key (no mTLS, so it works behind a TLS-terminating
+  proxy). Enrollment is a one-time token; keys rotate every 30 days.
 - An ISP is a group of ASNs: names are grouped by AS handle (`EXAMPLENET-64500` → `EXAMPLENET`).
   Every comparison is ISP to ISP, never ASN to ASN.
 - An unknown ISP counts as a backup, and starts metered. A backup switched to
@@ -30,7 +35,6 @@ records the decisions behind it and how to work in the repo.
 - License is AGPL-3.0-or-later. Every Go file starts with an SPDX header, and the
   footer links to the source (AGPL §13).
 - CI is GitLab CI (`.gitlab-ci.yml`), not GitHub. Images go to ghcr.io (see below), not the GitLab registry.
-- Deferred, not rejected: multiple Docker hosts.
 
 ## Working with the user
 
@@ -74,6 +78,9 @@ records the decisions behind it and how to work in the repo.
 - `internal/docker`: a minimal Engine API client.
 - `internal/hosts`: the hosts Drawbridge controls. Each has a `Runtime` (list,
   inspect, stop, start, stats); host 1 is the local Docker socket.
+- `internal/agentauth`: the agent protocol (keys, signed requests and commands,
+  messages). `internal/agents`: the manager's side (enrollment, agent API, command
+  queue, rotation, a `Runtime` per agent). `internal/agent`: agent mode.
 - `internal/executor`: stop/start runs in dependency layers, on every host at once. Runs
   are persisted so it can recover after a crash; starts owed to an unreachable host stay
   pending and `Retry` does them when it is back.
@@ -147,3 +154,5 @@ supported.
   each proxy's documentation and not yet tested against a real proxy.
 - Syslog has only been tested against fake UDP, TCP and TLS servers, not a real
   rsyslog, syslog-ng or other receiver.
+- Agents have only been tested in-process against fake Docker engines, not on a
+  real second Docker host or through a real reverse proxy.

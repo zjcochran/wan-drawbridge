@@ -178,6 +178,58 @@ Turns off a user's [two-factor sign-in](web-ui.md#two-factor-sign-in) and
 deletes their recovery codes, for a lost phone when no other admin can do it
 in Settings → Users. The username is case-insensitive.
 
+## hosts
+
+```sh
+$ docker compose exec drawbridge /drawbridge hosts
+ID  HOST   KIND   STATUS   LAST SEEN            VERSION
+1   local  local  online   2026-10-14 15:18:30
+2   nas    agent  online   2026-10-14 15:18:22  v0.14.0
+```
+
+Every [host](hosts.md): its ID, name, kind (`local` or `agent`), status
+(`pending`, `online`, `offline`, `revoked`, `disabled`), when it last answered
+and, for agents, their version.
+
+## enroll-token
+
+```sh
+$ docker compose exec drawbridge /drawbridge enroll-token nas
+DRAWBRIDGE_MANAGER=https://drawbridge.example.com
+DRAWBRIDGE_ENROLL_TOKEN=dbe_...
+DRAWBRIDGE_MANAGER_KEY=ed25519:...
+# the token works once, within an hour
+```
+
+Prints the variables an agent needs to enroll, for a host named as given:
+the host is added if it does not exist, and gets a new token if it does,
+which stops its current agent until it enrolls again. `DRAWBRIDGE_MANAGER` is
+`DRAWBRIDGE_BASE_URL`; without it, the line says to put the web UI's address
+there. Needs the instance key (`secret.key` or `DRAWBRIDGE_SECRET_KEY`), as
+the server does.
+
+## revoke-host
+
+```sh
+$ docker compose exec drawbridge /drawbridge revoke-host nas
+host nas revoked: its agent is refused from now on
+```
+
+Deletes an agent host's key, so its agent is refused from its next request.
+For a revoke that also takes effect in the running server's views at once,
+use Settings → Hosts.
+
+## agent
+
+```sh
+drawbridge agent
+```
+
+Runs [agent mode](hosts.md), with the settings from `DRAWBRIDGE_MANAGER`,
+`DRAWBRIDGE_ENROLL_TOKEN`, `DRAWBRIDGE_MANAGER_KEY`, `DRAWBRIDGE_AGENT_ALLOW`,
+`DRAWBRIDGE_AGENT_DIR`, `DOCKER_HOST` and `LOG_LEVEL`. It opens no database
+and no port. In a Compose file, this is `command: agent`.
+
 ## Notes
 
 - Changes made with the CLI are **not** recorded in the event log.

@@ -10,6 +10,17 @@ while you are on the backup and brings them back afterwards.
 No. Your router or modem does the failover. Drawbridge only notices which
 provider your traffic is using and reacts by stopping and starting containers.
 
+**Can Drawbridge stop containers on more than one Docker host?**
+Yes. Run a Drawbridge [agent](hosts.md) on each other host. Agents connect to
+Drawbridge at the web UI's address, so they need no open port and can be on
+other networks, behind NAT, or reach it through your reverse proxy.
+
+**What can an agent do on its host?**
+Only list, inspect, stop and start containers and read their network
+counters, when Drawbridge asks with a command signed by its key. It cannot run
+commands in containers, pull images or create anything. See [What an agent
+can and cannot do](hosts.md#what-an-agent-can-and-cannot-do).
+
 **How does it know I am on the backup?**
 It asks public "what is my IP" services for your address, looks up which
 network (ASN) the address belongs to, and compares that network's provider to

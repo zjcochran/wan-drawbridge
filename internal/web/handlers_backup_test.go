@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zjcochran/wan-drawbridge/internal/agents"
 	"github.com/zjcochran/wan-drawbridge/internal/backup"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
@@ -82,14 +83,17 @@ func TestDownloadBackup(t *testing.T) {
 	}
 	// The secret travels in the clear inside the encryption, so another
 	// instance with another key can use it.
-	var found bool
+	var found, agentKey bool
 	for _, row := range snap.Config["settings"] {
-		if row["key"] == SettingOIDC {
+		switch row["key"] {
+		case SettingOIDC:
 			found = strings.Contains(row["value"].(string), `"client_secret":"client-secret-value"`)
+		case agents.SettingManagerKeys:
+			agentKey = strings.Contains(row["value"].(string), `"k1":"ed25519-private:`)
 		}
 	}
-	if !found {
-		t.Fatal("client secret not exported in the clear")
+	if !found || !agentKey {
+		t.Fatalf("secrets not exported in the clear: sso %v, manager key %v", found, agentKey)
 	}
 	if _, body := c.get("/events"); !strings.Contains(body, "backup_created") {
 		t.Error("no backup_created event")
@@ -145,6 +149,9 @@ func backupOf(t *testing.T) []byte {
 	src.withSSO("moved-secret")
 	src.st.CreateUser(ctx, "alice", "test-password-123", store.RoleAdmin, time.Now())
 	src.st.SeeASN(ctx, 64511, "BIGTEL-64511", time.Now())
+	if _, _, err := src.ui.Agents.Add(ctx, "nas", "alice"); err != nil {
+		t.Fatal(err)
+	}
 	c := src.client()
 	c.do("POST", "/login", url.Values{"username": {"alice"}, "password": {"test-password-123"}})
 	c.get("/settings")
@@ -159,6 +166,7 @@ func TestRestoreFromSettings(t *testing.T) {
 	file := backupOf(t)
 	e := newEnv(t)
 	c := e.admin()
+	before, _ := e.ui.Agents.ManagerKey(context.Background())
 	if resp, body := c.upload("/settings/restore", file, "wrong passphrase!", "HX-Request", "true", "X-CSRF-Token", c.csrf); resp.StatusCode != http.StatusUnprocessableEntity || !strings.Contains(body, "wrong passphrase") {
 		t.Fatalf("wrong passphrase: %d %s", resp.StatusCode, body)
 	}
@@ -190,6 +198,13 @@ func TestRestoreFromSettings(t *testing.T) {
 	events, _ := e.st.Events(ctx, store.EventFilter{Type: "backup_restored", Limit: 10})
 	if len(events) != 1 {
 		t.Errorf("backup_restored events: %d", len(events))
+	}
+	// The backup's hosts and manager key replace this instance's.
+	if after, err := e.ui.Agents.ManagerKey(ctx); err != nil || after.Equal(before) {
+		t.Errorf("manager key after restore: %v (unchanged: %v)", err, after.Equal(before))
+	}
+	if as, _ := e.st.AgentHosts(ctx); len(as) != 1 || as[0].Name != "nas" {
+		t.Errorf("hosts after restore: %+v", as)
 	}
 }
 

@@ -76,7 +76,7 @@ func Format(e store.Event, names map[int]string) Message {
 		}
 		m.Text = str("error") + ". See the dashboard for which containers are affected."
 	default:
-		if !formatISP(&m, str, isp) && !formatDrill(&m, str) {
+		if !formatISP(&m, str, isp) && !formatDrill(&m, str) && !formatHost(&m, str) {
 			formatAdmin(&m, str)
 		}
 	}
@@ -139,6 +139,28 @@ func formatDrill(m *Message, str func(string) string) bool {
 }
 
 // formatAdmin covers events started by people or schedules: pausing, backups.
+// formatHost formats agent host events; it reports false for other events.
+func formatHost(m *Message, str func(string) string) bool {
+	switch m.Event {
+	case "host_offline":
+		m.Title, m.Priority = "Host "+str("host")+" is offline", 4
+		m.Text = "Its agent has not been in touch for 90 seconds. Its containers are stopped or started when it is back."
+	case "host_online":
+		m.Title = "Host " + str("host") + " is back"
+		m.Text = "Its agent is in touch again."
+	case "host_key_expiring":
+		m.Title, m.Priority = "Agent key of "+str("host")+" is about to expire", 4
+		m.Text = "The agent has not rotated its key. It is refused from " + str("expires") +
+			" unless it rotates; check that it runs, or make a new enrollment token in Settings → Hosts."
+	case "agent_refused":
+		m.Title, m.Priority = "Agent of "+str("host")+" was refused", 4
+		m.Text = str("reason") + ". If this was not you, revoke the host in Settings → Hosts."
+	default:
+		return false
+	}
+	return true
+}
+
 func formatAdmin(m *Message, str func(string) string) {
 	switch m.Event {
 	case "paused":

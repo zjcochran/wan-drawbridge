@@ -57,6 +57,7 @@ after a restart until the next message.
 | Failover and failback, and failover tests | `failover`, `failback`, `manual_failover`, `manual_restore`, `drill_started`, `drill_ended`, `drill_skipped` | Yes |
 | Failures: containers that did not stop or start, scheduled backups | `run_failed`, `backup_failed` | Yes |
 | Flapping primary ISP | `flapping` | Yes |
+| Hosts going offline and coming back, and agent key problems | `host_offline`, `host_online`, `host_key_expiring`, `agent_refused` | Yes |
 | New ISPs and primary ISP changes | `isp_new`, `primary_learned`, `primary_suggested`, `primary_undecided` | Yes |
 | Automation paused or resumed | `paused`, `resumed` | No |
 | Backups made or restored | `backup_created` (downloaded or scheduled), `backup_restored` | No |
@@ -71,12 +72,15 @@ of the messages:
 | `run_failed` | Stopping containers failed | (the error). See the dashboard for which containers are affected. |
 | `flapping` | The primary ISP is flapping | It failed again soon after failing back (2 times in a row), so failback now waits 20m0s of stable connection. |
 | `isp_new` | New ISP seen | Drawbridge saw BIGTEL (AS64511) for the first time. Until it is learned or set as primary on the ISPs page, it counts as a metered backup. |
+| `host_offline` | Host nas is offline | Its agent has not been in touch for 90 seconds. Its containers are stopped or started when it is back. |
+| `agent_refused` | Agent of nas was refused | bad signature. If this was not you, revoke the host in Settings → Hosts. |
 
 If automation is paused, failover and failback messages say that no container
 was stopped or started.
 
-Priorities: container failures are 5 (urgent), failovers and failed scheduled
-backups 4 (high), everything else 3 (default), on ntfy's 1 to 5 scale. Gotify
+Priorities: container failures are 5 (urgent); failovers, failed scheduled
+backups, a host going offline, an agent key about to expire and a refused
+agent 4 (high); everything else 3 (default), on ntfy's 1 to 5 scale. Gotify
 gets them as 10, 8 and 5; Pushover as 1, 1 and 0 (Pushover's emergency
 priority, which repeats until acknowledged, is not used); email marks 5 and 4
 with `X-Priority: 1` and `2`.

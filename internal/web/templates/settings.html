@@ -83,6 +83,9 @@
 {{else if eq $d.Tab "api"}}
 <section class="card">{{template "api-tokens" $d.API}}</section>
 
+{{else if eq $d.Tab "hosts"}}
+<section class="card">{{template "hosts" $d.Hosts}}</section>
+
 {{else if eq $d.Tab "account"}}
 <section class="card">
   <h2>Your sign-in</h2>
@@ -330,6 +333,85 @@
   {{end}}
   </tbody>
 </table>
+</div>
+{{end}}
+
+{{define "hosts"}}
+<div id="hosts">
+  <p>A host is a Docker engine Drawbridge stops and starts containers on. <strong>local</strong> is the one whose socket is mounted
+    into Drawbridge. Other hosts run a Drawbridge agent, which connects to this address; agents open no port.</p>
+  {{with .New}}<div class="banner ok" role="status">
+    <p>Start the agent for <strong>{{.Name}}</strong> with this Compose file. The enrollment token works once, within an hour,
+      and is not shown again.</p>
+    <pre><code>{{.Snippet}}</code></pre></div>{{end}}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Host</th><th>Status</th><th>Agent</th>{{if .IsAdmin}}<th></th>{{end}}</tr></thead>
+    <tbody>
+    {{range .Hosts}}
+    <tr>
+      <td><strong>{{.Name}}</strong><div class="sub">{{if .Agent}}agent{{else}}local socket{{end}}{{with .Platform}} · {{.}}{{end}}</div></td>
+      <td>
+        {{if eq .Status "online"}}<span class="badge ok">Online</span>
+        {{else if eq .Status "offline"}}<span class="badge bad">Offline</span>
+        {{else if eq .Status "pending"}}<span class="badge warn">Waiting for the agent</span>
+        {{else if eq .Status "revoked"}}<span class="badge muted">Revoked</span>
+        {{else}}<span class="badge muted">Disabled</span>{{end}}
+        {{if not .LastSeen.IsZero}}<div class="sub">last seen <time title="{{datetime .LastSeen}}">{{ago .LastSeen}}</time>{{with .LastAddress}} from {{.}}{{end}}</div>{{end}}
+        {{with .LastError}}<div class="sub bad-text">{{.}}</div>{{end}}
+        {{if .EnrollPending}}<div class="sub">token valid until <time>{{datetime .EnrollExpires}}</time></div>{{end}}
+        {{if .Owed}}<div class="sub warn-text">{{.Owed}} {{if eq .Owed 1}}container{{else}}containers{{end}} to start once it is back</div>{{end}}
+      </td>
+      <td>
+        {{if .Agent}}
+          {{$kc := .KeyCreated}}
+          {{.Version}}{{if .OldVersion}} <span class="badge warn">not the manager's version</span>{{end}}
+          {{with .Fingerprint}}<div class="sub">key {{.}} · {{keyAge $kc}}</div>{{end}}
+        {{else}}<span class="muted">–</span>{{end}}
+      </td>
+      {{if $.IsAdmin}}
+      <td class="right">
+        {{if .Agent}}
+          {{if or (eq .Status "online") (eq .Status "offline")}}
+          <button class="link" hx-post="/settings/hosts/{{.ID}}/rotate" hx-target="#hosts" hx-swap="outerHTML">Rotate key now</button>
+          {{end}}
+          <button class="link" hx-post="/settings/hosts/{{.ID}}/token" hx-target="#hosts" hx-swap="outerHTML"
+            hx-confirm="Make a new enrollment token for {{.Name}}? Its agent stops working until it enrolls again with the token.">New enrollment token</button>
+          {{if ne .Status "revoked"}}<button class="link danger-text" hx-post="/settings/hosts/{{.ID}}/revoke" hx-target="#hosts" hx-swap="outerHTML"
+            hx-confirm="Revoke {{.Name}}? Its agent is refused at once.">Revoke</button>{{end}}
+        {{end}}
+        {{if eq .Status "disabled"}}<button class="link" hx-post="/settings/hosts/{{.ID}}/enable" hx-target="#hosts" hx-swap="outerHTML">Enable</button>
+        {{else if ne .Status "revoked"}}<button class="link" hx-post="/settings/hosts/{{.ID}}/disable" hx-target="#hosts" hx-swap="outerHTML"
+          hx-confirm="Disable {{.Name}}? Its containers are left alone in every failover until you enable it again.">Disable</button>{{end}}
+        {{if .Owed}}<button class="link" hx-post="/settings/hosts/{{.ID}}/forget" hx-target="#hosts" hx-swap="outerHTML"
+          hx-confirm="Forget the containers still to start on {{.Name}}? Drawbridge will not start them.">Forget owed starts</button>{{end}}
+        {{if .Agent}}<button class="link danger-text" hx-post="/settings/hosts/{{.ID}}/remove" hx-target="#hosts" hx-swap="outerHTML"
+          hx-confirm="Remove {{.Name}} with its container settings? This cannot be undone.">Remove</button>{{end}}
+        <form class="inline" hx-post="/settings/hosts/{{.ID}}/rename" hx-target="#hosts" hx-swap="outerHTML">
+          <input name="name" value="{{.Name}}" maxlength="32" aria-label="New name for {{.Name}}" required>
+          <button class="link">Rename</button>
+        </form>
+      </td>
+      {{end}}
+    </tr>
+    {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if and .IsAdmin .Enabled}}
+  <h3>Add a host</h3>
+  <form class="row end" hx-post="/settings/hosts" hx-target="#hosts" hx-swap="outerHTML">
+    <label>Name <input name="name" maxlength="32" placeholder="nas" required></label>
+    <button>Add host</button>
+  </form>
+  <h3>Manager key</h3>
+  <p>Agents check every command against this key: <code>{{.ManagerKey}}</code>.
+    {{if .Total}}{{.Moved}} of {{.Total}} agents use it.{{end}}</p>
+  <form hx-post="/settings/hosts/manager-key" hx-target="#hosts" hx-swap="outerHTML"
+    hx-confirm="Make a new manager key? Connected agents move to it as they poll; agents that are offline move when they are back.">
+    <button class="secondary">Rotate manager key</button>
+  </form>
+  {{end}}
 </div>
 {{end}}
 

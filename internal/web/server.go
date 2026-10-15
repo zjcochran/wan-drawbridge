@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/zjcochran/wan-drawbridge/internal/agents"
 	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
 	"github.com/zjcochran/wan-drawbridge/internal/hosts"
@@ -71,6 +72,7 @@ type Server struct {
 	Mon     Monitor
 	Docker  Docker
 	Hosts   *hosts.Registry // every host, for live container state
+	Agents  *agents.Manager // agent hosts; nil: no agent API
 	Sync    Syncer
 	Hub     *Hub
 	Log     *slog.Logger
@@ -112,6 +114,9 @@ func New(s Server) (*Server, error) {
 	if err := srv.parseTemplates(); err != nil {
 		return nil, err
 	}
+	if srv.Agents != nil {
+		srv.Agents.ClientIP = srv.clientIP
+	}
 	return srv, nil
 }
 
@@ -143,6 +148,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /metrics", s.metrics)
 	mux.HandleFunc("GET /api/status", s.apiStatus)
+	if s.Agents != nil {
+		// Agents sign every request; sessions and CSRF do not apply.
+		mux.Handle("/api/agent/v1/", s.Agents.Handler())
+	}
 
 	mux.HandleFunc("GET /login", s.loginPage)
 	mux.HandleFunc("POST /login", s.login)
@@ -224,6 +233,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /users", s.admin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings/users", http.StatusMovedPermanently)
 	})))
+	mux.Handle("POST /settings/hosts", s.admin(s.addHost))
+	mux.Handle("POST /settings/hosts/manager-key", s.admin(s.rotateManagerKey))
+	mux.Handle("POST /settings/hosts/{id}/{op}", s.admin(s.hostOp))
 	mux.Handle("POST /settings/users", s.admin(s.createUser))
 	mux.Handle("POST /settings/users/{id}/{op}", s.admin(s.userOp))
 

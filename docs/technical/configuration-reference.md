@@ -30,9 +30,22 @@ All variables are read once at start-up. Invalid values stop start-up with
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `DRAWBRIDGE_SECRET_KEY` | unset | Any string; its SHA-256 is the AES-256-GCM key for stored secrets. When unset, the key is read from (or generated into) `$DRAWBRIDGE_DB_DIR/secret.key`. Changing it makes the saved OIDC client secret unreadable. |
+| `DRAWBRIDGE_SECRET_KEY` | unset | Any string; its SHA-256 is the AES-256-GCM key for stored secrets. When unset, the key is read from (or generated into) `$DRAWBRIDGE_DB_DIR/secret.key`. Changing it makes the stored secrets unreadable: the OIDC client secret, notification credentials, two-factor secrets and the manager's agent keys. |
 | `DRAWBRIDGE_LOCAL_LOGIN` | unset | `force`: password sign-in works even if single sign-on only is set. `auto` or unset: follow the setting. Anything else is an error. |
 | `DRAWBRIDGE_METRICS_TOKEN` | unset | Enables `/metrics` behind `Authorization: Bearer <token>`. |
+
+## Agent mode
+
+Read by `drawbridge agent` (see [Hosts and agents](../user/hosts.md)). Agent
+mode reads none of the other variables except `DOCKER_HOST` and `LOG_LEVEL`.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `DRAWBRIDGE_MANAGER` | required | The manager's address, `http://` or `https://` with a host, without a path (a trailing `/` is removed). Anything else stops the agent. Also turns `drawbridge healthcheck` into the agent's health check. |
+| `DRAWBRIDGE_ENROLL_TOKEN` | unset | One-time `dbe_…` token from Settings → Hosts or `drawbridge enroll-token`. Needed only until the agent has enrolled; ignored afterwards. |
+| `DRAWBRIDGE_MANAGER_KEY` | unset | The manager's `ed25519:…` public key, needed to enroll. Enrollment fails if the manager reached has another key. |
+| `DRAWBRIDGE_AGENT_ALLOW` | unset | Comma-separated stack (Compose project) names. When set, the agent lists and acts on containers of these stacks only; standalone containers are left out. |
+| `DRAWBRIDGE_AGENT_DIR` | `/data/agent` | Folder for `key`, `key.next`, `state.json` and `heartbeat`; created with mode 0700. |
 
 ## Detection
 
@@ -86,8 +99,10 @@ Settings changed in the UI live in the `settings` table (see
 | Notification channels | Settings → Notifications |
 | Backup schedule, and the outcome of the latest scheduled backup | Settings → Backup and restore |
 | Setup complete | Setup wizard step 7 |
+| Failover test schedule, and the outcome of the latest scheduled test | Settings → WAN detection |
+| Manager keys for agents (sealed) | Made at the first start; Settings → Hosts → Rotate manager key |
 
-Stack and container settings, ISP roles and users are in their own tables;
+Stack and container settings, ISP roles, hosts and users are in their own tables;
 each user's colour theme and light/dark mode are columns of `users`
 (Settings → Your account → Appearance).
 
