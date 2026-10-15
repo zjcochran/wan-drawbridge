@@ -30,6 +30,7 @@ type Workload struct {
 	Running   bool     `json:"running"`
 	Label     string   `json:"label,omitempty"`      // from the drawbridge.on-failover label: "", "disable" or "keep"
 	DependsOn []string `json:"depends_on,omitempty"` // members of the same group it depends on
+	Warnings  []string `json:"warnings,omitempty"`   // why stopping it may not last
 }
 
 // Key identifies a workload on its host across re-creation: group/member for

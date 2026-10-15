@@ -160,11 +160,14 @@ Every container on every host, except Drawbridge itself.
 
 **Columns:** container name (with a "Swarm service" badge for a [service of a
 swarm](hosts.md#adding-a-docker-swarm), "LXC" for a [Proxmox
-container](hosts.md#adding-proxmox-ve-lxc-containers), and its key,
+container](hosts.md#adding-proxmox-ve-lxc-containers), the kind of a
+[Kubernetes workload](hosts.md#adding-kubernetes), and its key,
 `project/service`, when different),
 host (only with more than one host; click it to filter by it), stack, state,
 what happens on failover (with where that comes from: "from stack", "own
-setting", "default", or "new, not configured"), and the setting (admins).
+setting", "default", or "new, not configured", and in amber any warning its
+host reports, such as an autoscaler that scales it back up), and the setting
+(admins).
 
 **Setting** for a container in a stack: *Follow stack*, *Stop on failover* or
 *Keep running*. For a standalone container, *Default (keep running)* replaces

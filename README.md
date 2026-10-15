@@ -17,7 +17,9 @@ them again.
 - Stops dependents first and starts dependencies first, waiting for
   healthchecks; only restarts what it stopped; survives restarts mid-run.
 - Controls more Docker hosts, Docker Swarms (services scaled to 0 and back)
-  and Proxmox VE LXC containers (directly or through HA), through agents: the same image with
+  Proxmox VE LXC containers (directly or through HA) and Kubernetes
+  workloads (scaled to 0, DaemonSets parked, CronJobs suspended), through
+  agents: the same image with
   `command: agent`, which connects to Drawbridge (no open port), enrolls with
   a one-time token, signs every request, only runs commands signed by
   Drawbridge's key, and rotates its key every 30 days. A host that is offline

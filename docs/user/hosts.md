@@ -25,6 +25,8 @@ the first failover test closely:
 - A Proxmox VE cluster. The token privileges below, especially those for
   HA, come from Proxmox's API documentation and have not been checked on a
   real cluster.
+- A Kubernetes cluster: the manifest in `deploy/kubernetes` has not yet been
+  applied to a real one.
 
 ## Adding a Docker host
 
@@ -64,8 +66,8 @@ differs.
 | `DRAWBRIDGE_MANAGER` | The manager's address, as your browser reaches the web UI. The Compose file uses `DRAWBRIDGE_BASE_URL` if it is set, otherwise the address of the page you are on |
 | `DRAWBRIDGE_ENROLL_TOKEN` | A one-time token: it works **once**, within **one hour**. It is not needed after the agent enrolled, and is ignored then |
 | `DRAWBRIDGE_MANAGER_KEY` | The manager's public key. The agent refuses to enroll if the manager it reaches has another key, so a wrong address or someone in between cannot take the agent over |
-| `DRAWBRIDGE_AGENT_ALLOW` | Optional: a comma-separated list of stacks (Compose projects). The agent then lists and acts on containers of those stacks only, whatever the manager asks; standalone containers are left out |
-| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` (default) for a Docker host, `swarm` for a whole Docker Swarm from a manager node (see [below](#adding-a-docker-swarm)), or `proxmox` for the LXC containers of a Proxmox VE cluster (see [below](#adding-proxmox-ve-lxc-containers)) |
+| `DRAWBRIDGE_AGENT_ALLOW` | Optional: a comma-separated list of stacks (Compose projects, Swarm stacks, Proxmox pools or Kubernetes namespaces). The agent then lists and acts on those only, whatever the manager asks; standalone containers are left out |
+| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` (default) for a Docker host, `swarm` for a whole Docker Swarm from a manager node (see [below](#adding-a-docker-swarm)), `proxmox` for the LXC containers of a Proxmox VE cluster (see [below](#adding-proxmox-ve-lxc-containers)), or `kubernetes` inside a cluster (see [below](#adding-kubernetes)) |
 | `DRAWBRIDGE_AGENT_DIR` | Where the agent keeps its key and state; default `/data/agent`. Mount it, as above, so the agent keeps its identity across re-creation |
 | `DOCKER_HOST` | The Docker engine; default `unix:///var/run/docker.sock` |
 | `LOG_LEVEL` | `debug`, `info` (default), `warn` or `error`, as for the manager |
@@ -208,6 +210,35 @@ How the containers are controlled:
 | Starting | A start, waiting for the task; under HA, the state `started`, waiting up to 2 minutes. |
 | Order | Within a pool, a container starts after those with a lower start order (the container's **Start/Shutdown order** option) and stops before them; containers without one start last. |
 | Data used | Proxmox's `netin` and `netout` counters for running containers. |
+
+## Adding Kubernetes
+
+An agent inside the cluster controls its Deployments, StatefulSets,
+DaemonSets and CronJobs. It connects out to Drawbridge, so the cluster needs
+no Service or Ingress for it. Add the host in Drawbridge, put the three
+values from the Compose file into the Secret in
+[`deploy/kubernetes/drawbridge-agent.yaml`](../../deploy/kubernetes/drawbridge-agent.yaml),
+and `kubectl apply -f` it. The manifest's
+[README](../../deploy/kubernetes/README.md) lists every object and
+permission it creates, and how to limit the agent to some namespaces
+(`DRAWBRIDGE_AGENT_ALLOW` then lists namespaces).
+
+The agent uses its pod's ServiceAccount: Drawbridge never stores cluster
+credentials, and the agent may only read workloads and autoscalers, scale
+Deployments and StatefulSets, and patch DaemonSets and CronJobs. At start it
+lists the workloads once, so missing permissions stop it at once with the
+reason.
+
+| | |
+| --- | --- |
+| What is listed | Deployments, StatefulSets, DaemonSets and CronJobs. A namespace is a stack; workloads are keyed `namespace/kind/name`, for example `media/deployment/web`, and show their kind on the Containers page. The agent's own Deployment (labelled `drawbridge.io/self: "true"`) is left out. |
+| Labels | The label or annotation `drawbridge.on-failover: stop` or `keep` on the workload works as on Docker. |
+| Running | Deployments and StatefulSets with more than 0 replicas wanted; DaemonSets with pods scheduled and not stopped by Drawbridge; CronJobs that are not suspended. |
+| Stopping | Deployments and StatefulSets are scaled to 0 through their `scale` subresource; their replica count is kept with the failover. DaemonSets get the node selector `drawbridge.io/stopped: "true"`, which no node has, so their pods go away. CronJobs are suspended. |
+| Starting | The replica count comes back (1 if it was lost), the node selector is removed, or the CronJob is resumed. For the health wait, a workload counts as healthy once all its replicas (or scheduled pods) are ready. |
+| Order | Kubernetes has no dependencies between workloads, so all stop and start at once. |
+| Warnings | A workload that a HorizontalPodAutoscaler targets, or that Argo CD or Flux manage, shows a warning on the Containers page: they undo the change. See the manifest's README for how to make Argo CD ignore it. |
+| Data used | Not measured: it would need the agent to read node statistics, which is far more access than it should have. |
 
 ## What the Hosts page shows
 

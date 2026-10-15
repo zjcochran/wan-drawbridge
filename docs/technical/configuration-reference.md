@@ -45,8 +45,8 @@ mode reads none of the other variables except `DOCKER_HOST` (not for
 | `DRAWBRIDGE_MANAGER` | required | The manager's address, `http://` or `https://` with a host, without a path (a trailing `/` is removed). Anything else stops the agent. Also turns `drawbridge healthcheck` into the agent's health check. |
 | `DRAWBRIDGE_ENROLL_TOKEN` | unset | One-time `dbe_…` token from Settings → Hosts or `drawbridge enroll-token`. Needed only until the agent has enrolled; ignored afterwards. |
 | `DRAWBRIDGE_MANAGER_KEY` | unset | The manager's `ed25519:…` public key, needed to enroll. Enrollment fails if the manager reached has another key. |
-| `DRAWBRIDGE_AGENT_ALLOW` | unset | Comma-separated stack (Compose project) names. When set, the agent lists and acts on containers of these stacks only; standalone containers are left out. |
-| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` | `docker` for the agent's Docker engine, `swarm` for the whole swarm from a manager node, or `proxmox` for the LXC containers of a Proxmox VE cluster. Anything else stops the agent; so does `swarm` on a node that is not a manager. See [Platforms](platforms.md). |
+| `DRAWBRIDGE_AGENT_ALLOW` | unset | Comma-separated stack names: Compose projects, Swarm stacks, Proxmox pools or Kubernetes namespaces. When set, the agent lists and acts on those only; standalone containers are left out. With `kubernetes`, each namespace is listed on its own, so RoleBindings in those namespaces are enough. |
+| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` | `docker` for the agent's Docker engine, `swarm` for the whole swarm from a manager node, `proxmox` for the LXC containers of a Proxmox VE cluster, or `kubernetes` for the cluster the agent's pod runs in. Anything else stops the agent; so does `swarm` on a node that is not a manager. See [Platforms](platforms.md). |
 | `PROXMOX_URL` | none | `proxmox` only: `https://<host>:8006` of any node. |
 | `PROXMOX_TOKEN_ID` | none | `proxmox` only: `user@realm!name`. |
 | `PROXMOX_TOKEN_SECRET` | none | `proxmox` only: the token's secret. |

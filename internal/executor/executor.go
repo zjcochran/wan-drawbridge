@@ -76,7 +76,8 @@ func (e *Executor) list(ctx context.Context) (ws []hosts.Workload, down map[int6
 		}
 		items := make([]store.InventoryItem, 0, len(l.Workloads))
 		for _, w := range l.Workloads {
-			items = append(items, store.InventoryItem{Key: w.Key(), Project: w.Group, Service: w.Member, Name: w.Name, Label: w.Label, Kind: w.Kind})
+			items = append(items, store.InventoryItem{Key: w.Key(), Project: w.Group, Service: w.Member, Name: w.Name,
+				Label: w.Label, Kind: w.Kind, Warning: strings.Join(w.Warnings, "; ")})
 			fmt.Fprintf(&fingerprint, "%d/%s=%s:%v;", w.Host, w.ID, w.Name, w.Running)
 		}
 		added, err := e.Store.SyncInventory(ctx, l.Host.ID, items, now)

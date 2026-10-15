@@ -25,6 +25,10 @@ It uses a **key**:
   `pool/<vmid>`, for example `media/101`; a container outside a pool uses its
   name. A pool is a stack here. The tags `drawbridge-stop` and
   `drawbridge-keep` work like the label below.
+- **Kubernetes workloads** (through a [Kubernetes agent](hosts.md#adding-kubernetes)):
+  `namespace/kind/name`, for example `media/deployment/web`. A namespace is a
+  stack here. The label or annotation `drawbridge.on-failover` works as on
+  Docker.
 
 Keys are per **host**: the local Docker socket is the host `local`, and the
 same project on another host is a different stack with its own settings.

@@ -1,0 +1,140 @@
+# WAN Drawbridge agent for a Kubernetes cluster. See README.md next to this
+# file. Put the values from Settings → Hosts in the Secret, then:
+#   kubectl apply -f drawbridge-agent.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: drawbridge
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: drawbridge-agent
+  namespace: drawbridge
+---
+# Only what the agent uses: read workloads and autoscalers, scale
+# Deployments and StatefulSets, patch DaemonSets (node selector) and
+# CronJobs (suspend). No pods, secrets, exec or create.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: drawbridge-agent
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale", "statefulsets/scale"]
+    verbs: ["get", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    verbs: ["patch"]
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list", "patch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["list"]
+---
+# Every namespace. To limit the agent to some namespaces, delete this
+# ClusterRoleBinding, add a RoleBinding to the ClusterRole in each of them,
+# and list them in DRAWBRIDGE_AGENT_ALLOW below (see README.md).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: drawbridge-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: drawbridge-agent
+subjects:
+  - kind: ServiceAccount
+    name: drawbridge-agent
+    namespace: drawbridge
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: drawbridge-agent
+  namespace: drawbridge
+stringData:
+  DRAWBRIDGE_MANAGER: https://drawbridge.example.com
+  DRAWBRIDGE_ENROLL_TOKEN: dbe_...
+  DRAWBRIDGE_MANAGER_KEY: ed25519:...
+---
+# The agent's key and state; it must survive the pod being replaced.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: drawbridge-agent
+  namespace: drawbridge
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 64Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drawbridge-agent
+  namespace: drawbridge
+  labels:
+    app: drawbridge-agent
+    drawbridge.io/self: "true" # never stopped by itself
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # one agent at a time, and the volume is ReadWriteOnce
+  selector:
+    matchLabels:
+      app: drawbridge-agent
+  template:
+    metadata:
+      labels:
+        app: drawbridge-agent
+    spec:
+      serviceAccountName: drawbridge-agent
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agent
+          image: ghcr.io/zjcochran/wan-drawbridge:latest
+          args: ["agent"]
+          env:
+            - name: DRAWBRIDGE_AGENT_PLATFORM
+              value: kubernetes
+            # - name: DRAWBRIDGE_AGENT_ALLOW
+            #   value: media,downloads
+          envFrom:
+            - secretRef:
+                name: drawbridge-agent
+          volumeMounts:
+            - name: state
+              mountPath: /data/agent
+          livenessProbe:
+            exec:
+              command: ["/drawbridge", "healthcheck"]
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: drawbridge-agent

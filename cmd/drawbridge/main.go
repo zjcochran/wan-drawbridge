@@ -40,6 +40,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
 	"github.com/zjcochran/wan-drawbridge/internal/executor"
 	"github.com/zjcochran/wan-drawbridge/internal/hosts"
+	"github.com/zjcochran/wan-drawbridge/internal/kube"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/proxmox"
@@ -280,10 +281,21 @@ func runAgent(ctx context.Context, stderr io.Writer) error {
 		return err
 	}
 	self, _ := os.Hostname()
-	if cfg.Platform == agent.PlatformProxmox {
+	switch cfg.Platform {
+	case agent.PlatformProxmox:
 		rt, err := proxmoxRuntime(ctx, self)
 		if err != nil {
 			return err
+		}
+		return agent.New(cfg, rt, nil, log).Run(ctx)
+	case agent.PlatformKubernetes:
+		c, err := kube.InCluster()
+		if err != nil {
+			return err
+		}
+		rt := hosts.Kubernetes{API: c, Namespaces: cfg.Allow}
+		if _, err := rt.List(ctx); err != nil {
+			return fmt.Errorf("cannot use the Kubernetes API (check the agent's RBAC): %w", err)
 		}
 		return agent.New(cfg, rt, nil, log).Run(ctx)
 	}
