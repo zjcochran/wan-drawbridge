@@ -36,6 +36,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 12 | `00012_api_tokens.sql` | api_tokens |
 | 13 | `00013_two_factor.sql` | `users` gains `totp_secret` and `totp_step`; recovery_codes |
 | 14 | `00014_hosts.sql` | hosts, with host 1 "local". `containers`, `stacks`, `run_actions` and `outage_usage` are rebuilt with a `host_id` in their primary key, existing rows on host 1; `run_actions` gains `restore` and `pending` |
+| 15 | `00015_agents.sql` | `hosts` gains `version`, `public_key`, `previous_key`, `key_created`, `enroll_hash`, `enroll_expires`, `last_address`, `inventory`, `manager_key_id`; unique index on `enroll_hash` where set |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -72,6 +73,7 @@ Key-value store of JSON values.
 | `backup_schedule_last` | the latest scheduled backup: `at`, `file`, `error`, and `success` (the latest that worked) |
 | `test_schedule` | `enabled`, `every` (`week` or `month`), `weekday` (0–6), `day` (1–28), `time` (`HH:MM`), `minutes` |
 | `test_schedule_last` | `slot` (the scheduled time handled last), `at`, `result` (`started`, or why not) |
+| `manager_keys` | The manager's agent signing keys: `current` (ID) and `keys`, ID (`k1`, `k2`, …) to sealed `ed25519-private:` key. See [Agent protocol](agent-protocol.md#keys) |
 | `notifications` | `notify.Settings`: `channels`, each with `id`, `name`, `kind` (`ntfy`, `gotify`, `pushover`, `telegram`, `discord`, `email`, `webhook`), `url`, `token` and `user` (all sealed), `to`, `from`, `topics`, `enabled` |
 
 ### isps
@@ -197,18 +199,27 @@ Network traffic per container and outage, written by
 ### hosts
 
 The places Drawbridge controls. Host 1 is the local Docker socket and always
-exists.
+exists; the others are [agents](../user/hosts.md).
 
 | Column | Type | Notes |
 | --- | --- | --- |
 | `id` | INTEGER PK | |
 | `name` | TEXT UNIQUE | `local` for host 1 |
 | `kind` | TEXT | `local` or `agent` |
-| `platform` | TEXT | `docker` |
+| `platform` | TEXT | `docker`; for agents, as the agent reports it |
 | `status` | TEXT | `pending`, `online`, `offline`, `revoked`, `disabled`. The executor sets `online` or `offline` each time it lists the host; it never changes `revoked` or `disabled` |
-| `last_seen` | INTEGER | The last time the host answered; NULL if never |
+| `last_seen` | INTEGER | The last time the host answered (for an agent: its last accepted request); NULL if never |
 | `last_error` | TEXT | Why the host could not be listed the last time; `''` when it answered |
 | `created_at`, `created_by` | INTEGER, TEXT | |
+| `version` | TEXT | Agents: the version the agent reported |
+| `public_key` | TEXT | Agents: the current `ed25519:` key; `''` before enrollment and after a revoke or a new token |
+| `previous_key` | TEXT | Agents: the key the last rotation replaced, accepted until the new one is first used |
+| `key_created` | INTEGER | Agents: when `public_key` was set; keys older than 90 days are refused |
+| `enroll_hash` | TEXT | Agents: SHA-256 of the one-time enrollment token; `''` once used. Unique where set |
+| `enroll_expires` | INTEGER | Agents: when the token stops working (1 hour after it was made) |
+| `last_address` | TEXT | Agents: the client address of the last accepted request |
+| `inventory` | TEXT | Agents: JSON of the workloads the agent last pushed, so the manager knows them after a restart |
+| `manager_key_id` | TEXT | Agents: the manager key the agent has pinned; commands to it are signed with that key |
 
 ### stacks
 

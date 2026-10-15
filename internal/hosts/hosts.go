@@ -18,16 +18,18 @@ const (
 )
 
 // Workload is something a host can stop and start: a Docker container today.
+// Agents send workloads as JSON, so the field names are part of the agent
+// protocol.
 type Workload struct {
-	Host      int64
-	ID        string
-	Name      string
-	Kind      string
-	Group     string // the Compose project, "" for a standalone container
-	Member    string // the Compose service, "" for a standalone container
-	Running   bool
-	Label     string   // from the drawbridge.on-failover label: "", "disable" or "keep"
-	DependsOn []string // members of the same group it depends on
+	Host      int64    `json:"-"` // set by the manager
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	Kind      string   `json:"kind"`
+	Group     string   `json:"group,omitempty"`  // the Compose project, "" for a standalone container
+	Member    string   `json:"member,omitempty"` // the Compose service, "" for a standalone container
+	Running   bool     `json:"running"`
+	Label     string   `json:"label,omitempty"`      // from the drawbridge.on-failover label: "", "disable" or "keep"
+	DependsOn []string `json:"depends_on,omitempty"` // members of the same group it depends on
 }
 
 // Key identifies a workload on its host across re-creation: group/member for

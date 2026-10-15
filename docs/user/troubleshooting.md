@@ -106,6 +106,11 @@ Check in this order:
 - **The container was removed and re-created with a different name or
   project.** Drawbridge looks for it by ID, then by key; if neither matches,
   its entry shows "… no longer exists". Start it yourself.
+- **Its host could not be reached at the failback.** The dashboard says
+  how many containers on that host will be started again once Drawbridge can
+  reach it. Drawbridge tries every minute (not while automation is paused);
+  get the host or its agent running. To give up on them, use **Forget owed
+  starts** in Settings → Hosts.
 - **Docker refused to start it.** The entry shows the Docker error. Fix the
   cause, then **Restore now** (it retries everything not yet started).
 
@@ -116,6 +121,27 @@ when starting, for healthchecks (up to 2 minutes per dependency level).
 During a run, checks pause. If the badge stays for more than a few minutes,
 look for `container action failed` in the log. Restarting Drawbridge is safe:
 it resumes the run.
+
+## An agent does not connect
+
+Look at the agent's log (`docker compose logs drawbridge-agent`) and at
+Settings → Hosts:
+
+| Agent log or Hosts page | Cause and fix |
+| --- | --- |
+| `not enrolled yet: set DRAWBRIDGE_ENROLL_TOKEN and DRAWBRIDGE_MANAGER_KEY` | The agent has no identity yet and no token. Copy both from the Compose file Settings → Hosts showed, or make a new token. |
+| `enrollment failed: … unknown or already used enrollment token` | A token works once. The agent may have enrolled already with an earlier folder; make a **New enrollment token** and start the agent with it. |
+| `enrollment failed: … the enrollment token has expired` | Tokens last one hour. Make a new one. |
+| `enrollment failed: the manager's key is not the one in DRAWBRIDGE_MANAGER_KEY` | `DRAWBRIDGE_MANAGER` points at another Drawbridge, or the manager key was rotated since the Compose file was made. Check the address and copy the key shown under Settings → Hosts. |
+| `cannot reach the manager` | The agent cannot open `DRAWBRIDGE_MANAGER`. Check the address from the agent's host, for example `curl -I https://drawbridge.example.com/healthz`. |
+| `the manager refuses this agent` with `bad signature` | The agent's key is not the one the manager knows: its `/data/agent` folder was lost or copied from another host. Make a **New enrollment token**. |
+| `… with the request's time is … from the manager's` | The two clocks differ by more than 5 minutes. Fix the time (NTP) on whichever is wrong. |
+| `… with key older than 90 days` | The agent was off for too long to rotate its key. Make a **New enrollment token**. |
+| `this host was revoked, disabled or removed` | As it says; enable it, or make a new enrollment token. |
+| Host **Offline**, agent log quiet | The agent's container is not running, or its Docker cannot be reached by it (`cannot reach Docker`). |
+
+The agent's container shows `unhealthy` in `docker ps` while it has not
+reached the manager in the last 90 seconds.
 
 ## Locked out
 

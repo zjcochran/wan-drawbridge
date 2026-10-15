@@ -447,3 +447,55 @@ func TestServeReportsStartupErrors(t *testing.T) {
 		t.Fatal("a bad listen address should stop the server")
 	}
 }
+
+func TestHostCommands(t *testing.T) {
+	setup(t, false)
+	code, out, _ := drawbridge(t, "", "enroll-token", "nas")
+	if code != 0 || !strings.Contains(out, "DRAWBRIDGE_ENROLL_TOKEN=dbe_") || !strings.Contains(out, "DRAWBRIDGE_MANAGER_KEY=ed25519:") ||
+		!strings.Contains(out, "DRAWBRIDGE_MANAGER=<the address") {
+		t.Fatalf("enroll-token: %d %q", code, out)
+	}
+	t.Setenv("DRAWBRIDGE_BASE_URL", "https://drawbridge.example.com")
+	if code, out, _ := drawbridge(t, "", "enroll-token", "nas"); code != 0 || !strings.Contains(out, "DRAWBRIDGE_MANAGER=https://drawbridge.example.com") {
+		t.Fatalf("enroll-token again: %d %q", code, out)
+	}
+	if code, out, _ := drawbridge(t, "", "hosts"); code != 0 || !regexp.MustCompile(`2\s+nas\s+agent\s+pending\s+never`).MatchString(out) ||
+		!regexp.MustCompile(`1\s+local\s+local\s+online`).MatchString(out) {
+		t.Fatalf("hosts: %d %q", code, out)
+	}
+	if code, out, _ := drawbridge(t, "", "revoke-host", "nas"); code != 0 || !strings.Contains(out, "host nas revoked") {
+		t.Fatalf("revoke-host: %d %q", code, out)
+	}
+	if code, _, errOut := drawbridge(t, "", "revoke-host", "attic"); code != 1 || !strings.Contains(errOut, `no agent host named "attic"`) {
+		t.Errorf("revoke an unknown host: %d %q", code, errOut)
+	}
+	if code, _, errOut := drawbridge(t, "", "enroll-token", "bad name"); code != 1 || errOut == "" {
+		t.Errorf("enroll-token with a bad name: %d %q", code, errOut)
+	}
+}
+
+func TestAgentMode(t *testing.T) {
+	setup(t, false)
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "DRAWBRIDGE_MANAGER") {
+		t.Errorf("agent without a manager: %d %q", code, errOut)
+	}
+	dir := t.TempDir()
+	t.Setenv("DRAWBRIDGE_MANAGER", "https://drawbridge.example.com")
+	t.Setenv("DRAWBRIDGE_AGENT_DIR", dir)
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "not enrolled yet") {
+		t.Errorf("agent without a token: %d %q", code, errOut)
+	}
+	t.Setenv("LOG_LEVEL", "loud")
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "LOG_LEVEL must be") {
+		t.Errorf("agent with a bad log level: %d %q", code, errOut)
+	}
+	if code, _, errOut := drawbridge(t, "", "healthcheck"); code != 1 || !strings.Contains(errOut, "has not reached the manager") {
+		t.Errorf("agent healthcheck before any poll: %d %q", code, errOut)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "heartbeat"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, errOut := drawbridge(t, "", "healthcheck"); code != 0 {
+		t.Errorf("agent healthcheck after a poll: %d %q", code, errOut)
+	}
+}

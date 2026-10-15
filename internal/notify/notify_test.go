@@ -255,7 +255,7 @@ func TestValidate(t *testing.T) {
 			t.Errorf("%s: accepted", name)
 		}
 	}
-	if d := DefaultTopics(); len(d) != 4 || d[0] != "failover" {
+	if d := DefaultTopics(); len(d) != 5 || d[0] != "failover" || d[3] != "hosts" {
 		t.Errorf("default topics %v", d)
 	}
 }
@@ -288,6 +288,10 @@ func TestFormat(t *testing.T) {
 		{"backup_restored", map[string]any{"by": "alice", "created": "2027-01-15T07:00:00Z"}, "Backup restored", "restored a backup made 2027-01-1"},
 		{"backup_created", map[string]any{"by": "schedule", "history": "none", "file": "drawbridge-backup-20270115-030000.json"}, "Scheduled backup saved", "Saved drawbridge-backup-20270115-030000.json"},
 		{"backup_failed", map[string]any{"error": "disk full"}, "Scheduled backup failed", "disk full."},
+		{"host_offline", map[string]any{"host": "nas"}, "Host nas is offline", "90 seconds"},
+		{"host_online", map[string]any{"host": "nas"}, "Host nas is back", "in touch again"},
+		{"host_key_expiring", map[string]any{"host": "nas", "expires": "2027-01-13T00:00:00Z"}, "Agent key of nas is about to expire", "refused from 2027-01-13T00:00:00Z"},
+		{"agent_refused", map[string]any{"host": "nas", "reason": "bad signature"}, "Agent of nas was refused", "bad signature. If this was not you"},
 		{"drill_started", map[string]any{"by": "alice", "minutes": 5.0}, "Failover test started", "They start again in 5 minutes."},
 		{"drill_started", map[string]any{"by": "schedule", "minutes": 5.0}, "Failover test started", "The schedule stopped"},
 		{"drill_skipped", map[string]any{"by": "schedule", "reason": "skipped: automation is paused"}, "Scheduled failover test skipped", "(skipped: automation is paused)"},

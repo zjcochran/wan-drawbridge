@@ -175,6 +175,12 @@ Open `http://<host>:8080`. Every page redirects to the
 - **WAN:** the dashboard shows your public IP and ISP after the first check
   (one minute at most).
 
+## Other Docker hosts
+
+To stop containers on more Docker hosts, run a Drawbridge agent on each; see
+[Hosts and agents](hosts.md). An agent needs only a way to reach Drawbridge's
+web UI address, no open port.
+
 ## Upgrading
 
 1. Back up the `db` folder, or download a backup file in Settings (see
@@ -202,6 +208,9 @@ Open `http://<host>:8080`. Every page redirects to the
 3. Check the logs. Database migrations run automatically at start-up; a
    failed migration stops the container with `migrate: …` in the log and
    leaves the database unchanged.
+
+Upgrade [agents](hosts.md) to the same version: the Hosts page marks any
+agent whose version differs from Drawbridge's.
 
 Upgrading during a failover is safe. Drawbridge stores its state and the list
 of containers it stopped before acting, and picks up where it left off (see

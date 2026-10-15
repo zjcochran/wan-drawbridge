@@ -834,6 +834,7 @@ type settingsData struct {
 	Notify    notifyData
 	Schedule  scheduleView
 	API       apiTokensData
+	Hosts     hostsView
 	TwoFactor twoFactorView
 	Test      testScheduleView
 }
@@ -881,6 +882,7 @@ var settingsTabs = []settingsTab{
 	{ID: "users", Name: "Users", Admin: true},
 	{ID: "sso", Name: "Single sign-on", Admin: true},
 	{ID: "api", Name: "API tokens", Admin: true},
+	{ID: "hosts", Name: "Hosts"},
 	{ID: "account", Name: "Your account"},
 	{ID: "system", Name: "System"},
 }
@@ -923,6 +925,8 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 		err = s.loadSSO(r, d)
 	case "api":
 		d.API, err = s.apiTokensData(r)
+	case "hosts":
+		d.Hosts, err = s.hostsView(r)
 	case "account":
 		d.Themes, d.Modes = Themes, Modes
 		if err = s.loadSSO(r, d); err == nil {

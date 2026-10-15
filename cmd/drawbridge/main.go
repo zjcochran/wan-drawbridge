@@ -32,6 +32,8 @@ import (
 	"time"
 	_ "time/tzdata" // distroless has no zoneinfo; TZ still works
 
+	"github.com/zjcochran/wan-drawbridge/internal/agent"
+	"github.com/zjcochran/wan-drawbridge/internal/agents"
 	"github.com/zjcochran/wan-drawbridge/internal/asn"
 	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
@@ -47,6 +49,7 @@ import (
 
 const usage = `usage:
   drawbridge                               run the monitor
+  drawbridge agent                         run as an agent for another Docker host
   drawbridge status                        WAN state and the open run
   drawbridge stacks                        stacks and their failover setting
   drawbridge containers                    containers and their effective policy
@@ -57,7 +60,10 @@ const usage = `usage:
   drawbridge set-isp <id> <setting>        primary (pinned), backup, ignored, metered or unmetered
   drawbridge move-asn <asn> <id>|new       merge an ASN into a group, or split it out
   drawbridge reset-password <username>     set a new password, read from stdin
-  drawbridge reset-2fa <username>          turn off two-factor sign-in`
+  drawbridge reset-2fa <username>          turn off two-factor sign-in
+  drawbridge hosts                         hosts and their status
+  drawbridge enroll-token <host>           a one-time token to enroll an agent (adds the host if new)
+  drawbridge revoke-host <host>            refuse a host's agent from now on`
 
 // Set at build time: -ldflags "-X main.version=v1.2.3 -X main.sourceURL=https://…".
 // The AGPL asks that people using Drawbridge over a network can get its
@@ -92,6 +98,13 @@ func cli(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if len(args) == 1 && args[0] == "agent" {
+		if err := runAgent(ctx, stderr); err != nil {
+			fmt.Fprintln(stderr, "drawbridge agent:", err)
+			return 1
+		}
+		return 0
+	}
 	if err := run(ctx, args, stdin, stdout, stderr); err != nil {
 		fmt.Fprintln(stderr, "drawbridge:", err)
 		return 1
@@ -136,16 +149,24 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return err
 	}
 	self, _ := os.Hostname() // Docker sets it to the container's short ID
-	reg := hosts.NewRegistry(hosts.Host{ID: store.LocalHost, Name: "local", Runtime: hosts.Local{Docker: dc, SelfID: self}})
-	ex := executor.New(reg, st, log)
+	names, err := st.HostNames(ctx)
+	if err != nil {
+		return err
+	}
+	local := hosts.Host{ID: store.LocalHost, Name: names[store.LocalHost], Runtime: hosts.Local{Docker: dc, SelfID: self}}
+	ex := executor.New(hosts.NewRegistry(local), st, log)
 
 	if len(args) == 0 {
-		return serve(ctx, cfg, st, dc, ex, sl, log)
+		return serve(ctx, cfg, st, dc, ex, local, sl, log)
 	}
-	return command(ctx, args, st, ex, stdin, stdout, stderr)
+	box := func() (*secrets.Box, error) {
+		return secrets.Load(cfg.SecretKey, filepath.Join(cfg.DBDir, "secret.key"))
+	}
+	return command(ctx, args, st, ex, box, cfg.BaseURL, stdin, stdout, stderr)
 }
 
-func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.Client, ex *executor.Executor, sl *syslog.Writer, log *slog.Logger) error {
+func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.Client, ex *executor.Executor, local hosts.Host,
+	sl *syslog.Writer, log *slog.Logger) error {
 	// The background goroutines are stopped and waited for before returning,
 	// so none of them still uses the store when the caller closes it.
 	var bg sync.WaitGroup
@@ -178,8 +199,36 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 	st.OnEvent(notifier.Event)
 	bg.Go(func() { notifier.Run(ctx) })
 
+	mgr := agents.New(st, box, ex.Hosts, local, log)
+	mgr.Version = version
+	resync := make(chan struct{}, 1)
+	mgr.OnChange = func() {
+		select {
+		case resync <- struct{}{}:
+		default:
+		}
+	}
+	if err := mgr.Load(ctx); err != nil {
+		return err
+	}
+	bg.Go(func() { mgr.Watch(ctx, 15*time.Second) })
+	bg.Go(func() {
+		// An agent's inventory or a host's status changed: sync, a burst at a time.
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-resync:
+				if err := ex.Sync(ctx); err != nil {
+					log.Debug("inventory sync after an agent update", "err", err)
+				}
+				hub.Publish(web.TopicInventory)
+			}
+		}
+	})
+
 	ui, err := web.New(web.Server{
-		Store: st, Mon: m, Docker: dc, Hosts: ex.Hosts, Sync: ex, Hub: hub, Log: log,
+		Store: st, Mon: m, Docker: dc, Hosts: ex.Hosts, Agents: mgr, Sync: ex, Hub: hub, Log: log,
 		BaseURL: cfg.BaseURL, DBPath: filepath.Join(cfg.DBDir, "drawbridge.db"), TrustedProxies: proxies,
 		Secrets: box, Notify: notifier, Syslog: sl, BackupDir: cfg.BackupDir, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
 		SourceURL: env("DRAWBRIDGE_SOURCE_URL", sourceURL),
@@ -217,8 +266,37 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 	return err
 }
 
+// runAgent runs agent mode: no database, web UI or monitor, and no port.
+func runAgent(ctx context.Context, stderr io.Writer) error {
+	level := slog.LevelInfo
+	if err := level.UnmarshalText([]byte(env("LOG_LEVEL", "info"))); err != nil {
+		return errors.New("LOG_LEVEL must be debug, info, warn or error")
+	}
+	log := slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: level}))
+	cfg, err := agent.ConfigFromEnv(os.Getenv, version)
+	if err != nil {
+		return err
+	}
+	dc, err := docker.New(env("DOCKER_HOST", "unix:///var/run/docker.sock"))
+	if err != nil {
+		return err
+	}
+	if engine, err := dc.Ping(ctx); err != nil {
+		log.Error("cannot reach Docker; is /var/run/docker.sock mounted?", "err", err)
+	} else {
+		log.Info("connected to Docker", "version", engine)
+	}
+	self, _ := os.Hostname()
+	return agent.New(cfg, hosts.Local{Docker: dc, SelfID: self}, dc, log).Run(ctx)
+}
+
 // healthcheck asks the running server for /healthz, for Docker's HEALTHCHECK.
+// In agent mode (DRAWBRIDGE_MANAGER set) it checks the agent reached the
+// manager within the last 90 seconds.
 func healthcheck() error {
+	if os.Getenv("DRAWBRIDGE_MANAGER") != "" {
+		return agent.Healthy(env("DRAWBRIDGE_AGENT_DIR", "/data/agent"), time.Now())
+	}
 	host, port, err := net.SplitHostPort(env("DRAWBRIDGE_LISTEN", ":8080"))
 	if err != nil {
 		return err

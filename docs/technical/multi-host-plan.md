@@ -173,42 +173,26 @@ renaming them to `workloads` and `groups` would touch every query for no gain.
 | `run_actions` | `host_id`, `restore`, `pending`; primary key `(run_id, host_id, container_id)` |
 | `outage_usage` | `host_id`; primary key `(outage_id, host_id, container)` |
 
-**Migration 00015_agents (phase 2)** adds what agents need:
+**Migration 00015_agents (phase 2, built)** adds what agents need to
+`hosts`: `version`, `public_key` (the agent's current Ed25519 key),
+`previous_key` (accepted until the new key is first used), `key_created`,
+`enroll_hash` and `enroll_expires` (the one-time token), `last_address`,
+`inventory` (the workloads the agent last pushed, as JSON) and
+`manager_key_id` (the manager key the agent pinned).
 
-```sql
-ALTER TABLE hosts ADD COLUMN version        TEXT NOT NULL DEFAULT '';
-ALTER TABLE hosts ADD COLUMN public_key     TEXT NOT NULL DEFAULT '';  -- the agent's current Ed25519 key
-ALTER TABLE hosts ADD COLUMN previous_key   TEXT NOT NULL DEFAULT '';  -- accepted until the new key is first used
-ALTER TABLE hosts ADD COLUMN key_created    INTEGER;
-ALTER TABLE hosts ADD COLUMN enroll_hash    TEXT NOT NULL DEFAULT '';  -- SHA-256 of the one-time token
-ALTER TABLE hosts ADD COLUMN enroll_expires INTEGER;
-ALTER TABLE hosts ADD COLUMN last_address   TEXT NOT NULL DEFAULT '';  -- where the last request came from, for display
-ALTER TABLE hosts ADD COLUMN inventory      TEXT NOT NULL DEFAULT '[]'; -- the last workloads the agent pushed (JSON)
-
--- Commands waiting for, or answered by, an agent.
-CREATE TABLE agent_commands (
-    id        TEXT    PRIMARY KEY,               -- random 128-bit ID
-    host_id   INTEGER NOT NULL,
-    type      TEXT    NOT NULL,                  -- stop, start, inspect, stats, rotate, rekey
-    body      TEXT    NOT NULL,                  -- the signed command (JSON)
-    created   INTEGER NOT NULL,
-    expires   INTEGER NOT NULL,
-    sent      INTEGER,
-    done      INTEGER,
-    result    TEXT    NOT NULL DEFAULT ''
-);
-CREATE INDEX agent_commands_host ON agent_commands (host_id, done);
-```
+Commands are **not** stored: a command is only useful while the executor
+waits for its result, so the queue lives in the manager's memory. After a
+manager restart, crash recovery issues the commands again.
 
 `containers` also gains `kind` in the phase that first lists something other
 than a container (Swarm).
 
-The manager's Ed25519 signing key lives in a new `manager_key` row in
-`settings`, sealed with `secret.key` like the other secrets. During a manager
-key rotation the row also holds the next key.
+The manager's Ed25519 signing keys live in the `manager_keys` row of
+`settings`, each sealed with `secret.key` like the other secrets, with the ID
+of the current one.
 
-**Backups.** `backup.go` carries `hosts` (from phase 1) and `manager_key`, but
-not `agent_commands`, which are short-lived. Older backups have no `hosts`
+**Backups.** `backup.go` carries `hosts` (from phase 1) and `manager_keys`,
+re-sealed with the restoring instance's key like the other secrets. Older backups have no `hosts`
 table and no `host_id`: their rows go to host 1, and the local host is
 created (built in phase 1). A restored manager keeps its key and the agents'
 public keys, so existing agents keep working against it.
@@ -359,13 +343,13 @@ is readable on the wire.
   2. each agent gets a `rekey` command, signed with the **old** key and
      carrying the new one;
   3. each agent pins the new key and confirms;
-  4. the manager signs with the new key once every agent has moved, and the
-     old key is dropped.
+  4. from then on the manager signs that agent's commands with the new key,
+     and old keys are dropped once no agent uses them.
 
-  The UI shows the progress: "4 of 5 agents moved". An agent that was
-  offline the whole time needs a new enrollment token.
-- **Notifications** (failures group):
-  - a host offline for 5 minutes, and back online;
+  The UI shows the progress: "4 of 5 agents use it". Agents that were
+  offline move when they are back.
+- **Notifications** (a new "Hosts" group, on by default):
+  - a host offline for 90 seconds, and back online;
   - an agent key under 7 days from the 90-day limit;
   - an agent refused for a bad signature (rate-limited to one an hour per
     host).
@@ -584,9 +568,7 @@ container.
 - **Events:** `host_added`, `host_enrolled`, `host_online`, `host_offline`,
   `host_key_rotated`, `host_revoked`, `host_removed`, `agent_refused`,
   `manager_key_rotated`. Run events gain `host`.
-- **Metrics:** `drawbridge_host_up{host}`,
-  `drawbridge_host_key_age_seconds{host}`, and a `host` label on the
-  workload gauges.
+- **Metrics:** `drawbridge_host_up{host}` (built in phase 1).
 
 ## 6. Security summary
 
@@ -657,7 +639,7 @@ changes. This plan is removed once phase 5 is merged.
 | `docs/user/faq.md` | 2 | Why agents connect to the manager; what an agent can and cannot do; plain HTTP versus HTTPS for agents |
 | `docs/technical/architecture.md` | 1, 2 | Runtime interface and registry; per-host fan-out; command queue and long poll; agent mode; the diagrams |
 | `docs/technical/container-control.md` | 1, 3–5 | Workloads, keys per host, layers within a host, pending actions, `restore` |
-| `docs/technical/data-model.md` | 1, 2 | Migration 14; `hosts`, `agent_commands`, `workloads`, `groups`; new columns on `run_actions` and `outage_usage`; the `manager_key` setting |
+| `docs/technical/data-model.md` | 1, 2 | Migrations 14 and 15; `hosts`; new columns on `containers`, `stacks`, `run_actions` and `outage_usage`; the `manager_keys` setting |
 | `docs/technical/http-interface.md` | 1, 2 | Host-scoped stack routes, `?host=`, Settings → Hosts actions, `/api/agent/v1/` routes |
 | `docs/technical/configuration-reference.md` | 2, 4 | Agent variables: `DRAWBRIDGE_MANAGER`, `DRAWBRIDGE_ENROLL_TOKEN`, `DRAWBRIDGE_MANAGER_KEY`, `DRAWBRIDGE_AGENT_ALLOW`; and `PROXMOX_URL`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET` (and `_FILE`), `PROXMOX_FINGERPRINT` |
 | `docs/technical/security.md` | 2, 4, 5 | Signatures, keys, rotation and revocation; the threat table from section 6; Proxmox token scope and pinning; Kubernetes RBAC |
@@ -679,8 +661,8 @@ changes. This plan is removed once phase 5 is merged.
   - manager key rotation with one agent offline.
 - **Long poll:** a command is answered within a second; a poll ends at 25
   seconds; an agent that stops polling turns offline after 90 seconds.
-- **End to end (`internal/e2e`):** a manager and two in-process agents on
-  fake Docker:
+- **End to end** (built in phase 2 as `internal/agents` tests rather than
+  `internal/e2e`): a real manager and in-process agents on fake Docker:
   - a failover stops on both hosts;
   - one agent offline during the failover catches up when it returns;
   - the failback restarts everything and the run closes;

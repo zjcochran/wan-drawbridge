@@ -74,13 +74,15 @@ on the new instance.
 
 | Part | Contents |
 | --- | --- |
-| Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; hosts; stack switches and container settings per host, including containers waiting for review; users with their roles, disabled flags, password hashes, two-factor secrets and recovery codes (hashed); single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs, tokens and users; whether setup is complete and whether automation is paused |
+| Configuration (always) | Detection settings; ISPs with their names, roles and pinned primary; ASNs and how they are grouped; hosts; stack switches and container settings per host, including containers waiting for review; users with their roles, disabled flags, password hashes, two-factor secrets and recovery codes (hashed); single sign-on settings with the client secret; single sign-on account links; notification channels with their URLs, tokens and users; the manager's agent keys and each agent's public key; whether setup is complete and whether automation is paused |
 | History (optional) | Checks, events, daily ISP totals, outages and data used from the chosen period (outages that started in it) |
 
 Not included: sign-in sessions, profile pictures (an uploaded one has to be
 uploaded again; one from single sign-on comes back at the next SSO sign-in),
 the current WAN state (primary, failover, pending changes), the list of
-containers Drawbridge stopped, `secret.key` and the ASN database.
+containers Drawbridge stopped, `secret.key` and the ASN database. Agents keep
+their own private keys; after a restore, even on a new machine, they keep
+working with the restored manager key (see [Hosts and agents](hosts.md#keys)).
 
 Checks and daily totals are only kept for the retention period (Settings →
 WAN detection, 30 days by default), so a longer range adds older events but no

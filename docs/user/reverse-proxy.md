@@ -57,6 +57,20 @@ pass it through without buffering:
 - A keep-alive comment is sent every 25 seconds, so proxy read timeouts of 60
   seconds (the usual default) are fine. Do not set them below 30 seconds.
 
+## Agents
+
+[Agents](hosts.md) on other Docker hosts call the manager at the same address
+as the web UI, on paths under `/api/agent/v1/`. Nothing extra is needed on the
+proxy:
+
+- An agent keeps one request open for up to 25 seconds while it waits for
+  commands, so the usual 60-second read timeouts are fine. Do not set them
+  below 30 seconds.
+- Agents sign every request themselves and check every command against the
+  manager's key, so the proxy may terminate TLS; no passthrough is needed.
+- If the proxy also uses the client address (`DRAWBRIDGE_TRUSTED_PROXIES`),
+  the Hosts page shows each agent's real address.
+
 ## Examples
 
 Written for Traefik 3.7, Caddy 2.11, nginx 1.30, Nginx Proxy Manager 2,
@@ -291,4 +305,6 @@ Drawbridge must be served at the root of its own host name
 Drawbridge has its own sign-in and does not read identity headers from a proxy
 (`Remote-User` and similar). You can still put forward-auth in front of it as
 an extra gate, but people then sign in twice. Single sign-on with the same
-provider usually makes that seamless.
+provider usually makes that seamless. Exempt `/api/` from it: the JSON
+status API and the agents authenticate themselves and cannot sign in to a
+forward-auth page.

@@ -16,7 +16,10 @@ model:
 | Clickjacking | `X-Frame-Options: DENY`, `frame-ancestors 'none'` |
 | Forged proxy headers | Only honoured from configured trusted proxies |
 | Single sign-on attacks | Authorization code + PKCE (S256), state, nonce, ID-token verification, issuer+subject matching |
-| Leaked database backup | Passwords hashed; session tokens hashed; client secret encrypted with a key stored separately (or in the environment) |
+| Leaked database backup | Passwords hashed; session tokens hashed; client secret and agent keys encrypted with a key stored separately (or in the environment) |
+| A rogue agent joins | Enrollment needs a one-time token for a host an admin created: 1 hour, single use, stored hashed, 10 attempts a minute per address |
+| Forged or replayed agent traffic, a compromised proxy | Every agent request is signed with the agent's key, with a timestamp and a nonce; every command is signed with the manager's key, which the agent pinned |
+| A compromised manager | Agents run only list, inspect, stop, start and stats, plus their own key changes; `DRAWBRIDGE_AGENT_ALLOW` limits them further |
 | Open redirect after sign-in | `next` must be a local path |
 
 What Drawbridge does **not** protect against: someone with access to the host,
@@ -198,8 +201,8 @@ entry is the one the trusted proxy saw.
 
 ## Stored secrets
 
-The OIDC client secret, each notification channel's URL, token and user, and
-each user's two-factor secret are
+The OIDC client secret, each notification channel's URL, token and user,
+each user's two-factor secret, and the manager's agent signing keys are
 sealed with AES-256-GCM (a webhook URL, a Discord one in particular, is itself
 a credential):
 
@@ -275,6 +278,34 @@ presented token. A token can only read the status (the same facts as the
 dashboard, including container names and the public IP); it cannot sign in
 or change anything. Revoking deletes it immediately. Tokens are not in backup
 files.
+
+## Agents
+
+Details: [Agent protocol](agent-protocol.md).
+
+- **Direction.** Agents connect to the manager; the manager never connects
+  to an agent. Agent hosts open no port.
+- **Identity.** Each agent makes an Ed25519 key that never leaves its folder.
+  The manager stores the public key. It accepts a request only with a valid
+  signature over the method, path, host, timestamp, nonce and body hash,
+  a timestamp within 5 minutes, and a nonce not seen in 10 minutes.
+- **Commands.** The manager's own Ed25519 keys are sealed with the instance
+  key. An agent runs a command only when the pinned manager key signed it,
+  for its host, unexpired, and not run before. Someone between agent and
+  manager (a proxy, or a plain-HTTP network) therefore cannot make an agent
+  act or impersonate one. Over plain HTTP they can still read the inventory
+  and see which containers are stopped.
+- **Key lifetime.** Agent keys rotate every 30 days, with proof of the new
+  key, and are refused after 90 days. Revoking deletes the key at once and
+  ends the agent's open request. Manager keys rotate on request, and each
+  agent is moved with a command signed by the key it already trusts.
+- **Enrollment.** A one-time token, as above, and the agent checks that the
+  manager's key is the one it was given, so a wrong address cannot capture
+  it.
+- **What an agent exposes.** No Docker API passthrough: no exec, pull,
+  create, remove, logs or environment. The agent still holds its host's
+  Docker socket, so whoever controls the agent's container controls that
+  host.
 
 ## Docker access
 

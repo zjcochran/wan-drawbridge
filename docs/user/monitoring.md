@@ -244,6 +244,19 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `backup_schedule` | The backup schedule was saved | `enabled`, `time`, `keep`, `history`, `by` |
 | `test_schedule` | The failover test schedule was saved | `enabled`, `every`, `weekday`, `day`, `time`, `minutes`, `by` |
 | `backup_restored` | A backup file was restored (in Settings, or in the setup wizard with `by` = `setup`) | `created`, `app_version`, `history`, `by` |
+| `host_added` | A host was added in Settings → Hosts | `host`, `by` |
+| `host_enrolled` | An agent used its one-time token | `host`, `platform`, `version`, `address`, `key` (fingerprint) |
+| `host_enroll_token` | A new enrollment token was made for a host | `host`, `by` |
+| `host_offline` | An agent was not in touch for 90 seconds | `host`, `last_seen` (RFC 3339, UTC) |
+| `host_online` | An offline host's agent was in touch again | `host` |
+| `host_key_rotated` | An agent replaced its key | `host`, `key` (fingerprint of the new key) |
+| `host_key_expiring` | An agent's key is within 7 days of the 90-day limit | `host`, `expires` (RFC 3339, UTC) |
+| `agent_refused` | An agent request was refused for a bad signature, a clock more than 5 minutes off, or a key older than 90 days; at most once an hour per host | `host`, `reason` |
+| `host_revoked`, `host_removed` | A host was revoked or removed | `host`, `by` |
+| `host_disabled`, `host_enabled` | A host was disabled or enabled | `host`, `by` |
+| `host_renamed` | A host was renamed | `host`, `from`, `by` |
+| `pending_forgotten` | Forget owed starts, in Settings → Hosts | `host`, `containers`, `by` |
+| `manager_key_rotated` | Rotate manager key | `key` (its ID), `by` |
 
 Changes made with the command line are not recorded as events.
 

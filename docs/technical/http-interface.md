@@ -1,8 +1,8 @@
 # HTTP interface
 
 All routes are served by `web.Server.Handler()` using Go's `net/http` pattern
-router. The interface is the web UI, plus one read-only JSON route,
-`/api/status`. Requests
+router. The interface is the web UI, one read-only JSON route,
+`/api/status`, and the agent API under `/api/agent/v1/`. Requests
 from HTMX carry `HX-Request: true`; for those, redirects are sent as
 `HX-Redirect` headers with status 204, and errors (4xx/5xx) are shown as toast
 messages instead of replacing page content.
@@ -31,6 +31,7 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/healthz` | `200 ok`. No auth. |
 | GET | `/metrics` | Prometheus text. 404 unless `DRAWBRIDGE_METRICS_TOKEN` is set; then `Authorization: Bearer` required (401). |
 | GET | `/api/status` | JSON status; see [Monitoring → JSON status API](../user/monitoring.md#json-status-api). `Authorization: Bearer <API token>` required (401 with `WWW-Authenticate` otherwise); each use sets the token's `last_used`. `Cache-Control: no-store`. |
+| any | `/api/agent/v1/…` | The [agent API](agent-protocol.md#routes): enroll, commands, results, inventory, rotate. Agents sign their requests; no session or CSRF token. |
 | GET | `/static/…` | Embedded assets. Pages link them as `/static/<file>?v=<hash>`, where the hash covers every static file, so an upgrade that changes one gives new URLs; those get `Cache-Control: public, max-age=31536000, immutable`, a link without `v` gets `public, max-age=3600`. |
 | GET | `/login` | Sign-in page; redirects to `/` if already signed in. Query `next`. |
 | POST | `/login` | Form `username`, `password`, `next`. 401 on wrong credentials, 429 when rate-limited, 403 when password sign-in is off. Sets the session cookie and redirects to `next` (local paths only). For an account with two-factor sign-in, it instead answers 200 with the code step and sets the `drawbridge_2fa` cookie (path `/login`, HttpOnly, SameSite=Strict, 5 minutes). |
@@ -68,7 +69,7 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/reports` | auth | Query `before` (outage ID cursor). 50 outages per page. |
 | GET | `/reports/outages/{id}` | auth | One outage and its data used per container; 404 if there is no such outage. |
 | GET | `/settings` | auth | The first Settings tab, WAN detection. Query `flash` shows a message. |
-| GET | `/settings/detection`, `/settings/account`, `/settings/system` | auth | Settings tabs. |
+| GET | `/settings/detection`, `/settings/hosts`, `/settings/account`, `/settings/system` | auth | Settings tabs. Hosts shows its buttons and the manager key to admins only. |
 | GET | `/settings/notifications`, `/settings/backup`, `/settings/users`, `/settings/sso`, `/settings/api` | admin | Settings tabs for admins. |
 | GET | `/settings/backups/{name}` | admin | Downloads a file from the backup folder. Only names matching `drawbridge-backup-YYYYMMDD-HHMMSS.json` are served; anything else is 404. |
 | GET | `/users` | admin | 301 to `/settings/users`, where Users moved. |
@@ -116,6 +117,9 @@ token.
 | `/settings/sso/test` | admin | `issuer` | Try discovery |
 | `/settings/api-tokens` | admin | `name` (1–64 characters) | Make an API token; returns the tab fragment showing the token once; 422 for a bad name |
 | `/settings/api-tokens/{id}/delete` | admin | | Revoke a token; 422 for an unknown one |
+| `/settings/hosts` | admin | `name` (see [Hosts and agents](../user/hosts.md#adding-a-docker-host) for the rules) | Add an agent host; returns the tab fragment with its Compose file and one-time token; 422 for a bad or taken name |
+| `/settings/hosts/{id}/{op}` | admin | `name` for `rename` | `op`: `rename`, `token` (new enrollment token, shown once), `revoke`, `disable`, `enable`, `remove`, `rotate` (the agent rotates its key at its next poll), `forget` (owed starts). Returns the tab fragment; 404 for an unknown `op` or an `{id}` that is not a number; 422 with the reason otherwise (unknown host, removing the local host, a bad name) |
+| `/settings/hosts/manager-key` | admin | | Rotate the manager key; returns the tab fragment |
 | `/settings/sso/unlink` | auth | | Unlink own SSO identities (refused without a password); redirects to `/settings/account` |
 | `/settings/restore` | admin | Multipart: `file`, `passphrase`; body at most 128 MB | Restore a backup file; ends every session; `HX-Redirect: /login` |
 | `/settings/users` | admin | `username`, `password`, `role` | Create user |

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zjcochran/wan-drawbridge/internal/agents"
 	"github.com/zjcochran/wan-drawbridge/internal/backup"
 	"github.com/zjcochran/wan-drawbridge/internal/notify"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
@@ -157,6 +158,12 @@ func (s *Server) restoreFrom(r *http.Request, actor string) error {
 		if err := s.Store.Import(ctx, snap); err != nil {
 			return err
 		}
+		if s.Agents != nil {
+			// The restored hosts replace the ones the manager holds.
+			if err := s.Agents.Reload(ctx); err != nil {
+				return err
+			}
+		}
 		return s.Store.AddEvent(ctx, s.now(), "backup_restored", map[string]any{
 			"created": meta.Created, "app_version": meta.AppVersion, "history": meta.History, "by": actor,
 		})
@@ -170,7 +177,7 @@ func (s *Server) restoreFrom(r *http.Request, actor string) error {
 
 // mapSecrets rewrites every sealed value in a snapshot's settings with fn:
 // the single sign-on client secret, each notification channel's URL, token
-// and user, and each user's two-factor secret. Open on export puts them in the encrypted backup as plain text; Seal
+// and user, each user's two-factor secret, and the manager's agent keys. Open on export puts them in the encrypted backup as plain text; Seal
 // on restore encrypts them with this instance's key.
 func mapSecrets(snap store.Snapshot, fn func(string) (string, error)) error {
 	for _, row := range snap.Config["users"] {
@@ -180,7 +187,7 @@ func mapSecrets(snap store.Snapshot, fn func(string) (string, error)) error {
 	}
 	for _, row := range snap.Config["settings"] {
 		key, _ := row["key"].(string)
-		if key != SettingOIDC && key != notify.SettingKey {
+		if key != SettingOIDC && key != notify.SettingKey && key != agents.SettingManagerKeys {
 			continue
 		}
 		raw, ok := row["value"].(string)
@@ -194,9 +201,17 @@ func mapSecrets(snap store.Snapshot, fn func(string) (string, error)) error {
 			return err
 		}
 		var err error
-		if key == SettingOIDC {
+		switch key {
+		case SettingOIDC:
 			err = mapField(o, "client_secret", fn)
-		} else {
+		case agents.SettingManagerKeys:
+			keys, _ := o["keys"].(map[string]any)
+			for id := range keys {
+				if err == nil {
+					err = mapField(keys, id, fn)
+				}
+			}
+		default:
 			chans, _ := o["channels"].([]any)
 			for _, c := range chans {
 				ch, ok := c.(map[string]any)

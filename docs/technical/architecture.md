@@ -26,10 +26,13 @@ flowchart LR
         L[learner.Decide]
         SM[wan.Machine]
         E[executor.Executor]
+        HR[hosts.Registry]
+        AM[agents.Manager<br/>agent API]
         S[(store.Store<br/>SQLite)]
     end
     D[(Docker Engine)]
     B[Browser]
+    A[Agents on other<br/>Docker hosts]
 
     B <-->|pages, HTMX, SSE| W
     W -->|commands| M
@@ -44,7 +47,12 @@ flowchart LR
     M --> E
     M --> S
     M -->|notify| H
-    E --> D
+    E --> HR
+    HR -->|local runtime| D
+    HR -->|agent runtimes| AM
+    A -->|"signed requests, long poll"| W
+    W -->|/api/agent/v1/| AM
+    AM --> S
     E --> S
     E -->|on change| H
     W -.SSO.-> IDP
@@ -61,6 +69,9 @@ flowchart LR
 | `internal/monitor` | The check loop. Owns the state machine, runs the learner, persists state, calls the executor. |
 | `internal/executor` | Stops and starts containers for runs on every host at once; keeps the container inventory in sync; catches up with hosts that could not be reached (`Retry`). |
 | `internal/hosts` | The hosts Drawbridge controls: the `Runtime` interface (list, inspect, stop, start, stats), the registry of hosts, and the local Docker runtime. |
+| `internal/agents` | The manager's side of agents: enrollment, the agent API, the in-memory command queue and long poll, key rotation, offline detection, and a `Runtime` per agent host. |
+| `internal/agent` | Agent mode (`drawbridge agent`): enrolls, polls for commands, runs them on its Docker engine, pushes the inventory, rotates its key. |
+| `internal/agentauth` | The agent protocol: Ed25519 keys, signed requests and commands, message types. See [Agent protocol](agent-protocol.md). |
 | `internal/docker` | Minimal Docker Engine API client (list, inspect, stop, start, events, stats, version). |
 | `internal/store` | All persistence: SQLite, migrations, users, sessions, ISPs, policies, runs, events. |
 | `internal/secrets` | AES-GCM sealing of stored secrets. |
@@ -87,6 +98,8 @@ flowchart TB
     main --> nt[notify.Run<br/>delivers notifications]
     main --> bs[web.RunBackupSchedule<br/>checks every minute]
     main --> ts[web.RunTestSchedule<br/>checks every minute]
+    main --> aw[agents.Manager.Watch<br/>every 15 s: offline agents, old keys]
+    main --> rs[resync<br/>inventory sync after an agent update]
     main -. DRAWBRIDGE_SYSLOG .-> sl[syslog.Writer.Run<br/>sends the log]
     http -. "do(): wait for result" .-> loop
     http -. "post(): fire and forget" .-> loop
@@ -114,6 +127,7 @@ for {
     case cmd := <-cmds: cmd(ctx)
     case <-resume:      end a timed pause (only armed while one is set)
     case <-drill:       end a failover test (only armed while one runs)
+    case <-retry:       every minute, unless paused: executor.Retry
     case <-next:        Check(); next = after(interval or 15 s while pending)
     }
 }
@@ -140,6 +154,15 @@ flag), not on every sync.
 **Retries** run in the monitor's loop: once a minute, unless automation is
 paused, it calls `executor.Retry`, which stops or starts what a host that
 could not be reached is still owed, once it answers.
+
+**Agents** are served by HTTP request goroutines. An agent's poll waits on
+its connection's wake channel for up to 25 seconds. An agent runtime's stop
+or start queues a signed command, wakes the poll, and waits for the result
+that the agent posts back. `agents.Manager.Watch` marks agents offline and
+warns about old keys every 15 seconds. When an agent's inventory or a host's
+status changes, the manager signals the resync goroutine, which runs
+`executor.Sync` (a burst of signals makes one sync) and publishes the
+`inventory` topic. See [Agent protocol](agent-protocol.md).
 
 **The usage watcher** (`executor.WatchUsage`) runs every minute. When an
 outage is open (`outages.ended IS NULL`), it lists every host and reads each
@@ -223,8 +246,11 @@ run is recovered on the next start (see
 4. Create the Docker client from `DOCKER_HOST` (default
    `unix:///var/run/docker.sock`) and ping it. Failure is logged, not fatal.
 5. Parse trusted proxies; load or create the secret key.
-6. Build the hub, executor, monitor, notifier and web server; start the
-   notifier, the HTTP server, the inventory watcher, the backup schedule and
+6. Build the hub, executor, monitor, notifier and agent manager. The agent
+   manager loads the manager key (making the first one) and registers every
+   enrolled, enabled agent host with its stored inventory. Then build the web
+   server; start the notifier, the agent watcher, the HTTP server, the
+   inventory watcher, the usage watcher, the backup and test schedules, and
    the monitor.
 7. The monitor loads its state and settings, refreshes the ASN database, and,
    unless paused, runs `recover()` to bring containers in line with the saved
@@ -267,5 +293,6 @@ discussion:
 - SQLite only. The database folder contains nothing but the database and the
   secret key, so it can be mounted and backed up on its own.
 - Direct Docker socket access; no socket proxy.
-- One instance per Docker host; not designed for load-balanced WANs.
+- One manager, many hosts: the local Docker socket plus agents, which
+  connect to the manager. Not designed for load-balanced WANs.
 - ISPs are groups of ASNs; every comparison is ISP to ISP.

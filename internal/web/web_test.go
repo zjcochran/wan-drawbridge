@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zjcochran/wan-drawbridge/internal/agents"
 	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/docker"
 	"github.com/zjcochran/wan-drawbridge/internal/hosts"
@@ -175,10 +176,16 @@ func newEnv(t *testing.T) *env {
 	box, _ := secrets.New("test-key")
 	fd := fakeDocker{cs: []docker.Container{container("player", true), container("indexer", true),
 		{ID: "id-dns", Name: "dns", Running: true}}}
-	reg := hosts.NewRegistry(hosts.Host{ID: store.LocalHost, Name: "local", Runtime: hosts.Local{Docker: fd}})
+	local := hosts.Host{ID: store.LocalHost, Name: "local", Runtime: hosts.Local{Docker: fd}}
+	reg := hosts.NewRegistry(local)
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	mgr := agents.New(st, box, reg, local, log)
+	if err := mgr.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
 	ui, err := New(Server{
 		Store: st, Mon: mon, Sync: noSync{}, Hub: NewHub(), Secrets: box,
-		Docker: fd, Hosts: reg,
+		Docker: fd, Hosts: reg, Agents: mgr,
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), DBPath: "/data/db/drawbridge.db",
 	})
 	if err != nil {
