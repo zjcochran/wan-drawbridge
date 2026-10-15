@@ -22,6 +22,9 @@ the first failover test closely:
 - An agent on a real second Docker host, and an agent reaching Drawbridge
   through a real reverse proxy.
 - A Docker Swarm.
+- A Proxmox VE cluster. The token privileges below, especially those for
+  HA, come from Proxmox's API documentation and have not been checked on a
+  real cluster.
 
 ## Adding a Docker host
 
@@ -62,7 +65,7 @@ differs.
 | `DRAWBRIDGE_ENROLL_TOKEN` | A one-time token: it works **once**, within **one hour**. It is not needed after the agent enrolled, and is ignored then |
 | `DRAWBRIDGE_MANAGER_KEY` | The manager's public key. The agent refuses to enroll if the manager it reaches has another key, so a wrong address or someone in between cannot take the agent over |
 | `DRAWBRIDGE_AGENT_ALLOW` | Optional: a comma-separated list of stacks (Compose projects). The agent then lists and acts on containers of those stacks only, whatever the manager asks; standalone containers are left out |
-| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` (default) for a Docker host, or `swarm` for a whole Docker Swarm from a manager node; see [below](#adding-a-docker-swarm) |
+| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` (default) for a Docker host, `swarm` for a whole Docker Swarm from a manager node (see [below](#adding-a-docker-swarm)), or `proxmox` for the LXC containers of a Proxmox VE cluster (see [below](#adding-proxmox-ve-lxc-containers)) |
 | `DRAWBRIDGE_AGENT_DIR` | Where the agent keeps its key and state; default `/data/agent`. Mount it, as above, so the agent keeps its identity across re-creation |
 | `DOCKER_HOST` | The Docker engine; default `unix:///var/run/docker.sock` |
 | `LOG_LEVEL` | `debug`, `info` (default), `warn` or `error`, as for the manager |
@@ -126,6 +129,85 @@ How the swarm is controlled:
 | Order | Services have no `depends_on`, so they all stop and start at once. For the health wait, a service counts as healthy once all its tasks run. |
 | Labels | `drawbridge.on-failover` works on a service's own labels (`deploy.labels` in a stack file). |
 | Data used | Not measured for services: their tasks run on several nodes. Standalone containers are measured as usual. |
+
+## Adding Proxmox VE (LXC containers)
+
+One agent controls the LXC containers of a whole Proxmox VE cluster through
+the Proxmox API. It needs no Docker socket. Run it anywhere that can reach
+both the Proxmox API and Drawbridge: in a small LXC container or VM of the
+cluster, or on a Docker host.
+
+**1. Make a token that can only see and switch containers.** On a Proxmox
+node, as root (the pool, `media` here, holds the containers Drawbridge may
+control):
+
+```sh
+pveum role add DrawbridgeOps --privs "VM.Audit VM.PowerMgmt"
+pveum user add drawbridge@pve --comment "WAN Drawbridge agent"
+pveum user token add drawbridge@pve agent --privsep 1
+pveum acl modify /pool/media --tokens 'drawbridge@pve!agent' --roles DrawbridgeOps
+```
+
+The third command prints the token's secret once. Give the role on more
+pools, or on `/vms` for every guest. Containers under **HA** must be stopped
+through HA, or HA starts them again. For that, the token also needs
+`Sys.Audit` on `/` to see which containers HA manages, and `Sys.Console` on
+`/` to change their HA state, for example with a second role. Without
+`Sys.Audit`, Drawbridge sees no HA and stops every container directly.
+
+**2. Note the API certificate's fingerprint**, from the Proxmox web UI
+(node → System → Certificates, `pve-ssl.pem` or your own). If you leave it
+out, the agent stops and prints the fingerprint the server presented, so you
+can compare and set it.
+
+**3. Add the host in Drawbridge and run the agent** with
+`DRAWBRIDGE_AGENT_PLATFORM: proxmox`:
+
+```yaml
+services:
+  drawbridge-agent:
+    image: ghcr.io/zjcochran/wan-drawbridge:latest
+    command: agent
+    restart: unless-stopped
+    volumes:
+      - ./agent:/data/agent
+    environment:
+      DRAWBRIDGE_AGENT_PLATFORM: proxmox
+      DRAWBRIDGE_MANAGER: https://drawbridge.example.com
+      DRAWBRIDGE_ENROLL_TOKEN: dbe_...
+      DRAWBRIDGE_MANAGER_KEY: ed25519:...
+      PROXMOX_URL: https://pve.example.com:8006
+      PROXMOX_TOKEN_ID: drawbridge@pve!agent
+      PROXMOX_TOKEN_SECRET_FILE: /run/secrets/proxmox-token
+      PROXMOX_FINGERPRINT: "AB:CD:…"
+    secrets:
+      - proxmox-token
+secrets:
+  proxmox-token:
+    file: ./proxmox-token
+```
+
+| Variable | Meaning |
+| --- | --- |
+| `PROXMOX_URL` | The API of any node: `https://<host>:8006` |
+| `PROXMOX_TOKEN_ID` | `user@realm!name` |
+| `PROXMOX_TOKEN_SECRET` or `PROXMOX_TOKEN_SECRET_FILE` | The token's secret, or a file holding it (a Docker secret) |
+| `PROXMOX_FINGERPRINT` | The API certificate's SHA-256 fingerprint, with or without colons. The agent trusts that certificate only, so a self-signed one works and nothing else can stand in for it |
+
+The token stays on the agent: Drawbridge never sees it. At start the agent
+lists the containers once, so a wrong token or fingerprint stops it at once
+with the reason.
+
+How the containers are controlled:
+
+| | |
+| --- | --- |
+| What is listed | Every LXC container the token can see; VMs are left out. A container in a pool is in a stack named after the pool, keyed `pool/<vmid>`; one without a pool is standalone, keyed by its name ("CT 104" when it has none). The containers show "LXC" on the Containers page. A container whose name is the agent's hostname is the agent's own and is left out. |
+| Labels | The Proxmox tags `drawbridge-stop` and `drawbridge-keep` work like the `drawbridge.on-failover` label. |
+| Stopping | A shutdown, forced after the stop timeout (30 seconds), then Drawbridge waits for Proxmox's task. Under HA: HA's state is set to `stopped`, and Drawbridge waits until the container is stopped. |
+| Starting | A start, waiting for the task; under HA, the state `started`, waiting up to 2 minutes. |
+| Order | Within a pool, a container starts after those with a lower start order (the container's **Start/Shutdown order** option) and stops before them; containers without one start last. |
+| Data used | Proxmox's `netin` and `netout` counters for running containers. |
 
 ## What the Hosts page shows
 

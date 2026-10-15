@@ -156,3 +156,6 @@ supported.
   rsyslog, syslog-ng or other receiver.
 - Agents have only been tested in-process against fake Docker engines, not on a
   real second Docker host, a real Docker Swarm, or through a real reverse proxy.
+- Proxmox support has only been tested against a fake API; the token
+  privileges in `docs/user/hosts.md` (including `Sys.Audit`/`Sys.Console` for
+  HA) are from Proxmox's API documentation, not checked on a real cluster.

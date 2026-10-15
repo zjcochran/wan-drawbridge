@@ -139,6 +139,11 @@ Settings → Hosts:
 | `… with key older than 90 days` | The agent was off for too long to rotate its key. Make a **New enrollment token**. |
 | `this host was revoked, disabled or removed` | As it says; enable it, or make a new enrollment token. |
 | `DRAWBRIDGE_AGENT_PLATFORM=swarm needs a swarm manager node` | The swarm agent runs on a worker. Constrain it to `node.role == manager`. |
+| `PROXMOX_FINGERPRINT is not set; the server's certificate has …` | Compare the fingerprint shown with the one in the Proxmox web UI (node → System → Certificates) and set it. |
+| `… the server's certificate fingerprint is …, not PROXMOX_FINGERPRINT` | The certificate changed (renewed, or another node), or the URL is wrong. Check it the same way. |
+| `cannot use the Proxmox API: … 401 …` | Wrong `PROXMOX_TOKEN_ID` or secret. |
+| Proxmox containers missing from the list, or `403 Permission check failed` when stopping | The token lacks `VM.Audit` or `VM.PowerMgmt` on their pool; see [Adding Proxmox VE](hosts.md#adding-proxmox-ve-lxc-containers). |
+| An HA-managed container starts again right after the failover | The token cannot read HA (`Sys.Audit` on `/`), so Drawbridge shut it down directly and HA restarted it. Give it `Sys.Audit` and `Sys.Console` on `/`. |
 | Host **Offline**, agent log quiet | The agent's container is not running, or its Docker cannot be reached by it (`cannot reach Docker`). |
 
 The agent's container shows `unhealthy` in `docker ps` while it has not

@@ -240,7 +240,7 @@ its `project`. The same project on two hosts is two stacks.
 | --- | --- | --- |
 | `host_id` | INTEGER | PK with `key`; default 1. No foreign key |
 | `key` | TEXT | `project/service` or container name; for Swarm services `stack/service` or the service name |
-| `kind` | TEXT | `container` (default) or `service` (a Docker Swarm service) |
+| `kind` | TEXT | `container` (default), `service` (a Docker Swarm service) or `lxc` (a Proxmox LXC container) |
 | `project`, `service` | TEXT | `''` for standalone containers |
 | `name` | TEXT | Latest container name |
 | `policy` | TEXT | `inherit` (default), `disable`, `keep` |

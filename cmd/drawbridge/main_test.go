@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/zjcochran/wan-drawbridge/internal/asn"
+	"github.com/zjcochran/wan-drawbridge/internal/proxmox"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
@@ -508,5 +509,38 @@ func TestAgentMode(t *testing.T) {
 	}
 	if code, _, errOut := drawbridge(t, "", "healthcheck"); code != 0 {
 		t.Errorf("agent healthcheck after a poll: %d %q", code, errOut)
+	}
+}
+
+func TestProxmoxAgentMode(t *testing.T) {
+	setup(t, false)
+	pve := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"data":[]}`)
+	}))
+	t.Cleanup(pve.Close)
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "secret")
+	if err := os.WriteFile(secret, []byte("s3cret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DRAWBRIDGE_MANAGER", "https://drawbridge.example.com")
+	t.Setenv("DRAWBRIDGE_AGENT_DIR", dir)
+	t.Setenv("DRAWBRIDGE_AGENT_PLATFORM", "proxmox")
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "PROXMOX_URL must be") {
+		t.Errorf("without a URL: %d %q", code, errOut)
+	}
+	t.Setenv("PROXMOX_URL", pve.URL)
+	t.Setenv("PROXMOX_TOKEN_ID", "drawbridge@pve!agent")
+	t.Setenv("PROXMOX_TOKEN_SECRET_FILE", secret)
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "PROXMOX_FINGERPRINT is not set") {
+		t.Errorf("without a fingerprint: %d %q", code, errOut)
+	}
+	t.Setenv("PROXMOX_FINGERPRINT", proxmox.Fingerprint(pve.Certificate().Raw))
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "not enrolled yet") {
+		t.Errorf("with a working API but no token: %d %q", code, errOut)
+	}
+	t.Setenv("PROXMOX_TOKEN_SECRET_FILE", filepath.Join(dir, "missing"))
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "PROXMOX_TOKEN_SECRET_FILE") {
+		t.Errorf("with a missing secret file: %d %q", code, errOut)
 	}
 }
