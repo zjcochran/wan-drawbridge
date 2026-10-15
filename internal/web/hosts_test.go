@@ -191,13 +191,20 @@ func TestHostsOnDashboardReportsAPIAndMetrics(t *testing.T) {
 func TestSwarmServicesListed(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
-	id := addHost(t, e, false)
+	id := addHost(t, e, true) // offline: its stored rows are all listed
 	if _, err := e.st.SyncInventory(context.Background(), id, []store.InventoryItem{
 		{Key: "media/player", Project: "media", Service: "player", Name: "media_player", Kind: "service"},
+		{Key: "media/deployment/web", Project: "media", Service: "deployment/web", Name: "web", Kind: "deployment",
+			Warning: "the HorizontalPodAutoscaler web-hpa scales it back up"},
 	}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if _, body := c.get("/containers"); !strings.Contains(body, `<strong>media_player</strong> <span class="badge muted">Swarm service</span>`) {
+	_, body := c.get("/containers")
+	if !strings.Contains(body, `<strong>media_player</strong> <span class="badge muted">Swarm service</span>`) {
 		t.Errorf("a Swarm service is not marked:\n%s", body)
+	}
+	if !strings.Contains(body, `<strong>web</strong> <span class="badge muted">deployment</span>`) ||
+		!strings.Contains(body, `<div class="sub warn-text">the HorizontalPodAutoscaler web-hpa scales it back up</div>`) {
+		t.Errorf("a Kubernetes workload or its warning is not shown:\n%s", body)
 	}
 }

@@ -144,6 +144,9 @@ Settings → Hosts:
 | `cannot use the Proxmox API: … 401 …` | Wrong `PROXMOX_TOKEN_ID` or secret. |
 | Proxmox containers missing from the list, or `403 Permission check failed` when stopping | The token lacks `VM.Audit` or `VM.PowerMgmt` on their pool; see [Adding Proxmox VE](hosts.md#adding-proxmox-ve-lxc-containers). |
 | An HA-managed container starts again right after the failover | The token cannot read HA (`Sys.Audit` on `/`), so Drawbridge shut it down directly and HA restarted it. Give it `Sys.Audit` and `Sys.Console` on `/`. |
+| `not running in a Kubernetes pod` | `DRAWBRIDGE_AGENT_PLATFORM=kubernetes` outside a cluster. Deploy it with the manifest in `deploy/kubernetes`. |
+| `cannot use the Kubernetes API (check the agent's RBAC): … forbidden` | The ServiceAccount lacks a permission, or `DRAWBRIDGE_AGENT_ALLOW` is unset while only RoleBindings exist (it then lists all namespaces). See `deploy/kubernetes/README.md`. |
+| A Kubernetes workload comes back right after the failover | An HPA or a GitOps tool restored it; the Containers page shows a warning. See `deploy/kubernetes/README.md`. |
 | Host **Offline**, agent log quiet | The agent's container is not running, or its Docker cannot be reached by it (`cannot reach Docker`). |
 
 The agent's container shows `unhealthy` in `docker ps` while it has not

@@ -38,6 +38,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 14 | `00014_hosts.sql` | hosts, with host 1 "local". `containers`, `stacks`, `run_actions` and `outage_usage` are rebuilt with a `host_id` in their primary key, existing rows on host 1; `run_actions` gains `restore` and `pending` |
 | 15 | `00015_agents.sql` | `hosts` gains `version`, `public_key`, `previous_key`, `key_created`, `enroll_hash`, `enroll_expires`, `last_address`, `inventory`, `manager_key_id`; unique index on `enroll_hash` where set |
 | 16 | `00016_workload_kind.sql` | `containers` gains `kind` (default `container`) |
+| 17 | `00017_workload_warning.sql` | `containers` gains `warning` |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -240,7 +241,8 @@ its `project`. The same project on two hosts is two stacks.
 | --- | --- | --- |
 | `host_id` | INTEGER | PK with `key`; default 1. No foreign key |
 | `key` | TEXT | `project/service` or container name; for Swarm services `stack/service` or the service name |
-| `kind` | TEXT | `container` (default), `service` (a Docker Swarm service) or `lxc` (a Proxmox LXC container) |
+| `kind` | TEXT | `container` (default), `service` (a Docker Swarm service), `lxc` (a Proxmox LXC container), or `deployment`, `statefulset`, `daemonset`, `cronjob` (Kubernetes) |
+| `warning` | TEXT | Why stopping it may not last, as its host reports it (an HPA, Argo CD, Flux); `''` when nothing is known. Updated at every sync |
 | `project`, `service` | TEXT | `''` for standalone containers |
 | `name` | TEXT | Latest container name |
 | `policy` | TEXT | `inherit` (default), `disable`, `keep` |

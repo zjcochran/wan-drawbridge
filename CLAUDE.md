@@ -81,6 +81,9 @@ records the decisions behind it and how to work in the repo.
 - `internal/agentauth`: the agent protocol (keys, signed requests and commands,
   messages). `internal/agents`: the manager's side (enrollment, agent API, command
   queue, rotation, a `Runtime` per agent). `internal/agent`: agent mode.
+- Platforms: `hosts.Local` (Docker), `hosts.Swarm`, `hosts.Proxmox` (client in
+  `internal/proxmox`), `hosts.Kubernetes` (client in `internal/kube`, manifest in
+  `deploy/kubernetes`).
 - `internal/executor`: stop/start runs in dependency layers, on every host at once. Runs
   are persisted so it can recover after a crash; starts owed to an unreachable host stay
   pending and `Retry` does them when it is back.
@@ -159,3 +162,5 @@ supported.
 - Proxmox support has only been tested against a fake API; the token
   privileges in `docs/user/hosts.md` (including `Sys.Audit`/`Sys.Console` for
   HA) are from Proxmox's API documentation, not checked on a real cluster.
+- Kubernetes support has only been tested against a fake API; the manifest in
+  `deploy/kubernetes` has not been applied to a real cluster.

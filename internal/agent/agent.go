@@ -52,13 +52,14 @@ const (
 
 // Platforms an agent can control.
 const (
-	PlatformDocker  = "docker"
-	PlatformSwarm   = "swarm"
-	PlatformProxmox = "proxmox"
+	PlatformDocker     = "docker"
+	PlatformSwarm      = "swarm"
+	PlatformProxmox    = "proxmox"
+	PlatformKubernetes = "kubernetes"
 )
 
 // Platforms lists the values of DRAWBRIDGE_AGENT_PLATFORM.
-var Platforms = []string{PlatformDocker, PlatformSwarm, PlatformProxmox}
+var Platforms = []string{PlatformDocker, PlatformSwarm, PlatformProxmox, PlatformKubernetes}
 
 // Config is the agent's settings, from DRAWBRIDGE_* variables.
 type Config struct {

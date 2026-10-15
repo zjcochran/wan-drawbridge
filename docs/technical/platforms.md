@@ -1,7 +1,7 @@
 # Platforms
 
-Code: `internal/hosts` (`local.go`, `swarm.go`, `proxmox.go`), `internal/docker`,
-`internal/proxmox`.
+Code: `internal/hosts` (`local.go`, `swarm.go`, `proxmox.go`, `kubernetes.go`),
+`internal/docker`, `internal/proxmox`, `internal/kube`.
 
 Every host has a runtime (`hosts.Runtime`) that lists its workloads and
 stops, starts, inspects and reads the counters of one. The executor treats
@@ -76,3 +76,38 @@ presented. Requests time out after 30 s.
 If reading `/cluster/ha/resources` fails (the token lacks `Sys.Audit` on
 `/`), containers are treated as not HA-managed and are shut down and started
 directly.
+
+## Kubernetes
+
+`DRAWBRIDGE_AGENT_PLATFORM=kubernetes`, runtime `hosts.Kubernetes`, client
+`internal/kube`. The agent reads the in-cluster ServiceAccount:
+`KUBERNETES_SERVICE_HOST`/`PORT`, and `ca.crt` and `token` under
+`/var/run/secrets/kubernetes.io/serviceaccount` (the token is read again for
+every request, as the kubelet rotates it). The manifest and its permissions
+are in [`deploy/kubernetes`](../../deploy/kubernetes/README.md).
+
+| | Deployment, StatefulSet | DaemonSet | CronJob |
+| --- | --- | --- | --- |
+| `kind` | `deployment`, `statefulset` | `daemonset` | `cronjob` |
+| ID | `<kind>/<namespace>/<name>` | same | same |
+| Group / member | namespace / `<kind>/<name>` | same | same |
+| Running | `spec.replicas` > 0 (unset counts as 1) | `drawbridge.io/stopped` not in the node selector, and `status.desiredNumberScheduled` > 0 | `spec.suspend` not true |
+| Health | `starting` until `status.readyReplicas` ≥ the wanted replicas, then `healthy` | `starting` until `status.numberReady` ≥ `desiredNumberScheduled` | none |
+| Stop | `GET …/scale` for the count, then merge-patch `…/scale` `{"spec":{"replicas":0}}` | merge-patch `spec.template.spec.nodeSelector["drawbridge.io/stopped"] = "true"` | merge-patch `{"spec":{"suspend":true}}` |
+| `restore` | `{"replicas": n}` | empty | empty |
+| Start | merge-patch `…/scale` with restore's count, else 1 | the node selector key set to `null` (removed) | `{"spec":{"suspend":false}}` |
+
+Listing goes through every namespace at once (`/apis/apps/v1/deployments`
+and so on), or, with `DRAWBRIDGE_AGENT_ALLOW`, through each namespace in it.
+HorizontalPodAutoscalers (`autoscaling/v2`) are listed the same way. A
+workload an HPA's `scaleTargetRef` names gets the warning "the
+HorizontalPodAutoscaler … scales it back up". One with the Argo CD label
+`argocd.argoproj.io/instance` or annotation `argocd.argoproj.io/tracking-id`
+gets an Argo CD warning. One with the Flux label
+`kustomize.toolkit.fluxcd.io/name` or `helm.toolkit.fluxcd.io/name` gets a
+Flux warning. Warnings are stored in `containers.warning` and shown on the
+Containers page.
+
+The on-failover setting is read from the workload's labels, then its
+annotations (`drawbridge.on-failover`). Workloads labelled
+`drawbridge.io/self: "true"` are left out.

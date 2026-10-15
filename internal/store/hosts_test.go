@@ -242,7 +242,7 @@ func oldDatabase(t *testing.T) string {
 func TestWorkloadKind(t *testing.T) {
 	ctx, s := context.Background(), open(t)
 	items := []InventoryItem{
-		{Key: "media/db", Project: "media", Service: "db", Name: "media_db", Kind: "service"},
+		{Key: "media/db", Project: "media", Service: "db", Name: "media_db", Kind: "service", Warning: "scaled back up by an autoscaler"},
 		{Key: "dns", Name: "dns"},
 	}
 	if _, err := s.SyncInventory(ctx, LocalHost, items, t0); err != nil {
@@ -252,6 +252,9 @@ func TestWorkloadKind(t *testing.T) {
 	kinds := map[string]string{}
 	for _, c := range cs {
 		kinds[c.Key] = c.Kind
+		if c.Key == "media/db" && c.Warning != "scaled back up by an autoscaler" {
+			t.Errorf("warning = %q", c.Warning)
+		}
 	}
 	if kinds["media/db"] != "service" || kinds["dns"] != "container" {
 		t.Errorf("kinds = %v", kinds)

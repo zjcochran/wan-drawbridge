@@ -492,9 +492,14 @@ func TestAgentMode(t *testing.T) {
 	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "needs a swarm manager node") {
 		t.Errorf("swarm agent on a node that is not a manager: %d %q", code, errOut)
 	}
-	t.Setenv("DRAWBRIDGE_AGENT_PLATFORM", "kubernetes")
-	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "DRAWBRIDGE_AGENT_PLATFORM must be one of docker, swarm") {
+	t.Setenv("DRAWBRIDGE_AGENT_PLATFORM", "nomad")
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "DRAWBRIDGE_AGENT_PLATFORM must be one of docker, swarm, proxmox, kubernetes") {
 		t.Errorf("unknown platform: %d %q", code, errOut)
+	}
+	t.Setenv("DRAWBRIDGE_AGENT_PLATFORM", "kubernetes")
+	t.Setenv("KUBERNETES_SERVICE_HOST", "")
+	if code, _, errOut := drawbridge(t, "", "agent"); code != 1 || !strings.Contains(errOut, "not running in a Kubernetes pod") {
+		t.Errorf("kubernetes outside a pod: %d %q", code, errOut)
 	}
 	t.Setenv("DRAWBRIDGE_AGENT_PLATFORM", "")
 	t.Setenv("LOG_LEVEL", "loud")

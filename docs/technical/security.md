@@ -306,6 +306,11 @@ Details: [Agent protocol](agent-protocol.md).
   stores it. The token needs only `VM.Audit` and `VM.PowerMgmt` on the pools
   it controls (plus `Sys.Audit` and `Sys.Console` on `/` only for containers
   under HA). The API certificate is pinned by its SHA-256 fingerprint.
+- **Kubernetes.** The agent uses its pod's ServiceAccount; no kubeconfig is
+  stored anywhere. The provided ClusterRole allows only get and list on
+  workloads, patching `scale` subresources, DaemonSets and CronJobs, and
+  listing HPAs: no pods, Secrets, exec or create. The agent runs as a
+  non-root user with a read-only root filesystem and no capabilities.
 - **What an agent exposes.** No Docker API passthrough: no exec, pull,
   create, remove, logs or environment. The agent still holds its host's
   Docker socket, so whoever controls the agent's container controls that
