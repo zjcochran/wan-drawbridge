@@ -40,7 +40,7 @@
     </dl>
     {{if .IsAdmin}}
     <div class="actions">
-      {{if .S.Paused}}<button hx-post="/actions/resume" hx-target="#status" hx-swap="outerHTML">Resume automation</button>
+      {{if .S.Paused}}<button class="wide" hx-post="/actions/resume" hx-target="#status" hx-swap="outerHTML">Resume automation</button>
       {{else}}<span class="pause">
         <button class="secondary" hx-post="/actions/pause" hx-include="next select" hx-target="#status" hx-swap="outerHTML">Pause automation</button>
         <select name="for" aria-label="How long to pause">
@@ -52,7 +52,6 @@
           <option value="">until I resume</option>
         </select>
       </span>{{end}}
-      <button class="secondary" hx-post="/actions/check" hx-target="#status" hx-swap="outerHTML">Check now</button>
       {{if not .S.DrillTill.IsZero}}
       <button hx-post="/actions/drill-end" hx-target="#status" hx-swap="outerHTML">End test now</button>
       {{else if or .Run (eq .S.State "failover") (eq .S.State "failback_pending")}}
@@ -61,7 +60,9 @@
       {{else}}
       <button class="danger" hx-post="/actions/failover" hx-target="#status" hx-swap="outerHTML"
         hx-confirm="Stop every container set to stop on failover, now? Drawbridge restores them once it confirms the primary ISP, unless automation is paused.">Fail over now</button>
-      {{if or (eq .S.State "primary") (eq .S.State "learning")}}<span class="pause">
+      {{end}}
+      <button class="secondary" hx-post="/actions/check" hx-target="#status" hx-swap="outerHTML">Check now</button>
+      {{if and .S.DrillTill.IsZero (not .Run) (or (eq .S.State "primary") (eq .S.State "learning"))}}<span class="pause">
         <button class="secondary" hx-post="/actions/drill" hx-include="next select" hx-target="#status" hx-swap="outerHTML"
           hx-confirm="Stop every container set to stop on failover, as a test, and start them again when the time is up?">Test failover</button>
         <select name="for" aria-label="How long the test lasts">
@@ -71,7 +72,6 @@
           <option value="15m">for 15 minutes</option>
         </select>
       </span>{{end}}
-      {{end}}
     </div>
     {{end}}
   </div>

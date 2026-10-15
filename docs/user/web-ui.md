@@ -59,6 +59,10 @@ The facts below the label:
 
 ### Buttons (admins)
 
+The buttons sit in two equal columns: Pause automation and how long on the
+first row (Resume automation fills the row while paused), then Fail over now,
+Restore now or End test now beside Check now, then Test failover and how long.
+
 | Button | When shown | What it does |
 | --- | --- | --- |
 | Pause automation / Resume automation | Always | Pausing keeps checking but stops all container actions, for the time chosen next to the button (30 minutes to 24 hours, default 1 hour) or until resumed. Resuming brings containers in line with the current state at once: stopped if in Failover, started again if on the primary. |
