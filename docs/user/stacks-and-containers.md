@@ -21,6 +21,10 @@ It uses a **key**:
   `stack/service`, from the stack label (`com.docker.stack.namespace`), for
   example `media/db`; a service outside a stack uses its name. A stack of a
   swarm is a stack here, with the same switch and rules.
+- **Proxmox LXC containers** (through a [Proxmox agent](hosts.md#adding-proxmox-ve-lxc-containers)):
+  `pool/<vmid>`, for example `media/101`; a container outside a pool uses its
+  name. A pool is a stack here. The tags `drawbridge-stop` and
+  `drawbridge-keep` work like the label below.
 
 Keys are per **host**: the local Docker socket is the host `local`, and the
 same project on another host is a different stack with its own settings.

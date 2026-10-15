@@ -69,7 +69,7 @@ start workloads during an outage. The Drawbridge server is called the
   - a new workload in a split group keeps running and is flagged for review.
 - Keys become host-scoped. A workload is identified by `(host_id, key)`.
   `key` stays `project/service` (or the container name) for Docker. It is
-  `namespace/kind/name` for Kubernetes, and `node/vmid` for Proxmox, with the
+  `namespace/kind/name` for Kubernetes, and `pool/vmid` for Proxmox (as built), with the
   guest's name shown.
 
 ### 1.2 Runtime interface
@@ -419,14 +419,17 @@ container.
     Docker secrets. The token stays on the agent; the manager never sees it.
   - `PROXMOX_FINGERPRINT` pins the cluster's TLS certificate, since Proxmox
     certificates are usually self-signed. On first start without it, the
-    agent logs the fingerprint it sees and refuses to continue until it is
-    set.
+    agent stops and prints the fingerprint it sees.
 - **The token.** The docs give the exact `pveum` commands for a
   privilege-separated token whose role has only `VM.Audit` and
-  `VM.PowerMgmt`, on one pool (recommended) or on `/vms`.
+  `VM.PowerMgmt`, on one pool (recommended) or on `/vms`. As built: HA needs
+  `Sys.Audit` on `/` to read and `Sys.Console` on `/` to change; without
+  `Sys.Audit`, every container is stopped directly.
 - **What is listed.** Workloads come from `GET /cluster/resources?type=vm`,
-  filtered to `type = lxc`, grouped by pool. A guest without a pool goes to
-  "(no pool)". QEMU VMs could be added later with the same calls.
+  filtered to `type = lxc`, grouped by pool and keyed `pool/<vmid>`. As
+  built, a guest without a pool is standalone, keyed by its name. The tags
+  `drawbridge-stop` and `drawbridge-keep` act as the on-failover label. QEMU
+  VMs could be added later with the same calls.
 - **Stop.** `POST /nodes/{node}/lxc/{vmid}/status/shutdown`, with the stop
   timeout and `forceStop=1`. The agent then waits for the task (UPID).
 - **Start.** `POST /nodes/{node}/lxc/{vmid}/status/start`.
@@ -434,9 +437,10 @@ container.
   through HA instead, by setting `state` to `stopped` or `started`.
   Otherwise HA starts them straight back up.
 - **Order.** The guest's `startup` order becomes the dependency layers.
-- **Data used** comes from `netin`/`netout` in `status/current`.
-- **Its own guest.** An agent running inside a guest of the same cluster
-  excludes that guest.
+- **Data used** comes from `netin`/`netout` (as built, read from
+  `/cluster/resources`).
+- **Its own guest.** As built, a guest named like the agent's hostname is
+  left out.
 
 ### 3.4 Kubernetes (`platform = kubernetes`, agent in the cluster)
 
@@ -543,7 +547,7 @@ container.
 | 1 | Hosts and workloads | Migration 00014; `internal/hosts` (`Runtime` interface, registry, local runtime); executor fan-out, per-host failures, pending starts and `Retry`; Host column and filter on Stacks and Containers; host on the dashboard, reports, events, `/api/status` and metrics; `<host>:` in `set-stack`/`set-container`; backup translation. With only "local", behaviour is unchanged | minor |
 | 2 | Agent and signatures | Migration 00015; `internal/agentauth` (Ed25519 signing, verification, nonce cache); `drawbridge agent` mode with the Docker backend; `/api/agent/v1/` routes; command queue and long poll; enrollment; key rotation, manager key rotation, revocation; Settings → Hosts; CLI; events, metrics, notifications | minor |
 | 3 | Docker Swarm | Swarm runtime (services, stacks, replicated and global stop/start, health); `DRAWBRIDGE_AGENT_PLATFORM=swarm`; migration 16 (`containers.kind`); the agent pinned to one manager node | minor |
-| 4 | Proxmox LXC | Proxmox backend in the agent; TLS pinning; HA handling; start order; usage | minor |
+| 4 | Proxmox LXC | `internal/proxmox` client; Proxmox runtime in the agent (`DRAWBRIDGE_AGENT_PLATFORM=proxmox`); TLS pinning; HA handling; start order; tags as labels; usage | minor |
 | 5 | Kubernetes | Small API client; workload kinds; HPA and GitOps warnings; `deploy/kubernetes/` manifest | minor |
 
 Each phase:

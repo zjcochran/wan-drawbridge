@@ -17,7 +17,7 @@ Start here if you run Drawbridge.
 | [Setup wizard](user/setup-wizard.md) | The seven first-run steps, with screenshots |
 | [Using the web UI](user/web-ui.md) | Every page: dashboard, stacks, containers, ISPs, events, reports of outages and data used, settings, users; colour themes |
 | [Choosing what to stop](user/stacks-and-containers.md) | Stack rules, container overrides, the `drawbridge.on-failover` label, new containers, examples |
-| [Hosts and agents](user/hosts.md) | Controlling more Docker hosts and Docker Swarms with agents: adding one, statuses, keys and their rotation, revoking, what an agent can do |
+| [Hosts and agents](user/hosts.md) | Controlling more Docker hosts, Docker Swarms and Proxmox VE LXC containers with agents: adding one, statuses, keys and their rotation, revoking, what an agent can do |
 | [ISPs and the primary ISP](user/isps.md) | How ISPs are recognised and grouped, pinning, learning, fixing a wrong grouping |
 | [What happens during an outage](user/during-an-outage.md) | A minute-by-minute walk-through of a failover and failback, flapping, manual controls, timed pauses, failover tests |
 | [Single sign-on](user/single-sign-on.md) | Pocket ID or any OIDC provider: setup, groups, linking, SSO-only, lock-out recovery |
@@ -42,7 +42,7 @@ Start here if you change Drawbridge or need to know exactly how it behaves.
 | [Data model](technical/data-model.md) | Every SQLite table and column, migrations, retention |
 | [Security](technical/security.md) | Authentication, sessions, CSRF, headers, proxies, secrets, threat model |
 | [HTTP interface](technical/http-interface.md) | Every route, Server-Sent Events, metrics format |
-| [Platforms](technical/platforms.md) | What each kind of host maps to: Docker containers and Swarm services, how each is stopped and started |
+| [Platforms](technical/platforms.md) | What each kind of host maps to: Docker containers, Swarm services and Proxmox LXC containers, how each is stopped and started |
 | [Agent protocol](technical/agent-protocol.md) | The agent API: signed requests and commands, enrollment, the long poll, key and manager key rotation, offline detection |
 | [Configuration reference](technical/configuration-reference.md) | Every environment variable and stored setting, with limits |
 | [Testing and CI](technical/testing-and-ci.md) | Test layers, fakes, the coverage gate, GitLab pipeline and reports |

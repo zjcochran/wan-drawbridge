@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -41,6 +42,7 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/hosts"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/notify"
+	"github.com/zjcochran/wan-drawbridge/internal/proxmox"
 	"github.com/zjcochran/wan-drawbridge/internal/secrets"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 	"github.com/zjcochran/wan-drawbridge/internal/syslog"
@@ -277,6 +279,14 @@ func runAgent(ctx context.Context, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	self, _ := os.Hostname()
+	if cfg.Platform == agent.PlatformProxmox {
+		rt, err := proxmoxRuntime(ctx, self)
+		if err != nil {
+			return err
+		}
+		return agent.New(cfg, rt, nil, log).Run(ctx)
+	}
 	dc, err := docker.New(env("DOCKER_HOST", "unix:///var/run/docker.sock"))
 	if err != nil {
 		return err
@@ -286,7 +296,6 @@ func runAgent(ctx context.Context, stderr io.Writer) error {
 	} else {
 		log.Info("connected to Docker", "version", engine)
 	}
-	self, _ := os.Hostname()
 	var rt hosts.Runtime = hosts.Local{Docker: dc, SelfID: self}
 	if cfg.Platform == agent.PlatformSwarm {
 		info, err := dc.Swarm(ctx)
@@ -299,6 +308,27 @@ func runAgent(ctx context.Context, stderr io.Writer) error {
 		rt = hosts.Swarm{Docker: dc, SelfID: self}
 	}
 	return agent.New(cfg, rt, dc, log).Run(ctx)
+}
+
+// proxmoxRuntime connects to the Proxmox API from PROXMOX_* variables, and
+// checks the token and certificate work.
+func proxmoxRuntime(ctx context.Context, self string) (hosts.Runtime, error) {
+	secret := os.Getenv("PROXMOX_TOKEN_SECRET")
+	if f := os.Getenv("PROXMOX_TOKEN_SECRET_FILE"); f != "" {
+		b, err := os.ReadFile(f) //nolint:gosec // G304: the path is the admin's own setting
+		if err != nil {
+			return nil, fmt.Errorf("PROXMOX_TOKEN_SECRET_FILE: %w", err)
+		}
+		secret = strings.TrimSpace(string(b))
+	}
+	c, err := proxmox.New(os.Getenv("PROXMOX_URL"), os.Getenv("PROXMOX_TOKEN_ID"), secret, os.Getenv("PROXMOX_FINGERPRINT"))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := c.Guests(ctx); err != nil {
+		return nil, fmt.Errorf("cannot use the Proxmox API: %w", err)
+	}
+	return hosts.Proxmox{API: c, Self: self}, nil
 }
 
 // healthcheck asks the running server for /healthz, for Docker's HEALTHCHECK.

@@ -37,7 +37,8 @@ All variables are read once at start-up. Invalid values stop start-up with
 ## Agent mode
 
 Read by `drawbridge agent` (see [Hosts and agents](../user/hosts.md)). Agent
-mode reads none of the other variables except `DOCKER_HOST` and `LOG_LEVEL`.
+mode reads none of the other variables except `DOCKER_HOST` (not for
+`proxmox`) and `LOG_LEVEL`.
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -45,7 +46,12 @@ mode reads none of the other variables except `DOCKER_HOST` and `LOG_LEVEL`.
 | `DRAWBRIDGE_ENROLL_TOKEN` | unset | One-time `dbe_…` token from Settings → Hosts or `drawbridge enroll-token`. Needed only until the agent has enrolled; ignored afterwards. |
 | `DRAWBRIDGE_MANAGER_KEY` | unset | The manager's `ed25519:…` public key, needed to enroll. Enrollment fails if the manager reached has another key. |
 | `DRAWBRIDGE_AGENT_ALLOW` | unset | Comma-separated stack (Compose project) names. When set, the agent lists and acts on containers of these stacks only; standalone containers are left out. |
-| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` | `docker` for the agent's Docker engine, or `swarm` for the whole swarm from a manager node (anything else stops the agent; `swarm` on a node that is not a manager stops it too). See [Platforms](platforms.md). |
+| `DRAWBRIDGE_AGENT_PLATFORM` | `docker` | `docker` for the agent's Docker engine, `swarm` for the whole swarm from a manager node, or `proxmox` for the LXC containers of a Proxmox VE cluster. Anything else stops the agent; so does `swarm` on a node that is not a manager. See [Platforms](platforms.md). |
+| `PROXMOX_URL` | none | `proxmox` only: `https://<host>:8006` of any node. |
+| `PROXMOX_TOKEN_ID` | none | `proxmox` only: `user@realm!name`. |
+| `PROXMOX_TOKEN_SECRET` | none | `proxmox` only: the token's secret. |
+| `PROXMOX_TOKEN_SECRET_FILE` | none | `proxmox` only: a file holding the secret (surrounding whitespace removed); overrides `PROXMOX_TOKEN_SECRET`. |
+| `PROXMOX_FINGERPRINT` | none | `proxmox` only: the API certificate's SHA-256 fingerprint; required. |
 | `DRAWBRIDGE_AGENT_DIR` | `/data/agent` | Folder for `key`, `key.next`, `state.json` and `heartbeat`; created with mode 0700. |
 
 ## Detection

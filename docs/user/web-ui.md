@@ -159,8 +159,9 @@ Every container on every host, except Drawbridge itself.
 - Setting: stops on failover, keeps running, or "New, not configured".
 
 **Columns:** container name (with a "Swarm service" badge for a [service of a
-swarm](hosts.md#adding-a-docker-swarm), and its key, `project/service`, when
-different),
+swarm](hosts.md#adding-a-docker-swarm), "LXC" for a [Proxmox
+container](hosts.md#adding-proxmox-ve-lxc-containers), and its key,
+`project/service`, when different),
 host (only with more than one host; click it to filter by it), stack, state,
 what happens on failover (with where that comes from: "from stack", "own
 setting", "default", or "new, not configured"), and the setting (admins).

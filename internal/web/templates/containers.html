@@ -51,7 +51,7 @@
   {{range .Rows}}
   <tr{{if eq .State "unknown"}} class="dim"{{end}}>
     {{if $.IsAdmin}}<td class="check"><input type="checkbox" name="keys" value="{{.HostID}}:{{.Key}}" aria-label="Select {{.Name}}"></td>{{end}}
-    <td><strong>{{.Name}}</strong>{{if eq .Kind "service"}} <span class="badge muted">Swarm service</span>{{end}}{{if ne .Name .Key}}<div class="sub">{{.Key}}</div>{{end}}</td>
+    <td><strong>{{.Name}}</strong>{{if eq .Kind "service"}} <span class="badge muted">Swarm service</span>{{else if eq .Kind "lxc"}} <span class="badge muted">LXC</span>{{end}}{{if ne .Name .Key}}<div class="sub">{{.Key}}</div>{{end}}</td>
     {{if $.MultiHost}}<td><a href="/containers?host={{.HostID}}">{{.Host}}</a></td>{{end}}
     <td>{{if .Project}}<a href="/containers?{{if $.MultiHost}}host={{.HostID}}&amp;{{end}}stack={{query .Project}}">{{.Project}}</a>{{else}}<span class="muted">standalone</span>{{end}}</td>
     <td><span class="dot {{.State}}"></span>{{if and (eq .State "unknown") $.MultiHost}}host offline{{else}}{{.State}}{{end}}</td>

@@ -302,6 +302,10 @@ Details: [Agent protocol](agent-protocol.md).
 - **Enrollment.** A one-time token, as above, and the agent checks that the
   manager's key is the one it was given, so a wrong address cannot capture
   it.
+- **Proxmox.** A Proxmox agent holds the API token itself; the manager never
+  stores it. The token needs only `VM.Audit` and `VM.PowerMgmt` on the pools
+  it controls (plus `Sys.Audit` and `Sys.Console` on `/` only for containers
+  under HA). The API certificate is pinned by its SHA-256 fingerprint.
 - **What an agent exposes.** No Docker API passthrough: no exec, pull,
   create, remove, logs or environment. The agent still holds its host's
   Docker socket, so whoever controls the agent's container controls that
