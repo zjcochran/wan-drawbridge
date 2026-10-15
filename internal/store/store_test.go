@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -40,5 +41,32 @@ func TestStateRoundTrip(t *testing.T) {
 		got.Machine.LastFailover.Equal(st.Machine.LastFailover) && got.Machine.LastFailback.Equal(st.Machine.LastFailback)
 	if err != nil || !same || got.CurrentASN != 64510 || !got.LearningStartedAt.Equal(now) {
 		t.Fatalf("reloaded state = %+v, %v", got, err)
+	}
+}
+
+// Transactions that read before they write must wait for another writer, not
+// fail with "database is locked".
+func TestConcurrentWriters(t *testing.T) {
+	ctx, s := context.Background(), open(t)
+	now := time.Unix(1_800_000_000, 0)
+	items := []InventoryItem{{Key: "dns", Name: "dns"}, {Key: "media/db", Project: "media", Service: "db", Name: "media-db-1"}}
+	errs := make(chan error, 60)
+	var wg sync.WaitGroup
+	for i := range 30 {
+		wg.Go(func() {
+			_, err := s.SyncInventory(ctx, items, now.Add(time.Duration(i)*time.Second))
+			errs <- err
+		})
+		wg.Go(func() {
+			_, _, err := s.SeeASN(ctx, 64500+i%10, "EXAMPLENET-64500", now)
+			errs <- err
+		})
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }

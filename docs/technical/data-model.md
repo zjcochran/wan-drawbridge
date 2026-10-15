@@ -7,7 +7,12 @@ Drawbridge stores everything in one SQLite database,
 journal_mode = WAL      concurrent readers while writing; -wal and -shm files
 busy_timeout = 5000     wait up to 5 s for a lock
 foreign_keys = 1
+_txlock = immediate     transactions take the write lock when they begin
 ```
+
+Because every transaction begins with `BEGIN IMMEDIATE`, a second writer
+waits for the first (up to the busy timeout) instead of failing with
+"database is locked" when a transaction that read first tries to write.
 
 Conventions: timestamps are Unix seconds (UTC) in `INTEGER` columns; days are
 `'YYYY-MM-DD'` strings in UTC; booleans are `0`/`1`. Zero timestamps mean
