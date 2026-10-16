@@ -15,6 +15,9 @@ const (
 	SettingSetupComplete = "setup_complete" // true once the wizard has finished
 	SettingPaused        = "paused"         // true while automation is paused
 	SettingPausedUntil   = "paused_until"   // end of a timed pause; zero time if none
+	// SettingContainerFilters lists the patterns of containers the
+	// Containers page hides.
+	SettingContainerFilters = "container_filters"
 )
 
 // GetSetting decodes a JSON setting into v. It reports false if it is unset.

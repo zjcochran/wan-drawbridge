@@ -79,7 +79,8 @@ func (s *Server) multiHost(ctx context.Context) (bool, []store.HostRow, error) {
 
 type containerRow struct {
 	store.ContainerRow
-	State string // running, stopped or unknown
+	State  string // running, stopped or unknown
+	Hidden bool   // matches a container filter
 }
 
 // Source explains where the effective policy comes from.
@@ -111,7 +112,7 @@ func (s *Server) containerRows(ctx context.Context) ([]containerRow, error) {
 				continue // removed from its host; its row is deleted after store.GoneAfter
 			}
 		}
-		out = append(out, containerRow{r, st})
+		out = append(out, containerRow{ContainerRow: r, State: st})
 	}
 	return out, nil
 }
@@ -518,6 +519,8 @@ type containersData struct {
 	Filter    containerFilter
 	IsAdmin   bool
 	Total     int
+	Hidden    int             // rows left out because they match a container filter
+	HasRules  bool            // container filters are set
 	disabled  map[liveKey]int // per host and stack: containers following a disabled stack
 }
 
@@ -528,6 +531,7 @@ func (d containersData) DisabledIn(host int64, project string) int {
 
 type containerFilter struct {
 	Host, Stack, State, Policy, Q string
+	ShowHidden                    bool // include containers matching a container filter
 }
 
 func (f containerFilter) match(c containerRow) bool {
@@ -553,6 +557,11 @@ func (s *Server) containersData(r *http.Request, f containerFilter) (containersD
 	if d.MultiHost, d.Hosts, err = s.multiHost(r.Context()); err != nil {
 		return d, err
 	}
+	rules, err := s.hideRules(r.Context())
+	if err != nil {
+		return d, err
+	}
+	d.HasRules = len(rules) > 0
 	seen := map[string]bool{}
 	for _, c := range cs {
 		inHost := f.Host == "" || strconv.FormatInt(c.HostID, 10) == f.Host
@@ -563,16 +572,21 @@ func (s *Server) containersData(r *http.Request, f containerFilter) (containersD
 		if c.StackDisabled && c.Policy == store.Inherit {
 			d.disabled[liveKey{c.HostID, c.Project}]++
 		}
-		if f.match(c) {
-			d.Rows = append(d.Rows, c)
+		if !f.match(c) {
+			continue
 		}
+		if c.Hidden = rules.hides(c); c.Hidden && !f.ShowHidden {
+			d.Hidden++
+			continue
+		}
+		d.Rows = append(d.Rows, c)
 	}
 	sort.Strings(d.Stacks)
 	return d, nil
 }
 
 func filterFrom(get func(string) string) containerFilter {
-	return containerFilter{Host: get("host"), Stack: get("stack"), State: get("state"), Policy: get("policy"), Q: strings.TrimSpace(get("q"))}
+	return containerFilter{Host: get("host"), Stack: get("stack"), State: get("state"), Policy: get("policy"), Q: strings.TrimSpace(get("q")), ShowHidden: get("hidden") == "1"}
 }
 
 func (s *Server) containersPage(w http.ResponseWriter, r *http.Request) {
@@ -834,6 +848,7 @@ type settingsData struct {
 	Notify    notifyData
 	Schedule  scheduleView
 	API       apiTokensData
+	Filters   string // container filter patterns, one per line
 	Hosts     hostsView
 	TwoFactor twoFactorView
 	Test      testScheduleView
@@ -883,6 +898,7 @@ var settingsTabs = []settingsTab{
 	{ID: "sso", Name: "Single sign-on", Admin: true},
 	{ID: "api", Name: "API tokens", Admin: true},
 	{ID: "hosts", Name: "Hosts"},
+	{ID: "container-filters", Name: "Container filters"},
 	{ID: "account", Name: "Your account"},
 	{ID: "system", Name: "System"},
 }
@@ -927,6 +943,10 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 		d.API, err = s.apiTokensData(r)
 	case "hosts":
 		d.Hosts, err = s.hostsView(r)
+	case "container-filters":
+		var h hideRules
+		h, err = s.hideRules(ctx)
+		d.Filters = strings.Join(h, "\n")
 	case "account":
 		d.Themes, d.Modes = Themes, Modes
 		if err = s.loadSSO(r, d); err == nil {

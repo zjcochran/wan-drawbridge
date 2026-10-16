@@ -22,6 +22,7 @@
     <option value="keep" {{if eq $d.Filter.Policy "keep"}}selected{{end}}>Keeps running</option>
     <option value="review" {{if eq $d.Filter.Policy "review"}}selected{{end}}>New, not configured</option>
   </select>
+  {{if $d.HasRules}}<label class="check"><input type="checkbox" name="hidden" value="1" {{if $d.Filter.ShowHidden}}checked{{end}}> Show hidden</label>{{end}}
 </form>
 <section class="card">{{template "containers-table" $d}}</section>
 {{end}}
@@ -41,6 +42,7 @@
   <span class="sub">{{len .Rows}} of {{.Total}} shown</span>
 </div>
 {{end}}
+{{if .Hidden}}<p class="sub">{{.Hidden}} hidden by <a href="/settings/container-filters">container filters</a>.</p>{{end}}
 <div class="table-wrap">
 <table>
   <thead><tr>
@@ -51,7 +53,7 @@
   {{range .Rows}}
   <tr{{if eq .State "unknown"}} class="dim"{{end}}>
     {{if $.IsAdmin}}<td class="check"><input type="checkbox" name="keys" value="{{.HostID}}:{{.Key}}" aria-label="Select {{.Name}}"></td>{{end}}
-    <td><strong>{{.Name}}</strong>{{if eq .Kind "service"}} <span class="badge muted">Swarm service</span>{{else if eq .Kind "lxc"}} <span class="badge muted">LXC</span>{{else if and .Kind (ne .Kind "container")}} <span class="badge muted">{{.Kind}}</span>{{end}}{{if ne .Name .Key}}<div class="sub">{{.Key}}</div>{{end}}</td>
+    <td><strong>{{.Name}}</strong>{{if eq .Kind "service"}} <span class="badge muted">Swarm service</span>{{else if eq .Kind "lxc"}} <span class="badge muted">LXC</span>{{else if and .Kind (ne .Kind "container")}} <span class="badge muted">{{.Kind}}</span>{{end}}{{if .Hidden}} <span class="badge muted">hidden</span>{{end}}{{if ne .Name .Key}}<div class="sub">{{.Key}}</div>{{end}}</td>
     {{if $.MultiHost}}<td><a href="/containers?host={{.HostID}}">{{.Host}}</a></td>{{end}}
     <td>{{if .Project}}<a href="/containers?{{if $.MultiHost}}host={{.HostID}}&amp;{{end}}stack={{query .Project}}">{{.Project}}</a>{{else}}<span class="muted">standalone</span>{{end}}</td>
     <td><span class="dot {{.State}}"></span>{{if and (eq .State "unknown") $.MultiHost}}host offline{{else}}{{.State}}{{end}}</td>

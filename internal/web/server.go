@@ -233,6 +233,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /users", s.admin(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings/users", http.StatusMovedPermanently)
 	})))
+	mux.Handle("POST /settings/container-filters", s.admin(s.saveContainerFilters))
 	mux.Handle("POST /settings/hosts", s.admin(s.addHost))
 	mux.Handle("POST /settings/hosts/manager-key", s.admin(s.rotateManagerKey))
 	mux.Handle("POST /settings/hosts/{id}/{op}", s.admin(s.hostOp))
