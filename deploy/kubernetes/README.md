@@ -11,10 +11,10 @@ Check the agent's log and the first failover test closely.
 
 ## Install
 
-1. In Drawbridge, **Settings → Hosts → Add host**. Copy the three values from
-   the Compose file it shows into the Secret in `drawbridge-agent.yaml`:
-   `DRAWBRIDGE_MANAGER`, `DRAWBRIDGE_ENROLL_TOKEN` (valid for one hour, once)
-   and `DRAWBRIDGE_MANAGER_KEY`.
+1. In Drawbridge, **Settings → Hosts → Add host**. Open the **Kubernetes** tab it
+   shows and replace the Secret in `drawbridge-agent.yaml` with that one. It
+   holds `DRAWBRIDGE_MANAGER`, `DRAWBRIDGE_ENROLL_TOKEN` (valid for one hour,
+   once) and `DRAWBRIDGE_MANAGER_KEY`.
 2. `kubectl apply -f drawbridge-agent.yaml`
 3. The host shows **Online** in Drawbridge within a few seconds. If it does
    not, `kubectl -n drawbridge logs deploy/drawbridge-agent` says why.

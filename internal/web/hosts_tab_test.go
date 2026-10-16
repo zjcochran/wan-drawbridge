@@ -152,3 +152,35 @@ func TestHostsWithoutAgents(t *testing.T) {
 		t.Errorf("old key = %q", got)
 	}
 }
+
+func TestAgentSnippets(t *testing.T) {
+	sn := snippets("https://drawbridge.example.com", "ed25519:KEY", "dbe_TOKEN")
+	for name, s := range map[string]string{"docker": sn.Docker, "swarm": sn.Swarm, "proxmox": sn.Proxmox, "kubernetes": sn.Kubernetes} {
+		for _, want := range []string{"DRAWBRIDGE_MANAGER: https://drawbridge.example.com", "DRAWBRIDGE_ENROLL_TOKEN: dbe_TOKEN", "DRAWBRIDGE_MANAGER_KEY: ed25519:KEY"} {
+			if !strings.Contains(s, want) {
+				t.Errorf("%s example lacks %q", name, want)
+			}
+		}
+	}
+	for s, want := range map[string]string{
+		sn.Swarm: "DRAWBRIDGE_AGENT_PLATFORM: swarm", sn.Proxmox: "PROXMOX_TOKEN_SECRET_FILE", sn.Kubernetes: "kind: Secret",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("example lacks %q", want)
+		}
+	}
+	if strings.Contains(sn.Kubernetes, "docker.sock") || strings.Contains(sn.Proxmox, "docker.sock") {
+		t.Error("an example without Docker mounts the socket")
+	}
+}
+
+func TestAddHostShowsEveryPlatform(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	_, body := c.htmx("/settings/hosts", url.Values{"name": {"nas"}})
+	for _, want := range []string{"Docker host", "Docker Swarm", "Proxmox VE (LXC)", "Kubernetes", "node.role == manager", "PROXMOX_URL", "kind: Secret"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the new host banner lacks %q", want)
+		}
+	}
+}

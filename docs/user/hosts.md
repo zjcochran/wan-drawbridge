@@ -34,7 +34,14 @@ the first failover test closely:
    host**. A name is 1 to 32 letters, digits, dots, dashes or underscores,
    starting with a letter or digit, and must be unused. The host appears as
    **Waiting for the agent**.
-2. Drawbridge shows a Compose file for the agent, **once**:
+2. Drawbridge shows how to run the agent, **once**, with the manager's
+   address, the token and the manager key filled in. It has a tab per
+   platform: **Docker host** (below), **Docker Swarm** (a stack file, see
+   [Adding a Docker Swarm](#adding-a-docker-swarm)), **Proxmox VE (LXC)** (a
+   Compose file with the `PROXMOX_` values to fill in, see [Adding Proxmox
+   VE](#adding-proxmox-ve-lxc-containers)) and **Kubernetes** (the Secret for
+   the manifest, see [Adding Kubernetes](#adding-kubernetes)). The Docker
+   host tab:
 
    ```yaml
    services:
@@ -84,8 +91,8 @@ manager over a network you do not control.
 
 One agent controls a whole swarm: its services, grouped by stack, plus the
 standalone containers of the node it runs on. It must run on a **manager
-node**, with `DRAWBRIDGE_AGENT_PLATFORM: swarm`. Add the host as above, then
-deploy the agent as a stack, pinned to one manager node so its folder (and
+node**, with `DRAWBRIDGE_AGENT_PLATFORM: swarm`. Add the host as above and open the
+**Docker Swarm** tab, then deploy the agent as a stack, pinned to one manager node so its folder (and
 with it its key) stays on that node:
 
 ```yaml
@@ -163,7 +170,7 @@ out, the agent stops and prints the fingerprint the server presented, so you
 can compare and set it.
 
 **3. Add the host in Drawbridge and run the agent** with
-`DRAWBRIDGE_AGENT_PLATFORM: proxmox`:
+`DRAWBRIDGE_AGENT_PLATFORM: proxmox`, as on the **Proxmox VE (LXC)** tab:
 
 ```yaml
 services:
@@ -215,10 +222,10 @@ How the containers are controlled:
 
 An agent inside the cluster controls its Deployments, StatefulSets,
 DaemonSets and CronJobs. It connects out to Drawbridge, so the cluster needs
-no Service or Ingress for it. Add the host in Drawbridge, put the three
-values from the Compose file into the Secret in
+no Service or Ingress for it. Add the host in Drawbridge, replace the
+Secret in
 [`deploy/kubernetes/drawbridge-agent.yaml`](../../deploy/kubernetes/drawbridge-agent.yaml),
-and `kubectl apply -f` it. The manifest's
+with the one on the **Kubernetes** tab, and `kubectl apply -f` it. The manifest's
 [README](../../deploy/kubernetes/README.md) lists every object and
 permission it creates, and how to limit the agent to some namespaces
 (`DRAWBRIDGE_AGENT_ALLOW` then lists namespaces).
@@ -268,7 +275,7 @@ reached](during-an-outage.md#hosts-that-cannot-be-reached).
 | Action | What it does |
 | --- | --- |
 | Rotate key now | The agent makes a new key at its next poll and replaces its old one (below). |
-| New enrollment token | Shows a new Compose file with a new one-time token. The agent's current key stops working at once; the host waits for the agent to enroll again. Use it when an agent lost its folder, or after a revoke. |
+| New enrollment token | Shows the examples again, for every platform, with a new one-time token. The agent's current key stops working at once; the host waits for the agent to enroll again. Use it when an agent lost its folder, or after a revoke. |
 | Revoke | The agent is refused from now on: its key is deleted. Its containers stay listed, as unknown, until you remove the host. |
 | Disable / Enable | A disabled host is left out of every failover and failback, and its agent is told so. The local host can be disabled too. Enabling puts it back. |
 | Forget owed starts | Shown when starts are owed to the host: Drawbridge will not start those containers. |
@@ -296,7 +303,7 @@ never leaves the agent's folder; the manager only knows the public key.
   key** (under the host list) makes a new one: agents that are online get it
   at once, signed with the old key, and the others when they are back. The
   page shows how many agents use the current key. Old keys are deleted once no
-  agent uses them. New Compose files carry the new key.
+  agent uses them. New examples carry the new key.
 
 ## What an agent can and cannot do
 

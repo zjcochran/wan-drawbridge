@@ -40,10 +40,11 @@ type hostView struct {
 	OldVersion    bool
 }
 
-// newHostView is a host just added, or given a new token: its enrollment
-// snippet is shown once.
+// newHostView is a host just added, or given a new token: the examples
+// for running its agent are shown once.
 type newHostView struct {
-	Name, Token, Snippet string
+	Name, Token string
+	Snippets    agentSnippets
 }
 
 func (s *Server) hostsView(r *http.Request) (hostsView, error) {
@@ -107,9 +108,15 @@ func (s *Server) externalBase(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
-// snippet is the Compose file for a new agent.
-func snippet(manager, managerKey, token string) string {
-	return fmt.Sprintf(`services:
+// agentSnippets are the ways to run a new agent, one per platform, with
+// its manager address, enrollment token and the manager's key filled in.
+type agentSnippets struct {
+	Docker, Swarm, Proxmox, Kubernetes string
+}
+
+func snippets(manager, managerKey, token string) agentSnippets {
+	return agentSnippets{
+		Docker: fmt.Sprintf(`services:
   drawbridge-agent:
     image: ghcr.io/zjcochran/wan-drawbridge:latest
     command: agent
@@ -122,7 +129,62 @@ func snippet(manager, managerKey, token string) string {
       DRAWBRIDGE_ENROLL_TOKEN: %s
       DRAWBRIDGE_MANAGER_KEY: %s
       # DRAWBRIDGE_AGENT_ALLOW: media,downloads
-`, manager, token, managerKey)
+`, manager, token, managerKey),
+		Swarm: fmt.Sprintf(`# docker stack deploy -c drawbridge-agent.yml drawbridge-agent
+services:
+  agent:
+    image: ghcr.io/zjcochran/wan-drawbridge:latest
+    command: agent
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /srv/drawbridge-agent:/data/agent
+    environment:
+      DRAWBRIDGE_AGENT_PLATFORM: swarm
+      DRAWBRIDGE_MANAGER: %s
+      DRAWBRIDGE_ENROLL_TOKEN: %s
+      DRAWBRIDGE_MANAGER_KEY: %s
+      # DRAWBRIDGE_AGENT_ALLOW: media,downloads
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+          - node.hostname == manager-1 # one manager node; create /srv/drawbridge-agent on it
+`, manager, token, managerKey),
+		Proxmox: fmt.Sprintf(`services:
+  drawbridge-agent:
+    image: ghcr.io/zjcochran/wan-drawbridge:latest
+    command: agent
+    restart: unless-stopped
+    volumes:
+      - ./agent:/data/agent
+    environment:
+      DRAWBRIDGE_AGENT_PLATFORM: proxmox
+      DRAWBRIDGE_MANAGER: %s
+      DRAWBRIDGE_ENROLL_TOKEN: %s
+      DRAWBRIDGE_MANAGER_KEY: %s
+      PROXMOX_URL: https://pve.example.com:8006
+      PROXMOX_TOKEN_ID: drawbridge@pve!agent
+      PROXMOX_TOKEN_SECRET_FILE: /run/secrets/proxmox-token
+      PROXMOX_FINGERPRINT: "AB:CD:..." # the API certificate's SHA-256 fingerprint
+      # DRAWBRIDGE_AGENT_ALLOW: media,downloads
+    secrets:
+      - proxmox-token
+secrets:
+  proxmox-token:
+    file: ./proxmox-token # the API token's secret
+`, manager, token, managerKey),
+		Kubernetes: fmt.Sprintf(`apiVersion: v1
+kind: Secret
+metadata:
+  name: drawbridge-agent
+  namespace: drawbridge
+stringData:
+  DRAWBRIDGE_MANAGER: %s
+  DRAWBRIDGE_ENROLL_TOKEN: %s
+  DRAWBRIDGE_MANAGER_KEY: %s
+`, manager, token, managerKey),
+	}
 }
 
 func (s *Server) hostsFragment(w http.ResponseWriter, r *http.Request, created *newHostView) {
@@ -132,7 +194,7 @@ func (s *Server) hostsFragment(w http.ResponseWriter, r *http.Request, created *
 		return
 	}
 	if created != nil {
-		created.Snippet = snippet(v.Manager, v.ManagerKey, created.Token)
+		created.Snippets = snippets(v.Manager, v.ManagerKey, created.Token)
 		v.New = created
 	}
 	s.Hub.Publish(TopicInventory)
