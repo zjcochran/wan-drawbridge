@@ -129,10 +129,10 @@ Settings → Hosts:
 
 | Agent log or Hosts page | Cause and fix |
 | --- | --- |
-| `not enrolled yet: set DRAWBRIDGE_ENROLL_TOKEN and DRAWBRIDGE_MANAGER_KEY` | The agent has no identity yet and no token. Copy both from the Compose file Settings → Hosts showed, or make a new token. |
+| `not enrolled yet: set DRAWBRIDGE_ENROLL_TOKEN and DRAWBRIDGE_MANAGER_KEY` | The agent has no identity yet and no token. Copy both from the example Settings → Hosts showed, or make a new token. |
 | `enrollment failed: … unknown or already used enrollment token` | A token works once. The agent may have enrolled already with an earlier folder; make a **New enrollment token** and start the agent with it. |
 | `enrollment failed: … the enrollment token has expired` | Tokens last one hour. Make a new one. |
-| `enrollment failed: the manager's key is not the one in DRAWBRIDGE_MANAGER_KEY` | `DRAWBRIDGE_MANAGER` points at another Drawbridge, or the manager key was rotated since the Compose file was made. Check the address and copy the key shown under Settings → Hosts. |
+| `enrollment failed: the manager's key is not the one in DRAWBRIDGE_MANAGER_KEY` | `DRAWBRIDGE_MANAGER` points at another Drawbridge, or the manager key was rotated since the example was made. Check the address and copy the key shown under Settings → Hosts. |
 | `cannot reach the manager` | The agent cannot open `DRAWBRIDGE_MANAGER`. Check the address from the agent's host, for example `curl -I https://drawbridge.example.com/healthz`. |
 | `the manager refuses this agent` with `bad signature` | The agent's key is not the one the manager knows: its `/data/agent` folder was lost or copied from another host. Make a **New enrollment token**. |
 | `… with the request's time is … from the manager's` | The two clocks differ by more than 5 minutes. Fix the time (NTP) on whichever is wrong. |

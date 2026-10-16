@@ -118,7 +118,7 @@ token.
 | `/settings/sso/test` | admin | `issuer` | Try discovery |
 | `/settings/api-tokens` | admin | `name` (1–64 characters) | Make an API token; returns the tab fragment showing the token once; 422 for a bad name |
 | `/settings/api-tokens/{id}/delete` | admin | | Revoke a token; 422 for an unknown one |
-| `/settings/hosts` | admin | `name` (see [Hosts and agents](../user/hosts.md#adding-a-docker-host) for the rules) | Add an agent host; returns the tab fragment with its Compose file and one-time token; 422 for a bad or taken name |
+| `/settings/hosts` | admin | `name` (see [Hosts and agents](../user/hosts.md#adding-a-docker-host) for the rules) | Add an agent host; returns the tab fragment with its one-time token in an example per platform (Docker host, Docker Swarm, Proxmox VE, Kubernetes); 422 for a bad or taken name |
 | `/settings/hosts/{id}/{op}` | admin | `name` for `rename` | `op`: `rename`, `token` (new enrollment token, shown once), `revoke`, `disable`, `enable`, `remove`, `rotate` (the agent rotates its key at its next poll), `forget` (owed starts). Returns the tab fragment; 404 for an unknown `op` or an `{id}` that is not a number; 422 with the reason otherwise (unknown host, removing the local host, a bad name) |
 | `/settings/hosts/manager-key` | admin | | Rotate the manager key; returns the tab fragment |
 | `/settings/sso/unlink` | auth | | Unlink own SSO identities (refused without a password); redirects to `/settings/account` |

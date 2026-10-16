@@ -361,9 +361,33 @@
   <p>A host is a Docker engine Drawbridge stops and starts containers on. <strong>local</strong> is the one whose socket is mounted
     into Drawbridge. Other hosts run a Drawbridge agent, which connects to this address; agents open no port.</p>
   {{with .New}}<div class="banner ok" role="status">
-    <p>Start the agent for <strong>{{.Name}}</strong> with this Compose file. The enrollment token works once, within an hour,
-      and is not shown again.</p>
-    <pre><code>{{.Snippet}}</code></pre></div>{{end}}
+    <p>Start the agent for <strong>{{.Name}}</strong> with the example for its platform. The enrollment token works once, within an hour,
+      and is not shown again, so copy it before leaving this page.</p>
+    <div class="platform-tabs">
+      <input type="radio" name="platform" id="pt-docker" class="visually-hidden" checked><label for="pt-docker">Docker host</label>
+      <input type="radio" name="platform" id="pt-swarm" class="visually-hidden"><label for="pt-swarm">Docker Swarm</label>
+      <input type="radio" name="platform" id="pt-proxmox" class="visually-hidden"><label for="pt-proxmox">Proxmox VE (LXC)</label>
+      <input type="radio" name="platform" id="pt-kubernetes" class="visually-hidden"><label for="pt-kubernetes">Kubernetes</label>
+      <div class="pt-panel pt-docker">
+        <p>On the other host, save this as <code>compose.yaml</code> and run <code>docker compose up -d</code>.</p>
+        <pre><code>{{.Snippets.Docker}}</code></pre></div>
+      <div class="pt-panel pt-swarm">
+        <p>Deploy it as a stack from a manager node. Replace <code>manager-1</code> with that node's hostname and create
+          <code>/srv/drawbridge-agent</code> there: the agent's key stays in that folder.</p>
+        <pre><code>{{.Snippets.Swarm}}</code></pre></div>
+      <div class="pt-panel pt-proxmox">
+        <p>Run it on any Docker host that can reach the Proxmox API. First make an API token that may only see and switch
+          containers, then fill in the <code>PROXMOX_</code> values and put the token's secret in <code>./proxmox-token</code>.
+          The <a href="https://github.com/zjcochran/wan-drawbridge/blob/main/docs/user/hosts.md#adding-proxmox-ve-lxc-containers">guide</a>
+          has the commands.</p>
+        <pre><code>{{.Snippets.Proxmox}}</code></pre></div>
+      <div class="pt-panel pt-kubernetes">
+        <p>Replace the Secret in
+          <a href="https://github.com/zjcochran/wan-drawbridge/blob/main/deploy/kubernetes/drawbridge-agent.yaml"><code>drawbridge-agent.yaml</code></a>
+          with this one, then run <code>kubectl apply -f drawbridge-agent.yaml</code>.</p>
+        <pre><code>{{.Snippets.Kubernetes}}</code></pre></div>
+    </div>
+  </div>{{end}}
   <div class="table-wrap">
   <table>
     <thead><tr><th>Host</th><th>Status</th><th>Agent</th>{{if .IsAdmin}}<th></th>{{end}}</tr></thead>
