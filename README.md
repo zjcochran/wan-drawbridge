@@ -16,7 +16,7 @@ them again.
   `drawbridge.on-failover` label in your Compose files.
 - Stops dependents first and starts dependencies first, waiting for
   healthchecks; only restarts what it stopped; survives restarts mid-run.
-- Controls more Docker hosts, Docker Swarms (services scaled to 0 and back)
+- Controls more Docker hosts, Docker Swarms (services scaled to 0 and back),
   Proxmox VE LXC containers (directly or through HA) and Kubernetes
   workloads (scaled to 0, DaemonSets parked, CronJobs suspended), through
   agents: the same image with
@@ -24,6 +24,8 @@ them again.
   a one-time token, signs every request, only runs commands signed by
   Drawbridge's key, and rotates its key every 30 days. A host that is offline
   during a failover is caught up with when it is back.
+  - An agent on a second standalone Docker host has been tested on a real
+    setup. Docker Swarm, Proxmox VE LXC and Kubernetes are untested so far.
 - A failover test stops and restarts the chosen containers on demand or on a
   weekly or monthly schedule, and automation can be paused for a set time or
   until resumed.
