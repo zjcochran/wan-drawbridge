@@ -86,6 +86,11 @@
 {{else if eq $d.Tab "hosts"}}
 <section class="card">{{template "hosts" $d.Hosts}}</section>
 
+{{else if eq $d.Tab "container-filters"}}
+<section class="card">
+  {{template "container-filters-form" $d}}
+</section>
+
 {{else if eq $d.Tab "account"}}
 <section class="card">
   <h2>Your sign-in</h2>
@@ -165,6 +170,21 @@
 {{end}}
 {{end}}
 
+
+{{define "container-filters-form"}}
+<form id="container-filters-form" hx-post="/settings/container-filters" hx-target="#container-filters-form" hx-swap="outerHTML" class="stack">
+  <p>The Containers page hides containers that match one of these patterns. Tick <strong>Show hidden</strong> there to see them.
+    Hiding only changes the list: a hidden container still stops or keeps running on failover by its setting.</p>
+  <fieldset {{if not .IsAdmin}}disabled{{end}}>
+    <label>Hide containers matching
+      <textarea name="patterns" rows="8" spellcheck="false" placeholder="one pattern per line">{{.Filters}}</textarea>
+      <small>One per line. <code>*</code> matches any characters and <code>?</code> one; case is ignored.
+        A pattern matches the container name, the key (<code>stack/service</code>) or <code>stack/name</code>.
+        For example <code>*-init</code>, <code>backup-?</code> or <code>monitoring/*</code>. At most 100 patterns.</small></label>
+  </fieldset>
+  {{if .IsAdmin}}<button>Save container filters</button>{{end}}
+</form>
+{{end}}
 
 {{define "detection-form"}}
 <form id="detection-form" hx-post="/settings/detection" hx-target="#detection-form" hx-swap="outerHTML" class="stack">

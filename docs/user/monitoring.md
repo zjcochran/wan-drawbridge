@@ -227,7 +227,7 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `asn_moved` | An ASN was moved to another ISP in the UI | `asn`, `isp`, `by` |
 | `stack_policy` | A stack switch was flipped | `host`, `stack`, `disable`, `by` |
 | `container_policy` | A container setting changed | `host`, `container`, `policy`, `converted_stack`, `by` |
-| `settings_changed` | Detection settings saved in Settings | `by` |
+| `settings_changed` | Detection settings or container filters saved in Settings | `by` |
 | `user_created` | A user was added: in the setup wizard (`by` = `setup`), by an admin, or by single sign-on (`by` = `sso`) | `user`, `role`, `by` |
 | `user_disable`, `user_enable`, `user_delete`, `user_password` | User operations in Settings → Users | `user_id`, `by` |
 | `user_role` | An admin changed a role in Settings → Users, or single sign-on changed it through the admin group (`by` = `sso groups`) | `user`, `role`, `by` |

@@ -62,14 +62,14 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/sse` | auth | Server-Sent Events stream (below). |
 | GET | `/stacks` | auth | Filter `host` (a host ID). `?partial=1` with `HX-Request` returns the table only. |
 | GET | `/stacks/{host}/{project}/containers` | auth | Container list fragment for one stack on one host (host ID). 404 if `{host}` is not a number. |
-| GET | `/containers` | auth | Filters: `q`, `host` (a host ID), `stack` (`-` = standalone), `state` (`running`, `stopped`), `policy` (`disable`, `keep`, `review`); `partial=1`. |
+| GET | `/containers` | auth | Filters: `q`, `host` (a host ID), `stack` (`-` = standalone), `state` (`running`, `stopped`), `policy` (`disable`, `keep`, `review`), `hidden=1` (include containers matching a container filter); `partial=1`. |
 | GET | `/isps` | auth | |
 | GET | `/events` | auth | Query `type`, `before` (event ID cursor). 100 per page. |
 | GET | `/events.csv` | auth | Query `type`. Up to 1,000 newest events; columns `time` (RFC 3339 UTC), `type`, `actor`, `details`. Cells starting with `= + - @ TAB CR` are prefixed with `'` against spreadsheet formula injection. |
 | GET | `/reports` | auth | Query `before` (outage ID cursor). 50 outages per page. |
 | GET | `/reports/outages/{id}` | auth | One outage and its data used per container; 404 if there is no such outage. |
 | GET | `/settings` | auth | The first Settings tab, WAN detection. Query `flash` shows a message. |
-| GET | `/settings/detection`, `/settings/hosts`, `/settings/account`, `/settings/system` | auth | Settings tabs. Hosts shows its buttons and the manager key to admins only. |
+| GET | `/settings/detection`, `/settings/container-filters`, `/settings/hosts`, `/settings/account`, `/settings/system` | auth | Settings tabs. Hosts shows its buttons and the manager key to admins only. |
 | GET | `/settings/notifications`, `/settings/backup`, `/settings/users`, `/settings/sso`, `/settings/api` | admin | Settings tabs for admins. |
 | GET | `/settings/backups/{name}` | admin | Downloads a file from the backup folder. Only names matching `drawbridge-backup-YYYYMMDD-HHMMSS.json` are served; anything else is 404. |
 | GET | `/users` | admin | 301 to `/settings/users`, where Users moved. |
@@ -98,6 +98,7 @@ token.
 | `/isps/relearn` | admin | | Forget the primary, restart learning |
 | `/asns/{asn}/move` | admin | `to` = ISP ID or `new` | Regroup an ASN |
 | `/settings/detection` | admin | detection fields | Validate and apply |
+| `/settings/container-filters` | admin | `patterns` (one per line) | Save the container filters; returns the form fragment; 422 for more than 100 patterns or one longer than 200 characters |
 | `/settings/test-schedule` | admin | `enabled` (`on` or absent), `every` (`week`, `month`), `weekday` (0–6, Sunday first), `day` (1–28), `time` (`HH:MM`), `minutes` (2, 5, 10, 15) | Save the failover test schedule; returns its fragment; 422 with the reason if invalid |
 | `/settings/password` | auth | `current`, `new`, `confirm` | Change own password; ends all own sessions |
 | `/settings/2fa/start` | auth | | Returns the two-factor card with a new secret, its QR code, and the secret sealed for the next step. Nothing is stored. 422 unless the account has a password, no linked SSO, password sign-in is allowed, and two-factor is off |

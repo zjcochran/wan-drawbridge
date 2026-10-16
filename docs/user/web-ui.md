@@ -157,6 +157,10 @@ Every container on every host, except Drawbridge itself.
   host); then the list also includes its containers removed in the last 10
   minutes.
 - Setting: stops on failover, keeps running, or "New, not configured".
+- Show hidden: shown only when [container filters](#container-filters) are
+  set. Containers matching one are left out unless this is ticked; then they
+  are listed with a "hidden" badge. Above the table, "N hidden by container
+  filters" counts the matching containers left out of the current view.
 
 **Columns:** container name (with a "Swarm service" badge for a [service of a
 swarm](hosts.md#adding-a-docker-swarm), "LXC" for a [Proxmox
@@ -275,11 +279,32 @@ bookmarked. `/settings` opens the first one.
 | Users | `/settings/users` | admins | Accounts; see [Users](#users). |
 | Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
 | API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
+| Container filters | `/settings/container-filters` | everyone | Patterns of containers the Containers page hides; see [Container filters](#container-filters). Viewers see them read-only. |
 | Hosts | `/settings/hosts` | everyone | The local host and the agent hosts, with their status, version and key; admins add hosts, rotate keys, revoke, disable, rename and remove them. See [Hosts and agents](hosts.md). Viewers see the list read-only, without the manager key. |
 | Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); [two-factor sign-in](#two-factor-sign-in); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
 | System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
 
 Viewers do not see the admin tabs; opening one's address gives 403.
+
+### Container filters
+
+**Settings → Container filters** hides containers you don't want to see on
+the Containers page, such as one-off init or backup containers. Admins enter
+one pattern per line and click **Save container filters**:
+
+- `*` matches any run of characters (also none), `?` exactly one character.
+  Case is ignored, and the pattern must match the whole text.
+- A pattern is tried against the container name, its key
+  (`project/service` for a Compose container) and `stack/name`. For example
+  `*-init`, `backup-?` or `monitoring/*`.
+- Blank lines and repeats (ignoring case) are dropped. At most 100 patterns
+  of at most 200 characters each; more gives an error and nothing is saved.
+- The filters apply to every user and every host, and are part of the
+  configuration in a [backup](backup-and-restore.md#what-is-in-it).
+
+Hiding only changes the Containers list. A hidden container still stops or
+keeps running on failover by its setting, and the Stacks page, the dashboard
+and the reports still show it. Saving records a `settings_changed` event.
 
 ### Users
 
