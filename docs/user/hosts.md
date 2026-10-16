@@ -15,12 +15,12 @@ the manager needs no route to them.
 ## Tested so far
 
 Agents are new. An agent on a second standalone Docker host has been set up
-on a real host and works. The setups below have so far only been tested
+on a real host and works, connecting to Drawbridge through Traefik 3. The setups below have so far only been tested
 inside Drawbridge's own test suite, against simulated Docker engines and
 APIs, and not yet on real equipment, so expect rough edges and check the
 first failover test closely:
 
-- An agent reaching Drawbridge through a real reverse proxy.
+- An agent reaching Drawbridge through a reverse proxy other than Traefik.
 - A Docker Swarm.
 - A Proxmox VE cluster. The token privileges below, especially those for
   HA, come from Proxmox's API documentation and have not been checked on a
