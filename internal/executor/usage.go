@@ -4,6 +4,7 @@ package executor
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/zjcochran/wan-drawbridge/internal/store"
@@ -59,50 +60,51 @@ func (e *Executor) SampleUsage(ctx context.Context) error {
 }
 
 // checkDataAlerts records a data_alert event the first time the traffic of
-// the open outage, or of this calendar month's outages, passes its limit.
+// the open outage, or of this calendar month's outages on the same ISP,
+// passes that ISP's limit.
 func (e *Executor) checkDataAlerts(ctx context.Context, outage int64) error {
-	var limits store.DataAlerts
-	if _, err := e.Store.GetSetting(ctx, store.SettingDataAlerts, &limits); err != nil {
+	isp, limits, err := e.Store.OutageLimits(ctx, outage)
+	if err != nil || isp == 0 || (limits.OutageBytes <= 0 && limits.MonthBytes <= 0) {
 		return err
-	}
-	if limits.OutageBytes <= 0 && limits.MonthBytes <= 0 {
-		return nil
 	}
 	var sent store.DataAlertsSent
 	if _, err := e.Store.GetSetting(ctx, store.SettingDataAlertsSent, &sent); err != nil {
 		return err
 	}
-	now := e.Now()
-	was := sent
+	if sent.Months == nil {
+		sent.Months = map[string]string{}
+	}
+	changed := false
 	if limits.OutageBytes > 0 && sent.Outage != outage {
 		used, err := e.Store.OutageTotal(ctx, outage)
 		if err != nil {
 			return err
 		}
 		if used >= limits.OutageBytes {
-			e.dataAlert(ctx, "outage", used, limits.OutageBytes)
-			sent.Outage = outage
+			e.dataAlert(ctx, "outage", isp, used, limits.OutageBytes)
+			sent.Outage, changed = outage, true
 		}
 	}
-	month := now.Format("2006-01")
-	if limits.MonthBytes > 0 && sent.Month != month {
+	now := e.Now()
+	month, key := now.Format("2006-01"), strconv.Itoa(isp)
+	if limits.MonthBytes > 0 && sent.Months[key] != month {
 		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-		used, err := e.Store.TotalSince(ctx, start)
+		used, err := e.Store.ISPTotalSince(ctx, isp, start)
 		if err != nil {
 			return err
 		}
 		if used >= limits.MonthBytes {
-			e.dataAlert(ctx, "month", used, limits.MonthBytes)
-			sent.Month = month
+			e.dataAlert(ctx, "month", isp, used, limits.MonthBytes)
+			sent.Months[key], changed = month, true
 		}
 	}
-	if sent == was {
+	if !changed {
 		return nil
 	}
 	return e.Store.SetSetting(ctx, store.SettingDataAlertsSent, sent)
 }
 
-func (e *Executor) dataAlert(ctx context.Context, scope string, used, limit int64) {
-	e.Log.Warn("data alert", "scope", scope, "used", used, "limit", limit)
-	e.report(e.Store.AddEvent(ctx, e.Now(), "data_alert", map[string]any{"scope": scope, "used": used, "limit": limit}))
+func (e *Executor) dataAlert(ctx context.Context, scope string, isp int, used, limit int64) {
+	e.Log.Warn("data alert", "scope", scope, "isp", isp, "used", used, "limit", limit)
+	e.report(e.Store.AddEvent(ctx, e.Now(), "data_alert", map[string]any{"scope": scope, "isp": isp, "used": used, "limit": limit}))
 }

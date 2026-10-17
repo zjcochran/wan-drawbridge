@@ -3,7 +3,6 @@
 package web
 
 import (
-	"context"
 	"errors"
 	"math"
 	"net/http"
@@ -13,14 +12,10 @@ import (
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
-// maxAlertGB caps a data limit: 1 PB.
-const maxAlertGB = 1e6
+// maxLimitGB caps a data limit: 1 PB.
+const maxLimitGB = 1e6
 
-// dataAlertsForm shows the data limits in GB; "" is off.
-type dataAlertsForm struct {
-	Outage, Month string
-}
-
+// gbText shows a data limit in GB; "" is off.
 func gbText(b int64) string {
 	if b <= 0 {
 		return ""
@@ -28,40 +23,34 @@ func gbText(b int64) string {
 	return strconv.FormatFloat(float64(b)/1e9, 'f', -1, 64)
 }
 
-// parseGB reads a limit in GB; blank and 0 turn it off.
+// parseGB reads a data limit in GB; blank and 0 turn it off.
 func parseGB(v string) (int64, error) {
 	v = strings.TrimSpace(v)
 	if v == "" {
 		return 0, nil
 	}
 	gb, err := strconv.ParseFloat(v, 64)
-	if err != nil || math.IsNaN(gb) || gb < 0 || gb > maxAlertGB {
-		return 0, errors.New("a limit is a number of GB from 0 to 1000000")
+	if err != nil || math.IsNaN(gb) || gb < 0 || gb > maxLimitGB {
+		return 0, errors.New("a data limit is a number of GB from 0 to 1000000")
 	}
 	return int64(math.Round(gb * 1e9)), nil
 }
 
-func (s *Server) dataAlertsForm(ctx context.Context) (dataAlertsForm, error) {
-	var a store.DataAlerts
-	_, err := s.Store.GetSetting(ctx, store.SettingDataAlerts, &a)
-	return dataAlertsForm{Outage: gbText(a.OutageBytes), Month: gbText(a.MonthBytes)}, err
-}
-
-func (s *Server) saveDataAlerts(w http.ResponseWriter, r *http.Request) {
-	var a store.DataAlerts
+func (s *Server) setISPDataLimits(w http.ResponseWriter, r *http.Request) {
+	id := atoi(r.PathValue("id"), 0)
+	var l store.DataLimits
 	var err error
-	if a.OutageBytes, err = parseGB(r.PostFormValue("outage")); err == nil {
-		a.MonthBytes, err = parseGB(r.PostFormValue("month"))
+	if l.OutageBytes, err = parseGB(r.PostFormValue("outage")); err == nil {
+		l.MonthBytes, err = parseGB(r.PostFormValue("month"))
+	}
+	if err == nil {
+		err = s.Store.SetDataLimits(r.Context(), id, l)
 	}
 	if err != nil {
 		invalid(w, err.Error())
 		return
 	}
-	if err := s.Store.SetSetting(r.Context(), store.SettingDataAlerts, a); err != nil {
-		s.fail(w, r, err)
-		return
-	}
-	s.event(r.Context(), "settings_changed", map[string]any{"by": actorName(r)})
+	s.event(r.Context(), "isp_data_limits", map[string]any{"isp": id, "outage_bytes": l.OutageBytes, "month_bytes": l.MonthBytes, "by": actorName(r)})
 	w.Header().Set("HX-Trigger", `{"toast":"Data limits saved."}`)
-	s.partial(w, r, "settings", "data-alerts", dataAlertsForm{Outage: gbText(a.OutageBytes), Month: gbText(a.MonthBytes)})
+	s.ispsTable(w, r)
 }

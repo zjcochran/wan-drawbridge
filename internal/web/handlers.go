@@ -846,7 +846,6 @@ type settingsData struct {
 	Themes    []choice
 	Modes     []choice
 	Notify    notifyData
-	Data      dataAlertsForm
 	Schedule  scheduleView
 	API       apiTokensData
 	Filters   string // container filter patterns, one per line
@@ -931,9 +930,7 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 			d.Test, err = s.testScheduleView(r)
 		}
 	case "notifications":
-		if d.Notify, err = s.notifyData(ctx); err == nil {
-			d.Data, err = s.dataAlertsForm(ctx)
-		}
+		d.Notify, err = s.notifyData(ctx)
 	case "backup":
 		if err = s.loadDetection(ctx, d); err == nil { // for the retention hint
 			d.Schedule, err = s.scheduleView(ctx)

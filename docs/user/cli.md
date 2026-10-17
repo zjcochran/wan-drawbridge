@@ -117,13 +117,14 @@ front: `set-container nas:media/player keep`. The second line appears when the c
 
 ```sh
 $ /drawbridge isps
-ID  ISP       ROLE               LAST 7 DAYS  ASNS
-1   EXAMPLENET   primary (pinned)   148h12m0s    AS64500 EXAMPLENET-64500, AS64501 EXAMPLENET-64501
-2   SKYLINK  backup             2h3m0s       AS64510 SKYLINK-AS64510
+ID  ISP         ROLE              DATA LIMITS (OUTAGE / MONTH)  LAST 7 DAYS  ASNS
+1   EXAMPLENET  primary (pinned)  -                             148h12m0s    AS64500 EXAMPLENET-64500, AS64501 EXAMPLENET-64501
+2   SKYLINK     backup            5 GB / 100 GB                 2h3m0s       AS64510 SKYLINK-AS64510
 ```
 
-The IDs are what `set-isp` and `move-asn` take. `(manual)` marks ASNs grouped
-by hand.
+The IDs are what `set-isp`, `set-data-limits` and `move-asn` take. `(manual)`
+marks ASNs grouped by hand. **Data limits** shows `-` when both are off, and
+`off` for one that is.
 
 ## set-isp
 
@@ -137,6 +138,17 @@ Roles: `primary` (pinned; the previous primary becomes a backup), `backup`,
 `unmetered` set the ISP's
 [Metered switch](isps.md#metered-and-unmetered-backups) instead; the `isps`
 command shows an unmetered backup as `backup (unmetered)`.
+
+## set-data-limits
+
+```sh
+$ /drawbridge set-data-limits 2 5 100
+ISP 2 data limits: 5 GB per outage, 100 GB per month
+```
+
+Sets an ISP's [data limits](isps.md#data-limits): GB per outage, then GB per
+month, decimals allowed, each from 0 to 1,000,000; `0` turns a limit off. An
+unknown ISP or a bad number exits with code 1.
 
 ## move-asn
 

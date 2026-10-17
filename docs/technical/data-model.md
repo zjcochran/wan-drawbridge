@@ -44,6 +44,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 15 | `00015_agents.sql` | `hosts` gains `version`, `public_key`, `previous_key`, `key_created`, `enroll_hash`, `enroll_expires`, `last_address`, `inventory`, `manager_key_id`; unique index on `enroll_hash` where set |
 | 16 | `00016_workload_kind.sql` | `containers` gains `kind` (default `container`) |
 | 17 | `00017_workload_warning.sql` | `containers` gains `warning` |
+| 18 | `00018_isp_data_limits.sql` | `isps` gains `limit_outage_bytes`, `limit_month_bytes`; the global `data_alerts` setting's values go to every backup ISP, and it and `data_alerts_sent` are deleted |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -56,7 +57,8 @@ defaults. A migration that renames or drops a column of a backed-up table
 `outage_usage`) must also teach
 `store.Import` to translate older backups. A backup from before hosts has no
 `hosts` table and no `host_id` columns: its rows take `host_id` 1, and the
-local host is created.
+local host is created. A backup made while data limits were global (the
+`data_alerts` setting) gives them to every backup ISP, as migration 18 does.
 
 ## Tables
 
@@ -78,8 +80,7 @@ Key-value store of JSON values.
 | `paused_until` | end of a timed pause (RFC 3339), or the zero time `0001-01-01T00:00:00Z` when the pause has no end |
 | `oidc` | single sign-on settings (`web.OIDCSettings`); `client_secret` is sealed (`v1:…`) |
 | `backup_schedule` | `enabled`, `time` (`HH:MM`), `keep`, `history`, `passphrase` (sealed) |
-| `data_alerts` | `outage_bytes`, `month_bytes`: the [data limits](../user/notifications.md#data-limits); 0 is off |
-| `data_alerts_sent` | `outage` (ID of the outage last alerted), `month` (`YYYY-MM` last alerted), so each alert is sent once |
+| `data_alerts_sent` | `outage` (ID of the outage last alerted), `months` (`YYYY-MM` last alerted, by ISP ID), so each alert is sent once |
 | `backup_schedule_last` | the latest scheduled backup: `at`, `file`, `error`, and `success` (the latest that worked) |
 | `test_schedule` | `enabled`, `every` (`week` or `month`), `weekday` (0–6), `day` (1–28), `time` (`HH:MM`), `minutes` |
 | `test_schedule_last` | `slot` (the scheduled time handled last), `at`, `result` (`started`, or why not) |
@@ -99,6 +100,7 @@ ISP groups.
 | `role` | TEXT | `primary`, `backup` (default), `ignored` |
 | `pinned` | INTEGER | Primary chosen by a person |
 | `metered` | INTEGER | Default 1. Only a metered backup triggers a failover; an unmetered one counts like the primary |
+| `limit_outage_bytes`, `limit_month_bytes` | INTEGER | [Data limits](../user/isps.md#data-limits) in bytes; default 0, off |
 | `first_seen`, `last_seen` | INTEGER | |
 
 Index `isps_one_primary`: unique on `role` where `role = 'primary'`, so at most

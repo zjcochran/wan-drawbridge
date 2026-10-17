@@ -254,7 +254,7 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `manual_restore` | Restore now | `from`, `to`, `by` |
 | `drill_started` | Test failover, by hand or scheduled (`by` = `schedule`) | `by`, `minutes`, `until` (RFC 3339, UTC) |
 | `drill_skipped` | A [scheduled failover test](during-an-outage.md#scheduled-tests) did not run | `reason`, `by` (`schedule`) |
-| `data_alert` | Containers passed a [data limit](notifications.md#data-limits) during outages | `scope` (`outage` or `month`), `used`, `limit` (bytes) |
+| `data_alert` | Containers passed an ISP's [data limit](isps.md#data-limits) during its outages | `scope` (`outage` or `month`), `isp`, `used`, `limit` (bytes) |
 | `drill_ended` | A failover test ended: time up (`by=timer`), End test now, Restore now or a failover (`by=failover` when automatic) | `by`; `kept_stopped` when a failover took over |
 | `paused`, `resumed` | Automation paused or resumed (finishing the wizard logs `resumed`; a timed pause ending logs `resumed` with `by=timer`) | `by`; `until` (RFC 3339, UTC) on a timed pause |
 | `primary_learned` | The learner chose a primary | `isp` |
@@ -265,10 +265,11 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `isp_role` | An ISP's role was changed in the UI | `isp`, `role`, `by` |
 | `api_token_created`, `api_token_deleted` | An API token was made or revoked in Settings → API tokens | `name`, `by` |
 | `isp_metered` | An ISP's Metered switch was changed in the UI | `isp`, `metered`, `by` |
+| `isp_data_limits` | An ISP's [data limits](isps.md#data-limits) were saved in the UI | `isp`, `outage_bytes`, `month_bytes` (0 is off), `by` |
 | `asn_moved` | An ASN was moved to another ISP in the UI | `asn`, `isp`, `by` |
 | `stack_policy` | A stack switch was flipped | `host`, `stack`, `disable`, `by` |
 | `container_policy` | A container setting changed | `host`, `container`, `policy`, `converted_stack`, `by` |
-| `settings_changed` | Detection settings, container filters or data limits saved in Settings | `by` |
+| `settings_changed` | Detection settings or container filters saved in Settings | `by` |
 | `user_created` | A user was added: in the setup wizard (`by` = `setup`), by an admin, or by single sign-on (`by` = `sso`) | `user`, `role`, `by` |
 | `user_disable`, `user_enable`, `user_delete`, `user_password` | User operations in Settings → Users | `user_id`, `by` |
 | `user_role` | An admin changed a role in Settings → Users, or single sign-on changed it through the admin group (`by` = `sso groups`) | `user`, `role`, `by` |

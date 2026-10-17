@@ -76,7 +76,7 @@ func Format(e store.Event, names map[int]string) Message {
 		}
 		m.Text = str("error") + ". See the dashboard for which containers are affected."
 	default:
-		if !formatISP(&m, str, isp) && !formatDrill(&m, str) && !formatHost(&m, str) && !formatData(&m, p) {
+		if !formatISP(&m, str, isp) && !formatDrill(&m, str) && !formatHost(&m, str) && !formatData(&m, p, isp) {
 			formatAdmin(&m, str)
 		}
 	}
@@ -139,7 +139,7 @@ func formatDrill(m *Message, str func(string) string) bool {
 }
 
 // formatData formats data_alert; it reports false for other events.
-func formatData(m *Message, p map[string]any) bool {
+func formatData(m *Message, p map[string]any, isp func(string) string) bool {
 	if m.Event != "data_alert" {
 		return false
 	}
@@ -150,7 +150,7 @@ func formatData(m *Message, p map[string]any) bool {
 		during, m.Title = "during this month's outages", "Data limit for this month reached"
 	}
 	m.Priority = 4
-	m.Text = fmt.Sprintf("Containers have used %s %s, over the %s limit.", humanBytes(num("used")), during, humanBytes(num("limit")))
+	m.Text = fmt.Sprintf("Containers have used %s on %s %s, over its %s limit.", humanBytes(num("used")), isp("isp"), during, humanBytes(num("limit")))
 	return true
 }
 

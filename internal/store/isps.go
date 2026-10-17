@@ -287,6 +287,7 @@ type ISPRow struct {
 	Role        string
 	Pinned      bool
 	Metered     bool // only a metered backup triggers a failover
+	Limits      DataLimits
 	WeekSeconds int64
 	AllSeconds  int64
 	LastSeen    time.Time
@@ -303,7 +304,7 @@ type ASNRow struct {
 // ISPs lists every ISP group, primary first, then by time seen this week.
 func (s *Store) ISPs(ctx context.Context, now time.Time) ([]ISPRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT i.id, COALESCE(NULLIF(i.display_name, ''), i.name), i.group_key, i.role, i.pinned, i.metered, i.last_seen,
+		SELECT i.id, COALESCE(NULLIF(i.display_name, ''), i.name), i.group_key, i.role, i.pinned, i.metered, i.limit_outage_bytes, i.limit_month_bytes, i.last_seen,
 			COALESCE((SELECT SUM(d.observed_seconds) FROM asn_daily d JOIN asns a ON a.asn = d.asn
 				WHERE a.isp_id = i.id AND d.day >= ?), 0) AS week,
 			COALESCE((SELECT SUM(a.observed_seconds) FROM asns a WHERE a.isp_id = i.id), 0)
@@ -316,7 +317,7 @@ func (s *Store) ISPs(ctx context.Context, now time.Time) ([]ISPRow, error) {
 	for rows.Next() {
 		var r ISPRow
 		var seen int64
-		if err := rows.Scan(&r.ID, &r.Name, &r.GroupKey, &r.Role, &r.Pinned, &r.Metered, &seen, &r.WeekSeconds, &r.AllSeconds); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.GroupKey, &r.Role, &r.Pinned, &r.Metered, &r.Limits.OutageBytes, &r.Limits.MonthBytes, &seen, &r.WeekSeconds, &r.AllSeconds); err != nil {
 			return nil, err
 		}
 		r.LastSeen = time.Unix(seen, 0)

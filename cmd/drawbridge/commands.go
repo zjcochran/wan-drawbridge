@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -38,19 +39,20 @@ var subcommands = map[string]struct {
 	args int
 	run  func(c cmdEnv, args []string) error
 }{
-	"status":         {0, (cmdEnv).status},
-	"stacks":         {0, (cmdEnv).stacks},
-	"containers":     {0, (cmdEnv).containers},
-	"set-stack":      {2, (cmdEnv).setStack},
-	"set-container":  {2, (cmdEnv).setContainer},
-	"isps":           {0, (cmdEnv).isps},
-	"set-isp":        {2, (cmdEnv).setISP},
-	"move-asn":       {2, (cmdEnv).moveASN},
-	"reset-password": {1, (cmdEnv).resetPassword},
-	"reset-2fa":      {1, (cmdEnv).resetTwoFactor},
-	"hosts":          {0, (cmdEnv).hosts},
-	"revoke-host":    {1, (cmdEnv).revokeHost},
-	"enroll-token":   {1, (cmdEnv).enrollToken},
+	"status":          {0, (cmdEnv).status},
+	"stacks":          {0, (cmdEnv).stacks},
+	"containers":      {0, (cmdEnv).containers},
+	"set-stack":       {2, (cmdEnv).setStack},
+	"set-container":   {2, (cmdEnv).setContainer},
+	"isps":            {0, (cmdEnv).isps},
+	"set-isp":         {2, (cmdEnv).setISP},
+	"set-data-limits": {3, (cmdEnv).setDataLimits},
+	"move-asn":        {2, (cmdEnv).moveASN},
+	"reset-password":  {1, (cmdEnv).resetPassword},
+	"reset-2fa":       {1, (cmdEnv).resetTwoFactor},
+	"hosts":           {0, (cmdEnv).hosts},
+	"revoke-host":     {1, (cmdEnv).revokeHost},
+	"enroll-token":    {1, (cmdEnv).enrollToken},
 }
 
 var errUsage = errors.New(usage)
@@ -189,7 +191,7 @@ func (c cmdEnv) isps([]string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(c.w, "ID\tISP\tROLE\tLAST 7 DAYS\tASNS")
+	fmt.Fprintln(c.w, "ID\tISP\tROLE\tDATA LIMITS (OUTAGE / MONTH)\tLAST 7 DAYS\tASNS")
 	for _, r := range rows {
 		role := r.Role
 		if r.Pinned {
@@ -197,6 +199,10 @@ func (c cmdEnv) isps([]string) error {
 		}
 		if r.Role == store.RoleBackup && !r.Metered {
 			role += " (unmetered)"
+		}
+		limits := "-"
+		if r.Limits.OutageBytes > 0 || r.Limits.MonthBytes > 0 {
+			limits = gbOrOff(r.Limits.OutageBytes) + " / " + gbOrOff(r.Limits.MonthBytes)
 		}
 		var asns []string
 		for _, a := range r.ASNs {
@@ -206,7 +212,7 @@ func (c cmdEnv) isps([]string) error {
 			}
 			asns = append(asns, label)
 		}
-		fmt.Fprintf(c.w, "%d\t%s\t%s\t%s\t%s\n", r.ID, r.Name, role,
+		fmt.Fprintf(c.w, "%d\t%s\t%s\t%s\t%s\t%s\n", r.ID, r.Name, role, limits,
 			(time.Duration(r.WeekSeconds) * time.Second).String(), strings.Join(asns, ", "))
 	}
 	return nil
@@ -227,6 +233,42 @@ func (c cmdEnv) setISP(args []string) error {
 		return err
 	}
 	fmt.Fprintf(c.w, "ISP %d is now %s\n", id, args[1])
+	return nil
+}
+
+// gbOrOff shows a data limit in GB, or "off".
+func gbOrOff(b int64) string {
+	if b <= 0 {
+		return "off"
+	}
+	return strconv.FormatFloat(float64(b)/1e9, 'f', -1, 64) + " GB"
+}
+
+// parseLimit reads a data limit in GB for set-data-limits; 0 is off.
+func parseLimit(v string) (int64, error) {
+	gb, err := strconv.ParseFloat(v, 64)
+	if err != nil || math.IsNaN(gb) || gb < 0 || gb > 1e6 {
+		return 0, fmt.Errorf("%q: a data limit is a number of GB from 0 to 1000000", v)
+	}
+	return int64(math.Round(gb * 1e9)), nil
+}
+
+func (c cmdEnv) setDataLimits(args []string) error {
+	id, err := strconv.Atoi(args[0])
+	if err != nil {
+		return errUsage
+	}
+	var l store.DataLimits
+	if l.OutageBytes, err = parseLimit(args[1]); err != nil {
+		return err
+	}
+	if l.MonthBytes, err = parseLimit(args[2]); err != nil {
+		return err
+	}
+	if err := c.st.SetDataLimits(c.ctx, id, l); err != nil {
+		return err
+	}
+	fmt.Fprintf(c.w, "ISP %d data limits: %s per outage, %s per month\n", id, gbOrOff(l.OutageBytes), gbOrOff(l.MonthBytes))
 	return nil
 }
 

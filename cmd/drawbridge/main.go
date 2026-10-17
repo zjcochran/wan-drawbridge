@@ -11,6 +11,7 @@
 //	drawbridge set-container <key> <policy>  inherit, disable or keep
 //	drawbridge isps                          ISP groups and their ASNs
 //	drawbridge set-isp <id> <setting>        primary (pinned), backup, ignored, metered or unmetered
+//	drawbridge set-data-limits <id> <outage-GB> <month-GB>  0 turns a limit off
 //	drawbridge move-asn <asn> <id>|new       merge an ASN into a group, or split it out
 //	drawbridge reset-password <username>     set a new password, read from stdin
 //	drawbridge reset-2fa <username>          turn off two-factor sign-in
@@ -61,6 +62,8 @@ const usage = `usage:
       (on another host: <host>:<project> or <host>:<key>)
   drawbridge isps                          ISP groups and their ASNs
   drawbridge set-isp <id> <setting>        primary (pinned), backup, ignored, metered or unmetered
+  drawbridge set-data-limits <id> <outage-GB> <month-GB>
+                                           an ISP's data limits; 0 turns one off
   drawbridge move-asn <asn> <id>|new       merge an ASN into a group, or split it out
   drawbridge reset-password <username>     set a new password, read from stdin
   drawbridge reset-2fa <username>          turn off two-factor sign-in
