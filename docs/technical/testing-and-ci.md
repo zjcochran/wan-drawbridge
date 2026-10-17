@@ -292,7 +292,9 @@ mechanisms ensure it:
      after they stopped being published (`ci_cutoff` in the script). Older
      commits still contain them, so their GitHub hashes did not change; GitHub
      shows them deleted once, and a commit that changed only those files does
-     not appear on GitHub at all.
+     not appear on GitHub at all;
+   - `CLAUDE.md`, the notes for Claude Code, is left out the same way of every
+     commit made after `claude_cutoff`.
 
    The rules are built at run time from GitLab's predefined
    variables (`CI_PROJECT_URL`, `CI_SERVER_HOST`,
@@ -313,7 +315,7 @@ the fictional demo data (see [Development](development.md#ui-screenshots)).
 
 The source itself contains no internal names: the Go module is
 `github.com/zjcochran/wan-drawbridge`, and docs and `CLAUDE.md` refer to "the
-GitLab project" or the `origin` remote.
+GitLab project" or the `origin` remote. `CLAUDE.md` is kept in GitLab only.
 
 All three run only on pushes to the default branch, after `release` (which passes
 `RELEASE_TAG` to them through a dotenv artifact). `github-sync` uses

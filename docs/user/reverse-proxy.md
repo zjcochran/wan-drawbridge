@@ -74,7 +74,9 @@ proxy:
 ## Examples
 
 Written for Traefik 3.7, Caddy 2.11, nginx 1.30, Nginx Proxy Manager 2,
-HAProxy 3 and Apache httpd 2.4. Each one serves Drawbridge at
+HAProxy 3 and Apache httpd 2.4. Drawbridge and an agent have been run behind
+Traefik 3 on a real setup; the other examples are written from each proxy's
+documentation and not yet tested against it. Each one serves Drawbridge at
 `https://drawbridge.example.com`; replace the host name, and use
 [Checking it works](#checking-it-works) afterwards.
 
