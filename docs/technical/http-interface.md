@@ -1,8 +1,8 @@
 # HTTP interface
 
 All routes are served by `web.Server.Handler()` using Go's `net/http` pattern
-router. The interface is the web UI, one read-only JSON route,
-`/api/status`, and the agent API under `/api/agent/v1/`. Requests
+router. The interface is the web UI, two read-only JSON routes,
+`/api/status` and `/api/health`, and the agent API under `/api/agent/v1/`. Requests
 from HTMX carry `HX-Request: true`; for those, redirects are sent as
 `HX-Redirect` headers with status 204, and errors (4xx/5xx) are shown as toast
 messages instead of replacing page content.
@@ -31,6 +31,7 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/healthz` | `200 ok`. No auth. |
 | GET | `/metrics` | Prometheus text. 404 unless `DRAWBRIDGE_METRICS_TOKEN` is set; then `Authorization: Bearer` required (401). |
 | GET | `/api/status` | JSON status; see [Monitoring → JSON status API](../user/monitoring.md#json-status-api). `Authorization: Bearer <API token>` required (401 with `WWW-Authenticate` otherwise); each use sets the token's `last_used`. `Cache-Control: no-store`. |
+| GET | `/api/health` | 200 when healthy, 503 with the problems otherwise; see [Monitoring → Health status API](../user/monitoring.md#health-status-api). Query `ignore` (comma-separated: `failover`, `checks`, `inconclusive`, `hosts`, `paused`; 400 for another name). Same token rules as `/api/status`. |
 | any | `/api/agent/v1/…` | The [agent API](agent-protocol.md#routes): enroll, commands, results, inventory, rotate. Agents sign their requests; no session or CSRF token. |
 | GET | `/static/…` | Embedded assets. Pages link them as `/static/<file>?v=<hash>`, where the hash covers every static file, so an upgrade that changes one gives new URLs; those get `Cache-Control: public, max-age=31536000, immutable`, a link without `v` gets `public, max-age=3600`. |
 | GET | `/login` | Sign-in page; redirects to `/` if already signed in. Query `next`. |

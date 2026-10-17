@@ -35,7 +35,7 @@ them again.
 - Web UI with a setup wizard, live updates, phone and dark mode support, and six
   colour themes per user; local accounts with optional two-factor sign-in, and
   single sign-on (Pocket ID or any OIDC provider); Prometheus metrics; a JSON status API for Home Assistant
-  and scripts, with revocable tokens; a CLI for scripting and recovery.
+  and scripts and a health API for uptime monitors, with revocable tokens; a CLI for scripting and recovery.
 - Notifications to ntfy, Gotify, Pushover, Telegram, Discord, email or any
   webhook, chosen per channel, and optionally the log to a syslog server over
   UDP, TCP or TLS.

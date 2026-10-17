@@ -186,6 +186,46 @@ rest:
         value_template: "{{ value_json.state in ['failover', 'failback_pending'] }}"
 ```
 
+## Health status API
+
+`GET /api/health` answers **200** when everything is fine and **503** when
+something needs attention, so an uptime monitor (Uptime Kuma, Peekaping,
+Gatus and the like) can alert on the status code alone. It takes the same
+API token as `/api/status`, sent as `Authorization: Bearer <token>`; a
+missing or unknown one gets 401.
+
+```sh
+$ curl -H "Authorization: Bearer dbt_..." http://drawbridge:8080/api/health
+{
+  "healthy": false,
+  "state": "failover",
+  "problems": [
+    { "check": "failover", "message": "on a backup ISP since 2026-10-14T15:17:34Z" },
+    { "check": "hosts", "message": "host nas is offline" }
+  ]
+}
+```
+
+`problems` is `[]` when healthy. The checks, in the order they are reported:
+
+| Check | A problem when |
+| --- | --- |
+| `failover` | The state is `failover` or `failback_pending`: traffic is on a metered backup, or it is back on the primary but the wait before failback is still running. Not during a [failover test](during-an-outage.md#manual-controls), and not while a failover is only pending. |
+| `checks` | The last WAN check is older than 3 × the check interval plus the check timeout (3 minutes 5 seconds with the defaults, 60 s and 5 s), or there has been no check that long since Drawbridge started. |
+| `inconclusive` | The last check could not tell which ISP is in use, for example during a total outage. |
+| `hosts` | A host is offline (one message per host). Disabled, revoked and not yet enrolled hosts are not problems. |
+| `paused` | Automation is paused. |
+
+To leave checks out, list them in `ignore`, comma-separated, for example
+`/api/health?ignore=failover,paused` to alert only when Drawbridge itself is
+in trouble. An unknown name gets 400. The response has `Cache-Control:
+no-store`.
+
+In an uptime monitor, use an HTTP monitor with the URL, `GET`, and the
+header `{"Authorization": "Bearer dbt_..."}`; 200 counts as up. Peekaping's
+form needs a body even for `GET`: choose the **Text** body encoding and leave
+it empty.
+
 ## Health check
 
 - `GET /healthz` returns `200 ok` whenever the web server runs. It needs no

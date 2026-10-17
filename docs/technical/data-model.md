@@ -332,7 +332,7 @@ Primary key `(run_id, host_id, container_id)`. Index `run_actions_pending` on
 
 ### api_tokens
 
-Tokens for `/api/status`, made in Settings → API tokens.
+Tokens for `/api/status` and `/api/health`, made in Settings → API tokens.
 
 | Column | Type | Notes |
 | --- | --- | --- |
