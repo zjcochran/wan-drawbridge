@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -331,7 +332,7 @@ func TestRevokeAndNewToken(t *testing.T) {
 		t.Fatalf("revoked = %+v", a)
 	}
 	// The agent's key no longer opens anything.
-	b, _ := os.ReadFile(filepath.Join(dir, "key"))
+	b, _ := fs.ReadFile(os.DirFS(dir), "key")
 	key, err := agentauth.ParseKey(string(b))
 	if err != nil {
 		t.Fatal(err)

@@ -5,6 +5,7 @@ package web
 import (
 	"bytes"
 	"context"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -44,7 +45,7 @@ func scheduleEnv(t *testing.T) (*env, *client) {
 func checkScheduledFile(t *testing.T, e *env, name string) []byte {
 	t.Helper()
 	path := filepath.Join(e.ui.BackupDir, name)
-	f, _ := os.ReadFile(path)
+	f, _ := fs.ReadFile(os.DirFS(e.ui.BackupDir), name)
 	meta, snap, err := backup.Decode(bytes.NewReader(f), schedPass)
 	if err != nil || meta.History != "30d" || len(snap.Config["users"]) == 0 {
 		t.Fatalf("decode: %+v %v", meta, err)

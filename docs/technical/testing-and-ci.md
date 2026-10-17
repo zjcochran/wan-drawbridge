@@ -106,7 +106,7 @@ Drawbridge's log.
 | `secret_detection` | test | GitLab template | Secret scanning of the repository. Not allowed to fail. | `secret_detection` |
 | `build-image` | test | `docker:28` + dind | Builds the image and saves it as `drawbridge.tar` (artifact, 1 day) | |
 | `container_scanning` | smoke | GitLab template | Scans `archive://drawbridge.tar`, including Go modules in the binary (`CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"`). Not allowed to fail: findings do not fail it, a broken scan does. | `container_scanning`, `cyclonedx` SBOM |
-| `security-gate` | smoke | `alpine:3` | `ci/security-gate.sh` on the three scan reports; fails on Critical or High SAST and container findings, any secret, or a missing or unreadable report. | |
+| `security-gate` | smoke | `alpine:3` | `ci/security-gate.sh` on the three scan reports: prints every finding and fails on any of any severity not accepted in `ci/security-allowlist.txt`, or on a missing or unreadable report. See [Security findings](#security-findings). | `codequality: gl-code-quality-security.json` (also when it fails) |
 | `smoke` | smoke | `docker:28` + dind | `test/smoke/smoke.sh` | `junit: smoke-report.xml` |
 | `release-label` | test | `alpine:3` | Merge request pipelines only: fails unless the MR has exactly one of the labels `major`, `minor`, `patch`. | |
 | `release` | release | `alpine:3` | Pushes to the default branch only: `ci/release.sh` creates the next version's tag and GitLab release. | `dotenv: release.env` |
@@ -194,7 +194,7 @@ Every job in a merge request pipeline must pass. Together they enforce:
 | Tests | `test` | Any test fails (with the race detector) |
 | Coverage | `test` | Any package is below 80% |
 | Code quality | `code-quality`, `shellcheck` | `golangci-lint` or ShellCheck reports any issue |
-| Security | `semgrep-sast`, `secret_detection`, `container_scanning`, `security-gate` | A scanner fails, or reports a Critical/High finding or any secret |
+| Security | `semgrep-sast`, `secret_detection`, `container_scanning`, `security-gate` | A scanner fails, or reports any finding that is not accepted |
 | Image and real Docker | `build-image`, `smoke` | The image does not build or the smoke test fails |
 | Version | `release-label` | The MR lacks exactly one of `major`, `minor`, `patch` |
 
@@ -250,16 +250,41 @@ git ls-files -z '*.sh' | xargs -0 shellcheck
 | Coverage percentage | Pipeline list and job; can be used for a badge |
 | Line coverage | Merge request diff gutter (Cobertura) |
 | Lint issues | Merge request **Code Quality** widget (new and fixed issues compared with the target branch) |
-| SAST, secret detection, container scanning | Job artifacts (JSON) on every tier; the Security tab and MR widgets on Ultimate |
+| SAST, secret detection, container scanning | The `security-gate` log and the merge request **Code Quality** widget (see [Security findings](#security-findings)); the raw reports as job artifacts (JSON); the Security tab and MR widgets on Ultimate only |
 
-### Semgrep suppressions
+### Security findings
 
-Four `// nosemgrep` comments in `internal/store` mark parameterised queries
-that Semgrep flags because a value built with `fmt.Sprintf` is passed as a
-bound argument, and one in `internal/web/handlers_test.go` marks a test helper
-that drops fixed table names. Each has a comment explaining why. Do not add
-suppressions without the same justification: the security gate fails on High
-findings.
+GitLab Free runs SAST, secret detection and container scanning, but its
+merge request widget only says that they ran: listing the findings, and
+blocking a merge on them, are Ultimate features. `security-gate` does both:
+
+- It prints every finding of the three reports, of any severity, with its
+  identifier and file and line (or package and version), and fails the job on
+  any that is not accepted. So does a missing or unreadable report.
+- The findings that are not accepted also go into
+  `gl-code-quality-security.json`, a Code Quality report (uploaded when the
+  job fails too), so the merge request's Code Quality widget lists them next
+  to the lint findings. Critical becomes `blocker`, High `critical`, Medium
+  `major`, Low `minor`, anything else `info`; container findings point at the
+  `Dockerfile`.
+
+Every finding is fixed before a merge. When one is a false positive:
+
+- **In our code:** mark it with `// nosemgrep` on the line before (or at the
+  end of the line), with a comment saying why. The current ones mark
+  parameterised or fixed SQL in `internal/store` and its tests, fixed table
+  names in `internal/web/handlers_test.go`, our own PNG as an image source in
+  `internal/web/twofactor.go`, the HMAC-SHA1 import RFC 6238 requires in
+  `internal/totp`, and the `PROXMOX_TOKEN_SECRET_FILE` path the admin sets in
+  `cmd/drawbridge`. Tests read files in their own temporary folders with
+  `fs.ReadFile(os.DirFS(dir), name)`, which needs no suppression.
+- **In a dependency or the image:** add a line to `ci/security-allowlist.txt`:
+  the identifier and the file or package as the gate prints them, then the
+  reason. A line without a reason fails the gate. The gate prints accepted
+  findings as `accepted`; remove the line once it matches nothing. The one
+  entry so far is GO-2026-5932 in `golang.org/x/crypto`: it covers only the
+  `openpgp` package, which Drawbridge does not import, and has no fixed
+  version.
 
 ### Publishing to GitHub
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -354,7 +355,7 @@ func TestAllowAndRekey(t *testing.T) {
 		t.Errorf("bad rekey = %+v", r)
 	}
 	var st state
-	b, _ := os.ReadFile(filepath.Join(dir, stateFile))
+	b, _ := fs.ReadFile(os.DirFS(dir), stateFile)
 	if json.Unmarshal(b, &st) != nil || st.ManagerKeyID != "k2" || st.ManagerKey != next.Public().String() {
 		t.Errorf("state = %+v", st)
 	}
@@ -382,10 +383,10 @@ func TestRotation(t *testing.T) {
 	a, dir := newAgent(t, m, newRuntime())
 	run(t, a)
 	waitFor(t, "the inventory", func() bool { m.mu.Lock(); defer m.mu.Unlock(); return len(m.inv) > 0 })
-	before, _ := os.ReadFile(filepath.Join(dir, keyFile))
+	before, _ := fs.ReadFile(os.DirFS(dir), keyFile)
 	rot := m.command(agentauth.CmdRotate, "", nil, m.key, 7)
 	waitFor(t, "the rotation", func() bool { r, ok := m.result(rot.ID); return ok && r.OK })
-	after, _ := os.ReadFile(filepath.Join(dir, keyFile))
+	after, _ := fs.ReadFile(os.DirFS(dir), keyFile)
 	if string(after) == string(before) || m.rotations() != 1 {
 		t.Fatal("the key did not change")
 	}
@@ -418,7 +419,7 @@ func TestFinishRotation(t *testing.T) {
 	if err := b.finishRotation(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	k, _ := os.ReadFile(filepath.Join(dir, keyFile))
+	k, _ := fs.ReadFile(os.DirFS(dir), keyFile)
 	if strings.TrimSpace(string(k)) != next.String() || m.rotations() != 1 {
 		t.Error("the saved new key was not sent and used")
 	}

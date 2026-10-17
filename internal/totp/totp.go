@@ -4,6 +4,9 @@
 // authenticator apps use them: HMAC-SHA1, 6 digits, 30 second steps.
 package totp
 
+// HMAC-SHA1 is what RFC 6238 and authenticator apps use; HMAC does not rely
+// on SHA-1's collision resistance, which is what is broken.
+// nosemgrep
 import (
 	"crypto/hmac"
 	"crypto/rand"

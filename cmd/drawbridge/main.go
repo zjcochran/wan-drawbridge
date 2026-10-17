@@ -327,7 +327,8 @@ func runAgent(ctx context.Context, stderr io.Writer) error {
 func proxmoxRuntime(ctx context.Context, self string) (hosts.Runtime, error) {
 	secret := os.Getenv("PROXMOX_TOKEN_SECRET")
 	if f := os.Getenv("PROXMOX_TOKEN_SECRET_FILE"); f != "" {
-		b, err := os.ReadFile(f) //nolint:gosec // G304: the path is the admin's own setting
+		// The path is the admin's own setting, like every other variable here.
+		b, err := os.ReadFile(f) //nolint:gosec // nosemgrep // G304: the admin's own path
 		if err != nil {
 			return nil, fmt.Errorf("PROXMOX_TOKEN_SECRET_FILE: %w", err)
 		}
