@@ -225,6 +225,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("POST /settings/backup/run", s.admin(s.runBackupNow))
 	mux.Handle("GET /settings/backups/{name}", s.admin(s.downloadStoredBackup))
 	mux.Handle("POST /settings/notifications", s.admin(s.saveChannel))
+	mux.Handle("POST /settings/data-alerts", s.admin(s.saveDataAlerts))
 	mux.Handle("POST /settings/notifications/delete", s.admin(s.deleteChannel))
 	mux.Handle("POST /settings/notifications/test", s.admin(s.testChannel))
 	mux.Handle("POST /settings/restore", limitBody(maxBackupUpload, s.admin(s.restoreBackup)))

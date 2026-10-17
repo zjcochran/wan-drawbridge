@@ -86,3 +86,51 @@ func TestWatchUsageStops(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func dataAlerts(t *testing.T, st *store.Store) []store.Event {
+	t.Helper()
+	evs, err := st.Events(context.Background(), store.EventFilter{Type: "data_alert"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return evs
+}
+
+func TestDataAlerts(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeDocker{}
+	f.add("web", "app", "web", true, "")
+	f.add("db", "app", "db", true, "")
+	stats := &fakeStats{counters: map[string][2]int64{"id-web": {0, 0}, "id-db": {0, 0}}}
+	f.stats = stats
+	e, st := setup(t, f)
+	now := time.Now()
+	e.Now = func() time.Time { return now }
+	st.SaveState(ctx, store.WANState{Machine: wan.Machine{State: wan.Failover}, Since: now, LearningStartedAt: now})
+	e.SampleUsage(ctx) // baseline, with no limits set
+
+	st.SetSetting(ctx, store.SettingDataAlerts, store.DataAlerts{OutageBytes: 1000, MonthBytes: 3000})
+	stats.set("id-web", 600, 300) // 900: under both
+	if err := e.SampleUsage(ctx); err != nil || len(dataAlerts(t, st)) != 0 {
+		t.Fatalf("under the limits: %v, %d alerts", err, len(dataAlerts(t, st)))
+	}
+	stats.set("id-web", 700, 400) // 1100: over the outage limit
+	e.SampleUsage(ctx)
+	stats.set("id-web", 800, 400) // still over: not sent again
+	e.SampleUsage(ctx)
+	evs := dataAlerts(t, st)
+	if len(evs) != 1 || evs[0].Payload["scope"] != "outage" || evs[0].Payload["used"] != float64(1100) || evs[0].Payload["limit"] != float64(1000) {
+		t.Fatalf("outage alert = %+v", evs)
+	}
+	stats.set("id-db", 2000, 0) // 3200: over the month limit
+	e.SampleUsage(ctx)
+	e.SampleUsage(ctx)
+	if evs = dataAlerts(t, st); len(evs) != 2 || evs[0].Payload["scope"] != "month" {
+		t.Fatalf("month alert = %+v", evs)
+	}
+	var sent store.DataAlertsSent
+	st.GetSetting(ctx, store.SettingDataAlertsSent, &sent)
+	if id, _ := st.OpenOutage(ctx); sent.Outage != id || sent.Month != now.Format("2006-01") {
+		t.Errorf("sent = %+v", sent)
+	}
+}

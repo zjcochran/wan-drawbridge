@@ -78,6 +78,8 @@ Key-value store of JSON values.
 | `paused_until` | end of a timed pause (RFC 3339), or the zero time `0001-01-01T00:00:00Z` when the pause has no end |
 | `oidc` | single sign-on settings (`web.OIDCSettings`); `client_secret` is sealed (`v1:…`) |
 | `backup_schedule` | `enabled`, `time` (`HH:MM`), `keep`, `history`, `passphrase` (sealed) |
+| `data_alerts` | `outage_bytes`, `month_bytes`: the [data limits](../user/notifications.md#data-limits); 0 is off |
+| `data_alerts_sent` | `outage` (ID of the outage last alerted), `month` (`YYYY-MM` last alerted), so each alert is sent once |
 | `backup_schedule_last` | the latest scheduled backup: `at`, `file`, `error`, and `success` (the latest that worked) |
 | `test_schedule` | `enabled`, `every` (`week` or `month`), `weekday` (0–6), `day` (1–28), `time` (`HH:MM`), `minutes` |
 | `test_schedule_last` | `slot` (the scheduled time handled last), `at`, `result` (`started`, or why not) |

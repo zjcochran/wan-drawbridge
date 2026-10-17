@@ -112,6 +112,7 @@ token.
 | `/settings/backup/schedule` | admin | `enabled`, `time` (`HH:MM`), `keep` (1–365), `history`, `passphrase`, `confirm` | Save the backup schedule; a blank passphrase keeps the saved one. Returns the schedule fragment; 422 with the reason if invalid |
 | `/settings/backup/run` | admin | | Make a scheduled backup now; returns the schedule fragment |
 | `/settings/notifications` | admin | `id` (empty to add), `name`, `kind`, `url`, `token`, `remove_token`, `topics` (repeated), `enabled` | Add or update a channel; blank `url`/`token` keep the saved ones. Returns the channel list; 422 with the reason if invalid, 404 for an unknown `id` |
+| `/settings/data-alerts` | admin | `outage`, `month` (GB, decimals allowed; blank or 0 is off) | Save the data limits; returns the form fragment; 422 for a value that is not a number from 0 to 1000000 |
 | `/settings/notifications/delete` | admin | `id` | Delete a channel; returns the channel list |
 | `/settings/notifications/test` | admin | as above | Send a test message with the form's values (saved ones for blanks); returns "✓ Sent…" or "✗ error" |
 | `/settings/sso` | admin | SSO fields | Save single sign-on settings |

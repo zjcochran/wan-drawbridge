@@ -323,3 +323,25 @@ func TestFormat(t *testing.T) {
 		t.Errorf("run_failed priority %d", m.Priority)
 	}
 }
+
+func TestFormatDataAlert(t *testing.T) {
+	for _, c := range []struct {
+		scope, title, text string
+	}{
+		{"outage", "Data limit for this outage reached", "Containers have used 5.2 GB during this outage, over the 5.0 GB limit."},
+		{"month", "Data limit for this month reached", "Containers have used 5.2 GB during this month's outages, over the 5.0 GB limit."},
+	} {
+		m := Format(store.Event{Type: "data_alert", Payload: map[string]any{"scope": c.scope, "used": float64(5_234_000_000), "limit": float64(5e9)}}, nil)
+		if m.Title != c.title || m.Text != c.text || m.Priority != 4 {
+			t.Errorf("%s: %+v", c.scope, m)
+		}
+	}
+	for n, want := range map[int64]string{999: "999 B", 1500: "1.5 kB", 123_456_789: "123 MB", 2e15: "2.0 PB"} {
+		if got := humanBytes(n); got != want {
+			t.Errorf("humanBytes(%d) = %q", n, got)
+		}
+	}
+	if topicOf("data_alert") != "failover" {
+		t.Error("data_alert is not in the failover topic")
+	}
+}

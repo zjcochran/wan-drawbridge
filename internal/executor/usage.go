@@ -5,6 +5,8 @@ package executor
 import (
 	"context"
 	"time"
+
+	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
 
 // WatchUsage samples the network counters of every running container each
@@ -53,5 +55,54 @@ func (e *Executor) SampleUsage(ctx context.Context) error {
 			}
 		}
 	}
-	return nil
+	return e.checkDataAlerts(ctx, outage)
+}
+
+// checkDataAlerts records a data_alert event the first time the traffic of
+// the open outage, or of this calendar month's outages, passes its limit.
+func (e *Executor) checkDataAlerts(ctx context.Context, outage int64) error {
+	var limits store.DataAlerts
+	if _, err := e.Store.GetSetting(ctx, store.SettingDataAlerts, &limits); err != nil {
+		return err
+	}
+	if limits.OutageBytes <= 0 && limits.MonthBytes <= 0 {
+		return nil
+	}
+	var sent store.DataAlertsSent
+	if _, err := e.Store.GetSetting(ctx, store.SettingDataAlertsSent, &sent); err != nil {
+		return err
+	}
+	now := e.Now()
+	was := sent
+	if limits.OutageBytes > 0 && sent.Outage != outage {
+		used, err := e.Store.OutageTotal(ctx, outage)
+		if err != nil {
+			return err
+		}
+		if used >= limits.OutageBytes {
+			e.dataAlert(ctx, "outage", used, limits.OutageBytes)
+			sent.Outage = outage
+		}
+	}
+	month := now.Format("2006-01")
+	if limits.MonthBytes > 0 && sent.Month != month {
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		used, err := e.Store.TotalSince(ctx, start)
+		if err != nil {
+			return err
+		}
+		if used >= limits.MonthBytes {
+			e.dataAlert(ctx, "month", used, limits.MonthBytes)
+			sent.Month = month
+		}
+	}
+	if sent == was {
+		return nil
+	}
+	return e.Store.SetSetting(ctx, store.SettingDataAlertsSent, sent)
+}
+
+func (e *Executor) dataAlert(ctx context.Context, scope string, used, limit int64) {
+	e.Log.Warn("data alert", "scope", scope, "used", used, "limit", limit)
+	e.report(e.Store.AddEvent(ctx, e.Now(), "data_alert", map[string]any{"scope": scope, "used": used, "limit": limit}))
 }

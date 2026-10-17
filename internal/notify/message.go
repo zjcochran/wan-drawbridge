@@ -76,7 +76,7 @@ func Format(e store.Event, names map[int]string) Message {
 		}
 		m.Text = str("error") + ". See the dashboard for which containers are affected."
 	default:
-		if !formatISP(&m, str, isp) && !formatDrill(&m, str) && !formatHost(&m, str) {
+		if !formatISP(&m, str, isp) && !formatDrill(&m, str) && !formatHost(&m, str) && !formatData(&m, p) {
 			formatAdmin(&m, str)
 		}
 	}
@@ -136,6 +136,39 @@ func formatDrill(m *Message, str func(string) string) bool {
 		return false
 	}
 	return true
+}
+
+// formatData formats data_alert; it reports false for other events.
+func formatData(m *Message, p map[string]any) bool {
+	if m.Event != "data_alert" {
+		return false
+	}
+	num := func(k string) int64 { f, _ := p[k].(float64); return int64(f) }
+	during := "during this outage"
+	m.Title = "Data limit for this outage reached"
+	if p["scope"] == "month" {
+		during, m.Title = "during this month's outages", "Data limit for this month reached"
+	}
+	m.Priority = 4
+	m.Text = fmt.Sprintf("Containers have used %s %s, over the %s limit.", humanBytes(num("used")), during, humanBytes(num("limit")))
+	return true
+}
+
+// humanBytes writes n in decimal units, as the web UI does.
+func humanBytes(n int64) string {
+	if n < 1000 {
+		return fmt.Sprintf("%d B", n)
+	}
+	f, units := float64(n)/1000, "kMGTP"
+	i := 0
+	for f >= 1000 && i < len(units)-1 {
+		f /= 1000
+		i++
+	}
+	if f >= 100 {
+		return fmt.Sprintf("%.0f %cB", f, units[i])
+	}
+	return fmt.Sprintf("%.1f %cB", f, units[i])
 }
 
 // formatAdmin covers events started by people or schedules: pausing, backups.
