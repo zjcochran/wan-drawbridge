@@ -28,6 +28,10 @@ first failover test closely:
 - A Kubernetes cluster: the manifest in `deploy/kubernetes` has not yet been
   applied to a real one.
 
+Settings → Hosts marks these platforms **experimental**: on their tabs in the
+examples shown after adding a host, and on each Swarm, Proxmox VE or
+Kubernetes host in the list.
+
 ## Adding a Docker host
 
 1. In **Settings → Hosts**, enter a name under **Add a host** and click **Add

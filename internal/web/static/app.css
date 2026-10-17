@@ -403,7 +403,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 /* Notification channels */
 /* Examples for a new agent: radio buttons as tabs, so no script. */
 .platform-tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.5rem; }
-.platform-tabs > label { cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; padding: 0.4rem 0.7rem; border-bottom: 2px solid transparent; }
+.platform-tabs > label { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; color: var(--muted); font-weight: 500; white-space: nowrap; padding: 0.4rem 0.7rem; border-bottom: 2px solid transparent; }
 .platform-tabs > label:hover, .platform-tabs > input:checked + label { color: var(--text); }
 .platform-tabs > input:checked + label { border-bottom-color: var(--accent); }
 .platform-tabs > input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }

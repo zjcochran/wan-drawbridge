@@ -184,3 +184,22 @@ func TestAddHostShowsEveryPlatform(t *testing.T) {
 		}
 	}
 }
+
+func TestExperimentalPlatforms(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	ctx := context.Background()
+	for _, p := range []string{"swarm", "proxmox", "kubernetes"} {
+		if _, err := e.st.AddHost(ctx, "x-"+p, "agent", p, "admin", time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, page := c.get("/settings/hosts")
+	if n := strings.Count(page, `<span class="badge warn">experimental</span>`); n != 3 {
+		t.Errorf("%d experimental badges in the host list, want 3 (not on local)", n)
+	}
+	_, body := c.htmx("/settings/hosts", url.Values{"name": {"nas"}})
+	if n := strings.Count(body, `<span class="badge warn">experimental</span>`); n != 6 || !strings.Contains(body, "not yet tested on a real swarm") {
+		t.Errorf("%d experimental badges with the examples, want 6", n)
+	}
+}
