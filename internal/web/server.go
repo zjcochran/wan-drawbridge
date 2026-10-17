@@ -74,6 +74,7 @@ type Server struct {
 	Hosts   *hosts.Registry // every host, for live container state
 	Agents  *agents.Manager // agent hosts; nil: no agent API
 	Sync    Syncer
+	Planner Planner // the failover preview; nil: none
 	Hub     *Hub
 	Log     *slog.Logger
 	BaseURL string // external URL; https marks cookies Secure
@@ -196,6 +197,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /events.csv", s.auth(s.eventsCSV))
 
 	mux.Handle("GET /reports", s.auth(s.reportsPage))
+	mux.Handle("GET /preview", s.auth(s.previewPage))
 	mux.Handle("GET /reports/outages/{id}", s.auth(s.outagePage))
 
 	mux.Handle("GET /settings", s.auth(s.settingsPage(settingsTabs[0])))

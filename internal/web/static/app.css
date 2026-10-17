@@ -368,6 +368,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .steps li::before { content: counter(step) ". "; }
 .steps li.current { color: var(--accent-text); background: var(--accent); border-color: var(--accent); font-weight: 600; }
 .steps li.done { color: var(--text); }
+/* Failover preview: one line per step. */
+.stop-order { margin: 0 0 0.75rem; padding-left: 1.6rem; }
+.stop-order li { padding: 0.2rem 0; }
+.stop-order li::marker { color: var(--muted); }
 .check-result p { margin: 0; }
 
 @media (max-width: 640px) {
