@@ -102,7 +102,7 @@ Drawbridge's log.
 | `test` | test | `golang:1.26` | gofmt check on tracked `.go` files, `go vet`, `gotestsum` running `go test -race -coverprofile`, total coverage line, Cobertura conversion, per-package 80% gate | `junit: report.xml`, `coverage_report: coverage.xml` (Cobertura), `coverage:` regex on `total: (statements) N%` |
 | `code-quality` | test | `golang:1.26` | `golangci-lint` v2.14.0 with `.golangci.yml`; fails on any issue | `codequality` (Code Climate JSON) |
 | `shellcheck` | test | `koalaman/shellcheck-alpine:v0.11.0` | ShellCheck on every tracked `*.sh` file; fails on any finding, style notes included | `codequality` (converted from ShellCheck's JSON with `jq`) |
-| `semgrep-sast` | test | GitLab template | SAST (Semgrep rules for Go). Not allowed to fail. | `sast` |
+| `semgrep-sast` | test | GitLab template | SAST (Semgrep rules for Go), with no per-rule time limit (`SAST_SCANNER_ALLOWED_CLI_OPTS: "--timeout=0"`): the default 5 seconds per rule and file left the largest test files partly unscanned, which the report does not show. Not allowed to fail. | `sast` |
 | `secret_detection` | test | GitLab template | Secret scanning of the repository. Not allowed to fail. | `secret_detection` |
 | `build-image` | test | `docker:28` + dind | Builds the image and saves it as `drawbridge.tar` (artifact, 1 day) | |
 | `container_scanning` | smoke | GitLab template | Scans `archive://drawbridge.tar`, including Go modules in the binary (`CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"`). Not allowed to fail: findings do not fail it, a broken scan does. | `container_scanning`, `cyclonedx` SBOM |
