@@ -5,9 +5,9 @@ package agents_test
 import (
 	"bytes"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -156,7 +156,7 @@ func TestEnrollRefusals(t *testing.T) {
 func TestAPIRefusals(t *testing.T) {
 	e := newEnv(t)
 	id, dir := e.startAgent(newDocker())
-	b, _ := os.ReadFile(filepath.Join(dir, "key"))
+	b, _ := fs.ReadFile(os.DirFS(dir), "key")
 	key, _ := agentauth.ParseKey(string(b))
 	other, _ := agentauth.NewKey()
 
@@ -239,7 +239,7 @@ func (e *env) signedAt(key agentauth.Key, host int64, path string, at time.Time)
 func TestRotateRefusals(t *testing.T) {
 	e := newEnv(t)
 	id, dir := e.startAgent(newDocker())
-	b, _ := os.ReadFile(filepath.Join(dir, "key"))
+	b, _ := fs.ReadFile(os.DirFS(dir), "key")
 	key, _ := agentauth.ParseKey(string(b))
 	next, _ := agentauth.NewKey()
 	ts := time.Now().Unix()
