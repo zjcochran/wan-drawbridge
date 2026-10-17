@@ -5,6 +5,7 @@ package web
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,13 @@ type hostView struct {
 	Owed          int // starts owed to it
 	OldVersion    bool
 }
+
+// experimentalPlatforms have only been tested against fakes so far.
+var experimentalPlatforms = []string{"swarm", "proxmox", "kubernetes"}
+
+// Experimental reports whether the host's platform is not yet tested on
+// real equipment.
+func (h hostView) Experimental() bool { return slices.Contains(experimentalPlatforms, h.Platform) }
 
 // newHostView is a host just added, or given a new token: the examples
 // for running its agent are shown once.

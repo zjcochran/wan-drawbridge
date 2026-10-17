@@ -365,23 +365,26 @@
       and is not shown again, so copy it before leaving this page.</p>
     <div class="platform-tabs">
       <input type="radio" name="platform" id="pt-docker" class="visually-hidden" checked><label for="pt-docker">Docker host</label>
-      <input type="radio" name="platform" id="pt-swarm" class="visually-hidden"><label for="pt-swarm">Docker Swarm</label>
-      <input type="radio" name="platform" id="pt-proxmox" class="visually-hidden"><label for="pt-proxmox">Proxmox VE (LXC)</label>
-      <input type="radio" name="platform" id="pt-kubernetes" class="visually-hidden"><label for="pt-kubernetes">Kubernetes</label>
+      <input type="radio" name="platform" id="pt-swarm" class="visually-hidden"><label for="pt-swarm">Docker Swarm <span class="badge warn">experimental</span></label>
+      <input type="radio" name="platform" id="pt-proxmox" class="visually-hidden"><label for="pt-proxmox">Proxmox VE (LXC) <span class="badge warn">experimental</span></label>
+      <input type="radio" name="platform" id="pt-kubernetes" class="visually-hidden"><label for="pt-kubernetes">Kubernetes <span class="badge warn">experimental</span></label>
       <div class="pt-panel pt-docker">
         <p>On the other host, save this as <code>compose.yaml</code> and run <code>docker compose up -d</code>.</p>
         <pre><code>{{.Snippets.Docker}}</code></pre></div>
       <div class="pt-panel pt-swarm">
+        <p class="warn-text">Experimental: not yet tested on a real swarm. Watch the first failover test closely.</p>
         <p>Deploy it as a stack from a manager node. Replace <code>manager-1</code> with that node's hostname and create
           <code>/srv/drawbridge-agent</code> there: the agent's key stays in that folder.</p>
         <pre><code>{{.Snippets.Swarm}}</code></pre></div>
       <div class="pt-panel pt-proxmox">
+        <p class="warn-text">Experimental: not yet tested on a real Proxmox VE cluster. Watch the first failover test closely.</p>
         <p>Run it on any Docker host that can reach the Proxmox API. First make an API token that may only see and switch
           containers, then fill in the <code>PROXMOX_</code> values and put the token's secret in <code>./proxmox-token</code>.
           The <a href="https://github.com/zjcochran/wan-drawbridge/blob/main/docs/user/hosts.md#adding-proxmox-ve-lxc-containers">guide</a>
           has the commands.</p>
         <pre><code>{{.Snippets.Proxmox}}</code></pre></div>
       <div class="pt-panel pt-kubernetes">
+        <p class="warn-text">Experimental: not yet tested on a real cluster. Watch the first failover test closely.</p>
         <p>Replace the Secret in
           <a href="https://github.com/zjcochran/wan-drawbridge/blob/main/deploy/kubernetes/drawbridge-agent.yaml"><code>drawbridge-agent.yaml</code></a>
           with this one, then run <code>kubectl apply -f drawbridge-agent.yaml</code>.</p>
@@ -394,7 +397,7 @@
     <tbody>
     {{range .Hosts}}
     <tr>
-      <td><strong>{{.Name}}</strong><div class="sub">{{if .Agent}}agent{{else}}local socket{{end}}{{with .Platform}} · {{.}}{{end}}</div></td>
+      <td><strong>{{.Name}}</strong><div class="sub">{{if .Agent}}agent{{else}}local socket{{end}}{{with .Platform}} · {{.}}{{end}}{{if .Experimental}} <span class="badge warn">experimental</span>{{end}}</div></td>
       <td>
         {{if eq .Status "online"}}<span class="badge ok">Online</span>
         {{else if eq .Status "offline"}}<span class="badge bad">Offline</span>
