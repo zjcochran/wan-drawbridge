@@ -54,7 +54,7 @@ after a restart until the next message.
 
 | Group | Events | On for a new channel |
 | --- | --- | --- |
-| Failover and failback, and failover tests | `failover`, `failback`, `manual_failover`, `manual_restore`, `drill_started`, `drill_ended`, `drill_skipped` | Yes |
+| Failover and failback, failover tests, and data limits reached | `failover`, `failback`, `manual_failover`, `manual_restore`, `drill_started`, `drill_ended`, `drill_skipped`, `data_alert` | Yes |
 | Failures: containers that did not stop or start, scheduled backups | `run_failed`, `backup_failed` | Yes |
 | Flapping primary ISP | `flapping` | Yes |
 | Hosts going offline and coming back, and agent key problems | `host_offline`, `host_online`, `host_key_expiring`, `agent_refused` | Yes |
@@ -74,16 +74,40 @@ of the messages:
 | `isp_new` | New ISP seen | Drawbridge saw BIGTEL (AS64511) for the first time. Until it is learned or set as primary on the ISPs page, it counts as a metered backup. |
 | `host_offline` | Host nas is offline | Its agent has not been in touch for 90 seconds. Its containers are stopped or started when it is back. |
 | `agent_refused` | Agent of nas was refused | bad signature. If this was not you, revoke the host in Settings → Hosts. |
+| `data_alert` | Data limit for this outage reached | Containers have used 5.2 GB during this outage, over the 5.0 GB limit. |
 
 If automation is paused, failover and failback messages say that no container
 was stopped or started.
 
-Priorities: container failures are 5 (urgent); failovers, failed scheduled
-backups, a host going offline, an agent key about to expire and a refused
+Priorities: container failures are 5 (urgent); failovers, data limits
+reached, failed scheduled backups, a host going offline, an agent key about to expire and a refused
 agent 4 (high); everything else 3 (default), on ntfy's 1 to 5 scale. Gotify
 gets them as 10, 8 and 5; Pushover as 1, 1 and 0 (Pushover's emergency
 priority, which repeats until acknowledged, is not used); email marks 5 and 4
 with `X-Priority: 1` and `2`.
+
+## Data limits
+
+Under the channels, **Data limits** (admins) sends a `data_alert` when the
+containers that keep running during outages have used more than a limit:
+
+| Field | Limit |
+| --- | --- |
+| One outage | GB during a single outage |
+| Calendar month | GB during this month's outages, in the server's time zone (`TZ`). An outage still going when the month began counts in full. |
+
+GB are decimal (1 GB = 1,000,000,000 bytes), from 0 to 1,000,000, with
+decimals allowed; blank or 0 turns a limit off. The traffic is what the
+[Reports](web-ui.md#reports) page shows for outages: each running
+container's network counters, sampled every minute while an outage lasts,
+including traffic on the local network and between containers, but not
+other devices on your network. Each alert is sent once: once per outage, and
+once per month. The check runs after each sample, so an alert comes within
+about a minute of passing the limit. Saving records a `settings_changed`
+event.
+
+The alert goes to channels with **Failover and failback, failover tests,
+and data limits reached** ticked.
 
 ## Message formats
 

@@ -20,6 +20,10 @@
   <p>Send events to <a href="https://ntfy.sh">ntfy</a>, Gotify, Pushover, Telegram, Discord, email or any webhook. Each channel chooses what it gets.</p>
   {{template "notify-list" $d.Notify}}
 </section>
+<section class="card">
+  <h2>Data limits</h2>
+  {{template "data-alerts" $d.Data}}
+</section>
 
 {{else if eq $d.Tab "backup"}}
 <section class="card">
@@ -183,6 +187,18 @@
         For example <code>*-init</code>, <code>backup-?</code> or <code>monitoring/*</code>. At most 100 patterns.</small></label>
   </fieldset>
   {{if .IsAdmin}}<button>Save container filters</button>{{end}}
+</form>
+{{end}}
+
+{{define "data-alerts"}}
+<form id="data-alerts" hx-post="/settings/data-alerts" hx-target="#data-alerts" hx-swap="outerHTML" class="stack narrow-form">
+  <p>Send a <code>data_alert</code> to channels with <em>Failover and failback</em> ticked when the containers that keep running have used this
+    much during outages. Each alert is sent once per outage or month. Leave a field blank to turn it off.</p>
+  <label>One outage <input name="outage" type="number" min="0" max="1000000" step="any" inputmode="decimal" value="{{.Outage}}" placeholder="off">
+    <small>GB (1 GB = 1,000,000,000 bytes) during a single outage.</small></label>
+  <label>Calendar month <input name="month" type="number" min="0" max="1000000" step="any" inputmode="decimal" value="{{.Month}}" placeholder="off">
+    <small>GB during this month's outages, in the server's time zone. An outage still going when the month began counts in full.</small></label>
+  <button>Save data limits</button>
 </form>
 {{end}}
 
