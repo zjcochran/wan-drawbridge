@@ -45,6 +45,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 16 | `00016_workload_kind.sql` | `containers` gains `kind` (default `container`) |
 | 17 | `00017_workload_warning.sql` | `containers` gains `warning` |
 | 18 | `00018_isp_data_limits.sql` | `isps` gains `limit_outage_bytes`, `limit_month_bytes`; the global `data_alerts` setting's values go to every backup ISP, and it and `data_alerts_sent` are deleted |
+| 19 | `00019_isp_usage.sql` | `isp_usage` |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -54,7 +55,7 @@ names, and record the schema version they were made at. A restore accepts
 backups from the same or an older schema: columns added since then take their
 defaults. A migration that renames or drops a column of a backed-up table
 (`store.ConfigTables`, `checks`, `events`, `asn_daily`, `outages`,
-`outage_usage`) must also teach
+`outage_usage`, `isp_usage`) must also teach
 `store.Import` to translate older backups. A backup from before hosts has no
 `hosts` table and no `host_id` columns: its rows take `host_id` 1, and the
 local host is created. A backup made while data limits were global (the
@@ -205,6 +206,24 @@ Network traffic per container and outage, written by
 | `container` | TEXT | Container key: `project/service` or the name |
 | `container_id` | TEXT | Docker ID at the last reading; a new one counts in full |
 | `rx`, `tx` | INTEGER | Bytes received and sent during the outage |
+| `last_rx`, `last_tx` | INTEGER | Docker's counters at the last reading |
+| `ts` | INTEGER | Last reading |
+
+### isp_usage
+
+Network traffic per container while on a metered primary ISP with a monthly
+[data limit](../user/isps.md#data-limits), by calendar month. Written by
+`executor.WatchUsage` outside outages, with the same differences as
+`outage_usage`.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `isp_id` | INTEGER | PK with `month`, `host_id` and `container`. No foreign key |
+| `month` | TEXT | `YYYY-MM`, server time |
+| `host_id` | INTEGER | The container's host; default 1 |
+| `container` | TEXT | Container key |
+| `container_id` | TEXT | Docker ID at the last reading; a new one counts in full |
+| `rx`, `tx` | INTEGER | Bytes received and sent in the month |
 | `last_rx`, `last_tx` | INTEGER | Docker's counters at the last reading |
 | `ts` | INTEGER | Last reading |
 

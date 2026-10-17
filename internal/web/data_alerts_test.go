@@ -48,10 +48,31 @@ func TestISPDataLimits(t *testing.T) {
 		t.Errorf("viewer: %d", resp.StatusCode)
 	}
 	c.htmx(path, url.Values{"outage": {"5"}, "month": {"100"}})
-	if _, page := v.get("/isps"); !strings.Contains(page, "5 GB per outage<br>100 GB per month") {
+	if _, page := v.get("/isps"); !strings.Contains(page, `<div class="line">5 GB per outage</div>`) || !strings.Contains(page, `<div class="line">100 GB per month</div>`) {
 		t.Error("the viewer does not see the limits")
 	}
 	if _, page := c.get("/settings/notifications"); strings.Contains(page, "Data limits") {
 		t.Error("the notifications tab still has global data limits")
+	}
+}
+
+func TestPrimaryDataLimitForm(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	p, _, _ := e.st.SeeASN(ctx, 64500, "EXAMPLENET-64500", time.Now())
+	e.st.SetRole(ctx, p, store.RolePrimary, true)
+	c := e.admin()
+	_, page := c.get("/isps")
+	_, form, found := strings.Cut(page, `hx-post="/isps/`+itoa64(int64(p))+`/data-limits"`)
+	form, _, _ = strings.Cut(form, "</form>")
+	if !found {
+		t.Fatal("the primary has no data limits form")
+	}
+	if strings.Contains(form, "GB per outage") || !strings.Contains(form, "GB per month") || !strings.Contains(form, `type="hidden" name="outage"`) {
+		t.Errorf("the primary's form: %s", form)
+	}
+	e.st.SetMetered(ctx, p, false)
+	if _, page := c.get("/isps"); strings.Contains(page, `/isps/`+itoa64(int64(p))+`/data-limits"`) {
+		t.Error("an unmetered primary has data limits")
 	}
 }

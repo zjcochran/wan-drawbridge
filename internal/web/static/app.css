@@ -208,6 +208,7 @@ time { white-space: nowrap; }
 .tabs a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 4px; }
 main { max-width: 1180px; margin: 0 auto; padding: 1.5rem 1.25rem 2rem; }
 main.narrow { max-width: 420px; padding-top: 12vh; }
+main.wide { max-width: 1520px; } /* the ISPs table has many columns */
 .lead { color: var(--muted); max-width: 70ch; }
 .grid { display: grid; gap: 1rem; margin-bottom: 1rem; }
 .grid.two { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
@@ -294,7 +295,7 @@ button.htmx-request, form.htmx-request button { opacity: 0.7; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 0.6rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
-th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; }
+th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); font-weight: 600; white-space: nowrap; }
 td.check, th.check { width: 2rem; }
 tr.detail td { padding: 0 0.6rem; border-bottom: 0; }
 tr.detail td:not(:empty) { padding: 0.25rem 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
@@ -368,9 +369,15 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .steps li::before { content: counter(step) ". "; }
 .steps li.current { color: var(--accent-text); background: var(--accent); border-color: var(--accent); font-weight: 600; }
 .steps li.done { color: var(--text); }
+/* ISPs page: every control is one height, and the first line of each cell
+   is a box of that height with its content centred, so the text in every
+   cell of a row lines up, whatever else the cell holds below. */
+#isps-table input:not([type="checkbox"]), #isps-table select { height: 2.4rem; }
+#isps-table .line { display: flex; align-items: center; gap: 0.5rem; min-height: 2.4rem; }
+#isps-table form.inline { flex-wrap: nowrap; }
 /* ISPs page: an ISP's data limits. */
 .limits { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
-.limits label { display: flex; align-items: center; gap: 0.4rem; font-weight: 400; white-space: nowrap; }
+.limits label { font-weight: 400; white-space: nowrap; }
 .limits input { width: 6.5rem; }
 /* Failover preview: one line per step. */
 .stop-order { margin: 0 0 0.75rem; padding-left: 1.6rem; }

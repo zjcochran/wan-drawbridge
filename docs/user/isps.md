@@ -54,9 +54,10 @@ Use **Ignored** sparingly, for example for a VPN exit that some checks
 occasionally leak through. Ignoring your real backup would stop Drawbridge from
 ever failing over.
 
-## Metered and unmetered backups
+## Metered and unmetered ISPs
 
-Every backup ISP also has a **Metered** switch, on the ISPs page:
+The primary and every backup ISP have a **Metered** switch, on the ISPs
+page. On a backup:
 
 - **On (metered):** traffic on it triggers a failover, as described above.
   Every newly seen ISP starts metered, and so does every ISP that existed
@@ -66,27 +67,36 @@ Every backup ISP also has a **Metered** switch, on the ISPs page:
   moves to it, the failback wait starts, as when the primary comes back.
   Use it for a second wired line, or any backup without a data cap.
 
-The primary and ignored ISPs have no switch: the primary is never a reason
-to fail over, and ignored ISPs never count. An ISP keeps its setting when its
-role changes, so a former primary that becomes a backup is metered again
-only if it was before. The dashboard marks the current ISP **unmetered** when
-it is an unmetered backup. Changes apply from the next check; each one is
+On the primary, the switch never causes a failover: the primary is never a
+reason to fail over. Metered there means its traffic counts towards its
+[monthly data limit](#data-limits), for an ISP plan with a data cap. Ignored
+ISPs have no switch: they never count. An ISP keeps its setting when its
+role changes, so a former primary that becomes a backup is metered only if
+it was before. The dashboard marks the current ISP **unmetered** when it is
+an unmetered backup. Changes apply from the next check; each one is
 recorded as an `isp_metered` event. On the command line: `drawbridge set-isp
 <id> metered` or `unmetered`.
 
 ## Data limits
 
-A metered backup ISP can have **data limits**, set in its row on the ISPs
-page (admins; viewers see them read-only) or with `drawbridge
-set-data-limits`. When the containers that keep running pass one during an
-outage on that ISP, Drawbridge sends a `data_alert` to the
-[notification channels](notifications.md#what-is-sent) with **Failover and
-failback, failover tests, and data limits reached** ticked:
+A metered ISP can have **data limits**, set in its row on the ISPs page
+(admins; viewers see them read-only) or with `drawbridge set-data-limits`.
+When the containers' traffic passes one, Drawbridge sends a `data_alert` to
+the [notification channels](notifications.md#what-is-sent) with **Failover
+and failback, failover tests, and data limits reached** ticked:
 
-| Limit | Counts |
-| --- | --- |
-| GB per outage | The traffic during a single outage on this ISP |
-| GB per month | The traffic during this ISP's outages in the calendar month, in the server's time zone (`TZ`). An outage still going when the month began counts in full. |
+| Limit | ISP | Counts |
+| --- | --- | --- |
+| GB per outage | Metered backup | The traffic during a single outage on this ISP |
+| GB per month | Metered backup | The traffic during this ISP's outages in the calendar month, in the server's time zone (`TZ`). An outage still going when the month began counts in full. |
+| GB per month | Metered primary | The traffic while on the primary in the calendar month, in the server's time zone. The alert says "this month" instead of "during this month's outages". |
+
+On the primary, only the monthly limit applies, and Drawbridge measures the
+containers only while it has a limit and is metered, and traffic is on it:
+outside outages, the same once-a-minute readings as during an outage. A
+month's measuring starts with the first reading of that month, and stops
+while traffic is on another ISP or Drawbridge is not running, so it is a
+lower bound for the month, never the ISP's own meter.
 
 - GB are decimal (1 GB = 1,000,000,000 bytes), from 0 to 1,000,000, with
   decimals allowed. Blank or 0 turns a limit off; every ISP starts with both
@@ -102,8 +112,8 @@ failback, failover tests, and data limits reached** ticked:
   of passing the limit.
 - A limit only alerts: it changes nothing about what is stopped.
 - Saving records an `isp_data_limits` event.
-- Only metered backups show the fields, since only they cause outages; an
-  ISP keeps its limits when its role or Metered switch changes.
+- Only metered ISPs show the fields: both on a backup, GB per month on the
+  primary. An ISP keeps its limits when its role or Metered switch changes.
 
 ## How the primary is chosen
 

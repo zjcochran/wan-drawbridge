@@ -37,7 +37,7 @@
 {{if not .Setup}}{{if and .Session.User.IsAdmin (ne .Nav "setup")}}<div class="banner warn">Setup is not finished, so Drawbridge is only watching. <a href="/setup?step=2">Finish setup</a></div>{{end}}
 {{else if .Status.Paused}}<div class="banner warn">Automation is paused{{if not .Status.PausedTill.IsZero}} until {{clock .Status.PausedTill}} (in {{until .Status.PausedTill}}){{end}}: Drawbridge keeps checking but will not stop or start containers.</div>{{end}}
 {{end}}
-<main class="{{if not .Session}}narrow{{end}}">
+<main class="{{if not .Session}}narrow{{else if eq .Nav "isps"}}wide{{end}}">
 {{with .Flash}}<div class="banner ok">{{.}}</div>{{end}}
 {{template "content" .}}
 </main>

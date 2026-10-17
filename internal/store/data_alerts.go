@@ -69,6 +69,41 @@ func (s *Store) ISPTotalSince(ctx context.Context, isp int, since time.Time) (in
 	return n, err
 }
 
+// PrimaryMeter returns the primary ISP and its monthly limit when traffic
+// is on it now, it is metered and it has a monthly limit; isp is 0 otherwise.
+func (s *Store) PrimaryMeter(ctx context.Context) (isp int, monthBytes int64, err error) {
+	err = s.db.QueryRowContext(ctx, `SELECT i.id, i.limit_month_bytes
+		FROM wan_state w JOIN asns a ON a.asn = w.current_asn JOIN isps i ON i.id = a.isp_id
+		WHERE i.role = 'primary' AND i.metered = 1 AND i.limit_month_bytes > 0`).Scan(&isp, &monthBytes)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, 0, nil
+	}
+	return isp, monthBytes, err
+}
+
+// RecordISPUsage adds a container's traffic since its last sample to an
+// ISP's month, like RecordUsage does for an outage.
+func (s *Store) RecordISPUsage(ctx context.Context, isp int, month string, hostID int64, key, containerID string, rx, tx int64, now time.Time) error {
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO isp_usage (isp_id, month, host_id, container, container_id, last_rx, last_tx, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (isp_id, month, host_id, container) DO UPDATE SET
+			rx = rx + CASE WHEN container_id = excluded.container_id AND excluded.last_rx >= last_rx AND excluded.last_tx >= last_tx
+				THEN excluded.last_rx - last_rx ELSE excluded.last_rx END,
+			tx = tx + CASE WHEN container_id = excluded.container_id AND excluded.last_rx >= last_rx AND excluded.last_tx >= last_tx
+				THEN excluded.last_tx - last_tx ELSE excluded.last_tx END,
+			container_id = excluded.container_id, last_rx = excluded.last_rx, last_tx = excluded.last_tx, ts = excluded.ts`,
+		isp, month, hostID, key, containerID, rx, tx, now.Unix())
+	return err
+}
+
+// ISPMonthUsage is the traffic of every container on an ISP in a month
+// ("YYYY-MM"), as RecordISPUsage recorded it.
+func (s *Store) ISPMonthUsage(ctx context.Context, isp int, month string) (int64, error) {
+	var n int64
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(rx + tx), 0) FROM isp_usage WHERE isp_id = ? AND month = ?`, isp, month).Scan(&n)
+	return n, err
+}
+
 // moveGlobalDataLimitsSQL gives the global data limits of a backup made
 // before they were per ISP to every backup ISP, as migration 18 does.
 const moveGlobalDataLimitsSQL = `

@@ -26,10 +26,16 @@ func TestISPMetered(t *testing.T) {
 	tmo, _, _ := e.st.SeeASN(ctx, 64510, "SKYLINK-AS64510", time.Now())
 	e.st.SetRole(ctx, 1, store.RolePrimary, true)
 	// New backups start metered; the switch turns it off (no "metered" field).
+	// The primary has one too, for its monthly data limit; an ignored ISP has none.
 	if _, page := c.get("/isps"); !strings.Contains(page, `hx-post="/isps/`+strconv.Itoa(tmo)+`/metered"`) ||
-		strings.Contains(page, `hx-post="/isps/1/metered"`) {
-		t.Error("the metered switch should show for the backup only")
+		!strings.Contains(page, `hx-post="/isps/1/metered"`) {
+		t.Error("the metered switch should show for the primary and the backup")
 	}
+	e.st.SetRole(ctx, tmo, store.RoleIgnored, false)
+	if _, page := c.get("/isps"); strings.Contains(page, `hx-post="/isps/`+strconv.Itoa(tmo)+`/metered"`) {
+		t.Error("an ignored ISP has a metered switch")
+	}
+	e.st.SetRole(ctx, tmo, store.RoleBackup, false)
 	if resp, _ := c.htmx("/isps/"+strconv.Itoa(tmo)+"/metered", url.Values{}); resp.StatusCode != http.StatusOK {
 		t.Fatalf("metered off: %d", resp.StatusCode)
 	}

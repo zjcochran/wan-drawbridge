@@ -155,3 +155,44 @@ func TestDataAlertsWithoutISP(t *testing.T) {
 		t.Fatalf("no ISP: %v", err)
 	}
 }
+
+func TestPrimaryDataLimit(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeDocker{}
+	f.add("web", "app", "web", true, "")
+	f.add("db", "app", "db", true, "")
+	stats := &fakeStats{counters: map[string][2]int64{"id-web": {0, 0}, "id-db": {0, 0}}}
+	f.stats = stats
+	e, st := setup(t, f)
+	now := time.Now()
+	e.Now = func() time.Time { return now }
+	isp, _, _ := st.SeeASN(ctx, 64500, "EXAMPLENET-64500", now)
+	st.SetRole(ctx, isp, store.RolePrimary, true)
+	st.SaveState(ctx, store.WANState{Machine: wan.Machine{State: wan.Primary}, Since: now, LearningStartedAt: now, CurrentASN: 64500})
+
+	// Metered but no monthly limit: nothing is read.
+	if err := e.SampleUsage(ctx); err != nil || stats.calls != 0 {
+		t.Fatalf("without a limit: %v, %d calls", err, stats.calls)
+	}
+	st.SetDataLimits(ctx, isp, store.DataLimits{MonthBytes: 1000})
+	e.SampleUsage(ctx)            // baseline
+	stats.set("id-web", 500, 100) // 600
+	e.SampleUsage(ctx)
+	if n, _ := st.ISPMonthUsage(ctx, isp, now.Format("2006-01")); n != 600 || len(dataAlerts(t, st)) != 0 {
+		t.Fatalf("month usage = %d, alerts %d", n, len(dataAlerts(t, st)))
+	}
+	stats.set("id-db", 500, 0) // 1100: over
+	e.SampleUsage(ctx)
+	e.SampleUsage(ctx)
+	evs := dataAlerts(t, st)
+	if len(evs) != 1 || evs[0].Payload["primary"] != true || evs[0].Payload["scope"] != "month" || evs[0].Payload["used"] != float64(1100) {
+		t.Fatalf("alerts = %+v", evs)
+	}
+
+	// Unmetered: no longer measured.
+	st.SetMetered(ctx, isp, false)
+	calls := stats.calls
+	if e.SampleUsage(ctx); stats.calls != calls {
+		t.Error("an unmetered primary was measured")
+	}
+}

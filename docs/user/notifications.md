@@ -76,6 +76,7 @@ of the messages:
 | `host_offline` | Host nas is offline | Its agent has not been in touch for 90 seconds. Its containers are stopped or started when it is back. |
 | `agent_refused` | Agent of nas was refused | bad signature. If this was not you, revoke the host in Settings → Hosts. |
 | `data_alert` | Data limit for this outage reached | Containers have used 5.2 GB on SKYLINK during this outage, over its 5.0 GB limit. |
+| `data_alert` (primary) | Data limit for this month reached | Containers have used 1.3 TB on EXAMPLENET this month, over its 1.2 TB limit. |
 
 If automation is paused, failover and failback messages say that no container
 was stopped or started.

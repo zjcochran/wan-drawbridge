@@ -148,6 +148,9 @@ func formatData(m *Message, p map[string]any, isp func(string) string) bool {
 	m.Title = "Data limit for this outage reached"
 	if p["scope"] == "month" {
 		during, m.Title = "during this month's outages", "Data limit for this month reached"
+		if p["primary"] == true {
+			during = "this month"
+		}
 	}
 	m.Priority = 4
 	m.Text = fmt.Sprintf("Containers have used %s on %s %s, over its %s limit.", humanBytes(num("used")), isp("isp"), during, humanBytes(num("limit")))

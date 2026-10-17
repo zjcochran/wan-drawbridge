@@ -336,6 +336,10 @@ func TestFormatDataAlert(t *testing.T) {
 			t.Errorf("%s: %+v", c.scope, m)
 		}
 	}
+	m := Format(store.Event{Type: "data_alert", Payload: map[string]any{"scope": "month", "primary": true, "isp": float64(1), "used": float64(1.3e12), "limit": float64(1.2e12)}}, map[int]string{1: "EXAMPLENET"})
+	if m.Text != "Containers have used 1.3 TB on EXAMPLENET this month, over its 1.2 TB limit." {
+		t.Errorf("primary: %q", m.Text)
+	}
 	for n, want := range map[int64]string{999: "999 B", 1500: "1.5 kB", 123_456_789: "123 MB", 2e15: "2.0 PB"} {
 		if got := humanBytes(n); got != want {
 			t.Errorf("humanBytes(%d) = %q", n, got)
