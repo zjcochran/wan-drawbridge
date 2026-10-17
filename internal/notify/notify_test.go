@@ -328,10 +328,10 @@ func TestFormatDataAlert(t *testing.T) {
 	for _, c := range []struct {
 		scope, title, text string
 	}{
-		{"outage", "Data limit for this outage reached", "Containers have used 5.2 GB during this outage, over the 5.0 GB limit."},
-		{"month", "Data limit for this month reached", "Containers have used 5.2 GB during this month's outages, over the 5.0 GB limit."},
+		{"outage", "Data limit for this outage reached", "Containers have used 5.2 GB on SKYLINK during this outage, over its 5.0 GB limit."},
+		{"month", "Data limit for this month reached", "Containers have used 5.2 GB on SKYLINK during this month's outages, over its 5.0 GB limit."},
 	} {
-		m := Format(store.Event{Type: "data_alert", Payload: map[string]any{"scope": c.scope, "used": float64(5_234_000_000), "limit": float64(5e9)}}, nil)
+		m := Format(store.Event{Type: "data_alert", Payload: map[string]any{"scope": c.scope, "isp": float64(2), "used": float64(5_234_000_000), "limit": float64(5e9)}}, map[int]string{2: "SKYLINK"})
 		if m.Title != c.title || m.Text != c.text || m.Priority != 4 {
 			t.Errorf("%s: %+v", c.scope, m)
 		}

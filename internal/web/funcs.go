@@ -37,6 +37,7 @@ var funcs = template.FuncMap{
 	"span":       span,
 	"add64":      func(a, b int64) int64 { return a + b },
 	"bytes":      humanBytes,
+	"gb":         gbText,
 	"month":      func(t time.Time) string { return t.Local().Format("Jan 2006") },
 	"keyAge":     func(t time.Time) string { return keyAge(t, time.Now()) },
 }

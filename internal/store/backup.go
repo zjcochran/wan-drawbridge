@@ -177,6 +177,10 @@ func upgradeOld(ctx context.Context, tx *sql.Tx, snap Snapshot) error {
 			return err
 		}
 	}
+	// A backup from before data limits were per ISP.
+	if _, err := tx.ExecContext(ctx, moveGlobalDataLimitsSQL); err != nil {
+		return err
+	}
 	if _, ok := snap.History["outages"]; snap.History != nil && !ok {
 		// A backup from before outages were recorded: recreate them from its events.
 		return rebuildOutages(ctx, tx)

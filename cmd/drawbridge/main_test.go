@@ -549,3 +549,21 @@ func TestProxmoxAgentMode(t *testing.T) {
 		t.Errorf("with a missing secret file: %d %q", code, errOut)
 	}
 }
+
+func TestSetDataLimits(t *testing.T) {
+	db := setup(t, false)
+	withStore(t, db, func(ctx context.Context, st *store.Store) {
+		st.SeeASN(ctx, 64510, "SKYLINK-AS64510", time.Now())
+	})
+	if code, out, _ := drawbridge(t, "", "set-data-limits", "1", "5", "0"); code != 0 || !strings.Contains(out, "ISP 1 data limits: 5 GB per outage, off per month") {
+		t.Fatalf("set-data-limits: %d %q", code, out)
+	}
+	if _, out, _ := drawbridge(t, "", "isps"); !strings.Contains(out, "5 GB / off") {
+		t.Fatalf("isps: %q", out)
+	}
+	for _, args := range [][]string{{"x", "1", "1"}, {"1", "-1", "1"}, {"1", "1", "lots"}, {"99", "1", "1"}} {
+		if code, _, _ := drawbridge(t, "", append([]string{"set-data-limits"}, args...)...); code != 1 {
+			t.Errorf("set-data-limits %v: %d", args, code)
+		}
+	}
+}

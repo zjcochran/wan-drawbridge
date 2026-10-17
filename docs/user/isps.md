@@ -74,6 +74,37 @@ it is an unmetered backup. Changes apply from the next check; each one is
 recorded as an `isp_metered` event. On the command line: `drawbridge set-isp
 <id> metered` or `unmetered`.
 
+## Data limits
+
+A metered backup ISP can have **data limits**, set in its row on the ISPs
+page (admins; viewers see them read-only) or with `drawbridge
+set-data-limits`. When the containers that keep running pass one during an
+outage on that ISP, Drawbridge sends a `data_alert` to the
+[notification channels](notifications.md#what-is-sent) with **Failover and
+failback, failover tests, and data limits reached** ticked:
+
+| Limit | Counts |
+| --- | --- |
+| GB per outage | The traffic during a single outage on this ISP |
+| GB per month | The traffic during this ISP's outages in the calendar month, in the server's time zone (`TZ`). An outage still going when the month began counts in full. |
+
+- GB are decimal (1 GB = 1,000,000,000 bytes), from 0 to 1,000,000, with
+  decimals allowed. Blank or 0 turns a limit off; every ISP starts with both
+  off.
+- An outage belongs to the first backup ISP seen during it, as on the
+  [Reports](web-ui.md#reports) page.
+- The traffic is what Reports shows: each running container's network
+  counters, sampled every minute while an outage lasts. It includes traffic
+  on the local network and between containers, and not other devices on your
+  network.
+- Each alert is sent once: once per outage, and once per month for each ISP.
+  The check runs after each sample, so an alert comes within about a minute
+  of passing the limit.
+- A limit only alerts: it changes nothing about what is stopped.
+- Saving records an `isp_data_limits` event.
+- Only metered backups show the fields, since only they cause outages; an
+  ISP keeps its limits when its role or Metered switch changes.
+
 ## How the primary is chosen
 
 In order of precedence:

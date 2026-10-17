@@ -37,8 +37,8 @@ them again.
   single sign-on (Pocket ID or any OIDC provider); Prometheus metrics; a JSON status API for Home Assistant
   and scripts and a health API for uptime monitors, with revocable tokens; a CLI for scripting and recovery.
 - Notifications to ntfy, Gotify, Pushover, Telegram, Discord, email or any
-  webhook, chosen per channel, including when containers pass a data limit
-  during an outage or a month, and optionally the log to a syslog server over
+  webhook, chosen per channel, including when containers pass a backup ISP's
+  data limit during an outage or a month, and optionally the log to a syslog server over
   UDP, TCP or TLS.
 - Encrypted backup files of the configuration, downloaded or made daily, with
   optional history, that restore from Settings or straight from the setup

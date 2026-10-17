@@ -9,7 +9,7 @@
 <div id="isps-table">
 <div class="table-wrap">
 <table>
-  <thead><tr><th>ISP</th><th>Role</th><th>Metered</th><th>Last 7 days</th><th>All time</th><th>Networks (ASNs)</th></tr></thead>
+  <thead><tr><th>ISP</th><th>Role</th><th>Metered</th><th>Data limits</th><th>Last 7 days</th><th>All time</th><th>Networks (ASNs)</th></tr></thead>
   <tbody>
   {{range .ISPs}}{{$isp := .}}
   <tr>
@@ -43,6 +43,16 @@
       </label>
       {{else}}{{if .Metered}}yes{{else}}no{{end}}{{end}}
     </td>
+    <td>
+      {{if not (and (eq .Role "backup") .Metered)}}<span class="muted" title="Only a metered backup ISP causes outages">–</span>
+      {{else if $d.IsAdmin}}
+      <form class="limits" hx-post="/isps/{{.ID}}/data-limits" hx-target="#isps-table" hx-swap="outerHTML">
+        <label><input name="outage" type="number" min="0" max="1000000" step="any" inputmode="decimal" value="{{gb .Limits.OutageBytes}}" placeholder="off" aria-label="{{.Name}}: GB per outage"> GB per outage</label>
+        <label><input name="month" type="number" min="0" max="1000000" step="any" inputmode="decimal" value="{{gb .Limits.MonthBytes}}" placeholder="off" aria-label="{{.Name}}: GB per month"> GB per month</label>
+        <button class="link">Save</button>
+      </form>
+      {{else}}{{with gb .Limits.OutageBytes}}{{.}} GB per outage{{end}}{{if and .Limits.OutageBytes .Limits.MonthBytes}}<br>{{end}}{{with gb .Limits.MonthBytes}}{{.}} GB per month{{end}}{{if not (or .Limits.OutageBytes .Limits.MonthBytes)}}<span class="muted">none</span>{{end}}{{end}}
+    </td>
     <td>{{if eq .Role "ignored"}}–{{else}}{{pct .WeekSeconds $d.WeekTotal}}{{end}}</td>
     <td>{{hours .AllSeconds}}</td>
     <td>
@@ -64,7 +74,7 @@
     </td>
   </tr>
   {{else}}
-  <tr><td colspan="6" class="empty">No ISPs seen yet. They appear after the first successful check.</td></tr>
+  <tr><td colspan="7" class="empty">No ISPs seen yet. They appear after the first successful check.</td></tr>
   {{end}}
   </tbody>
 </table>

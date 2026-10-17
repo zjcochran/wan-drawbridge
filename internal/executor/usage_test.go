@@ -5,6 +5,7 @@ package executor
 import (
 	"context"
 	"errors"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -106,10 +107,16 @@ func TestDataAlerts(t *testing.T) {
 	e, st := setup(t, f)
 	now := time.Now()
 	e.Now = func() time.Time { return now }
-	st.SaveState(ctx, store.WANState{Machine: wan.Machine{State: wan.Failover}, Since: now, LearningStartedAt: now})
+	isp, _, err := st.SeeASN(ctx, 64510, "SKYLINK-AS64510", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.SaveState(ctx, store.WANState{Machine: wan.Machine{State: wan.Failover}, Since: now, LearningStartedAt: now, CurrentASN: 64510})
 	e.SampleUsage(ctx) // baseline, with no limits set
 
-	st.SetSetting(ctx, store.SettingDataAlerts, store.DataAlerts{OutageBytes: 1000, MonthBytes: 3000})
+	if err := st.SetDataLimits(ctx, isp, store.DataLimits{OutageBytes: 1000, MonthBytes: 3000}); err != nil {
+		t.Fatal(err)
+	}
 	stats.set("id-web", 600, 300) // 900: under both
 	if err := e.SampleUsage(ctx); err != nil || len(dataAlerts(t, st)) != 0 {
 		t.Fatalf("under the limits: %v, %d alerts", err, len(dataAlerts(t, st)))
@@ -119,7 +126,8 @@ func TestDataAlerts(t *testing.T) {
 	stats.set("id-web", 800, 400) // still over: not sent again
 	e.SampleUsage(ctx)
 	evs := dataAlerts(t, st)
-	if len(evs) != 1 || evs[0].Payload["scope"] != "outage" || evs[0].Payload["used"] != float64(1100) || evs[0].Payload["limit"] != float64(1000) {
+	if len(evs) != 1 || evs[0].Payload["scope"] != "outage" || evs[0].Payload["isp"] != float64(isp) ||
+		evs[0].Payload["used"] != float64(1100) || evs[0].Payload["limit"] != float64(1000) {
 		t.Fatalf("outage alert = %+v", evs)
 	}
 	stats.set("id-db", 2000, 0) // 3200: over the month limit
@@ -130,7 +138,20 @@ func TestDataAlerts(t *testing.T) {
 	}
 	var sent store.DataAlertsSent
 	st.GetSetting(ctx, store.SettingDataAlertsSent, &sent)
-	if id, _ := st.OpenOutage(ctx); sent.Outage != id || sent.Month != now.Format("2006-01") {
+	if id, _ := st.OpenOutage(ctx); sent.Outage != id || sent.Months[strconv.Itoa(isp)] != now.Format("2006-01") {
 		t.Errorf("sent = %+v", sent)
+	}
+}
+
+func TestDataAlertsWithoutISP(t *testing.T) {
+	ctx := context.Background()
+	f := &fakeDocker{}
+	f.add("web", "app", "web", true, "")
+	f.stats = &fakeStats{counters: map[string][2]int64{"id-web": {0, 0}}}
+	e, st := setup(t, f)
+	now := time.Now()
+	st.SaveState(ctx, store.WANState{Machine: wan.Machine{State: wan.Failover}, Since: now, LearningStartedAt: now})
+	if err := e.SampleUsage(ctx); err != nil || len(dataAlerts(t, st)) != 0 {
+		t.Fatalf("no ISP: %v", err)
 	}
 }
