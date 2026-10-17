@@ -216,6 +216,17 @@ clears its `started_at`, so it is restored at failback.
 CLI changes do not call `PoliciesChanged`; they take effect at the next Stop or
 Start.
 
+### Plan
+
+`Executor.Plan` works out what Stop would do now, for the failover preview
+(`/preview`). It lists every host like `Sync` (so the inventory and host
+status are refreshed) and loads the effective policies, but opens no run and
+stops nothing. Per host, in host ID order, it returns the running containers
+set to `disable` grouped into the same layers Stop uses, reversed (dependents
+first), each layer sorted by name; the ones set to `disable` that are already
+stopped (`Idle`); the number of running containers that keep running; and,
+for a host that could not be listed, the error.
+
 ## Crash recovery
 
 The monitor saves the state machine **before** calling the executor, and the

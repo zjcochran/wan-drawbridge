@@ -1,0 +1,28 @@
+{{define "content"}}
+{{$d := .Data}}
+<p><a href="/">← Dashboard</a></p>
+<h1>Failover preview</h1>
+<p class="lead">What a failover would do if it started now, from each container's current state and setting. Nothing is changed.</p>
+{{if $d.InFailover}}<div class="banner warn">A failover is in effect. Containers it stopped are listed as already stopped.</div>{{end}}
+{{if $d.NeedsReview}}<div class="banner warn">{{$d.NeedsReview}} new {{if eq $d.NeedsReview 1}}container is{{else}}containers are{{end}} not configured yet and would keep running. <a href="/containers?policy=review">Review them</a></div>{{end}}
+<section class="card">
+  <p><strong>{{$d.Stops}}</strong> {{if eq $d.Stops 1}}container{{else}}containers{{end}} would be stopped{{if $d.MultiHost}}, on every host at once{{end}}.
+    Within a host, each step starts once the one before it has stopped: containers that others depend on stop last.
+    At failback they start in the opposite order.</p>
+</section>
+{{range $d.Hosts}}
+<section class="card">
+  {{if $d.MultiHost}}<h2>{{.Name}}</h2>{{end}}
+  {{if .Error}}<p class="bad-text">Cannot be reached ({{.Error}}). Its containers would be stopped once it is back.</p>
+  {{else}}
+    {{if .Steps}}
+    <ol class="stop-order">
+      {{range .Steps}}<li>{{range $i, $w := .}}{{if $i}}, {{end}}<strong>{{$w.Name}}</strong>{{if $w.Group}} <span class="sub">{{$w.Group}}</span>{{end}}{{end}}</li>{{end}}
+    </ol>
+    {{else}}<p class="muted">Nothing would be stopped.</p>{{end}}
+    {{if .Idle}}<p class="sub">Already stopped, left alone and not started at failback: {{range $i, $w := .Idle}}{{if $i}}, {{end}}{{$w.Name}}{{end}}.</p>{{end}}
+    <p class="sub">{{.Keep}} running {{if eq .Keep 1}}container keeps{{else}}containers keep{{end}} running.</p>
+  {{end}}
+</section>
+{{end}}
+{{end}}

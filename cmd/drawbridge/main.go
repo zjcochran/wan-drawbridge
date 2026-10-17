@@ -231,7 +231,7 @@ func serve(ctx context.Context, cfg config.Config, st *store.Store, dc *docker.C
 	})
 
 	ui, err := web.New(web.Server{
-		Store: st, Mon: m, Docker: dc, Hosts: ex.Hosts, Agents: mgr, Sync: ex, Hub: hub, Log: log,
+		Store: st, Mon: m, Docker: dc, Hosts: ex.Hosts, Agents: mgr, Sync: ex, Planner: ex, Hub: hub, Log: log,
 		BaseURL: cfg.BaseURL, DBPath: filepath.Join(cfg.DBDir, "drawbridge.db"), TrustedProxies: proxies,
 		Secrets: box, Notify: notifier, Syslog: sl, BackupDir: cfg.BackupDir, ForceLocal: cfg.ForceLocal, MetricsToken: cfg.MetricsToken, Version: version,
 		SourceURL: env("DRAWBRIDGE_SOURCE_URL", sourceURL),

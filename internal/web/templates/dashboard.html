@@ -97,6 +97,7 @@
     {{range $host, $n := .Owed}}
       <p class="warn-text">{{$n}} {{if eq $n 1}}container{{else}}containers{{end}} on {{$host}} will be started again once Drawbridge can reach it.</p>
     {{end}}
+    <p class="sub"><a href="/preview">Preview what a failover would stop</a></p>
   </div>
 </section>
 {{end}}

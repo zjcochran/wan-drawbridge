@@ -196,7 +196,7 @@ func start(t *testing.T, dbDir string, d *fakeDocker, w *fakeWAN) *system {
 	ex.PollEvery = 10 * time.Millisecond
 	ex.OnChange = func() { hub.Publish(web.TopicInventory) }
 	mon := monitor.New(cfg, st, res, ex, log, func() { hub.Publish(web.TopicState) })
-	ui, err := web.New(web.Server{Store: st, Mon: mon, Docker: dc, Hosts: ex.Hosts, Sync: ex, Hub: hub, Log: log,
+	ui, err := web.New(web.Server{Store: st, Mon: mon, Docker: dc, Hosts: ex.Hosts, Sync: ex, Planner: ex, Hub: hub, Log: log,
 		Secrets: box, MetricsToken: "e2e", DBPath: filepath.Join(dbDir, "drawbridge.db")})
 	if err != nil {
 		t.Fatal(err)

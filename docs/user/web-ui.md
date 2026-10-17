@@ -96,6 +96,32 @@ reached](during-an-outage.md#hosts-that-cannot-be-reached)).
 "Nothing. Every container is as you left it." means there is no open run and
 no start is owed.
 
+**Preview what a failover would stop**, at the bottom of the card, opens the
+failover preview.
+
+### Failover preview
+
+`/preview` (everyone) shows what a failover would do if it started now,
+without changing anything. It lists every host and refreshes the inventory
+first, as a sync does:
+
+- The total number of containers that would be stopped.
+- Per host, the stop order as numbered steps, one line per step, each
+  container with its stack. Each step starts once the one before it has
+  stopped; dependents come first and the containers others depend on last
+  (see [Order of stopping and
+  starting](stacks-and-containers.md#order-of-stopping-and-starting)). At
+  failback they start in the opposite order.
+- Containers set to stop that are already stopped: they would be left alone
+  and not started at failback.
+- How many running containers keep running.
+- A host that cannot be reached, with the error: its containers would be
+  stopped once it is back.
+
+A banner says when a failover is already in effect (the containers it stopped
+then show as already stopped), and how many new containers are not configured
+yet and would keep running, with a link to review them.
+
 ### Last 24 hours
 
 A timeline of every check: green for the primary, amber for a backup, grey for
