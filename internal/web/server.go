@@ -94,6 +94,7 @@ type Server struct {
 	codes *pendingCodes
 
 	now     func() time.Time
+	started time.Time // when New ran, for the health check before the first WAN check
 	pages   map[string]*template.Template
 	limiter *limiter
 }
@@ -102,6 +103,7 @@ type Server struct {
 func New(s Server) (*Server, error) {
 	srv := &s
 	srv.now = time.Now
+	srv.started = time.Now()
 	srv.limiter = newLimiter(5, 15*time.Minute)
 	srv.oidc = &oidcFlows{pending: map[string]pendingLogin{}}
 	srv.codes = &pendingCodes{m: map[string]*pendingCode{}}
@@ -148,6 +150,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /metrics", s.metrics)
 	mux.HandleFunc("GET /api/status", s.apiStatus)
+	mux.HandleFunc("GET /api/health", s.apiHealthCheck)
 	if s.Agents != nil {
 		// Agents sign every request; sessions and CSRF do not apply.
 		mux.Handle("/api/agent/v1/", s.Agents.Handler())
