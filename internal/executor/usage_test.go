@@ -170,7 +170,14 @@ func TestPrimaryDataLimit(t *testing.T) {
 	st.SetRole(ctx, isp, store.RolePrimary, true)
 	st.SaveState(ctx, store.WANState{Machine: wan.Machine{State: wan.Primary}, Since: now, LearningStartedAt: now, CurrentASN: 64500})
 
-	// Metered but no monthly limit: nothing is read.
+	// A primary starts unmetered: nothing is read, even with a limit.
+	st.SetDataLimits(ctx, isp, store.DataLimits{MonthBytes: 1000})
+	if err := e.SampleUsage(ctx); err != nil || stats.calls != 0 {
+		t.Fatalf("unmetered: %v, %d calls", err, stats.calls)
+	}
+	// Metered but no monthly limit: nothing is read either.
+	st.SetMetered(ctx, isp, true)
+	st.SetDataLimits(ctx, isp, store.DataLimits{})
 	if err := e.SampleUsage(ctx); err != nil || stats.calls != 0 {
 		t.Fatalf("without a limit: %v, %d calls", err, stats.calls)
 	}

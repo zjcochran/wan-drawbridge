@@ -62,6 +62,10 @@ func TestPrimaryDataLimitForm(t *testing.T) {
 	p, _, _ := e.st.SeeASN(ctx, 64500, "EXAMPLENET-64500", time.Now())
 	e.st.SetRole(ctx, p, store.RolePrimary, true)
 	c := e.admin()
+	if _, page := c.get("/isps"); strings.Contains(page, `/isps/`+itoa64(int64(p))+`/data-limits"`) {
+		t.Error("a new primary is metered")
+	}
+	e.st.SetMetered(ctx, p, true)
 	_, page := c.get("/isps")
 	_, form, found := strings.Cut(page, `hx-post="/isps/`+itoa64(int64(p))+`/data-limits"`)
 	form, _, _ = strings.Cut(form, "</form>")

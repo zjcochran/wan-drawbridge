@@ -67,8 +67,14 @@ func (s *Store) Metered(ctx context.Context, id int) (bool, error) {
 }
 
 // SetMetered marks an ISP group metered or unmetered.
+// On the primary it sets the primary's own switch (primary_metered), which
+// only counts its traffic towards its monthly data limit, and leaves the
+// backup flag as it is.
 func (s *Store) SetMetered(ctx context.Context, id int, metered bool) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE isps SET metered = ? WHERE id = ?`, metered, id)
+	res, err := s.db.ExecContext(ctx, `UPDATE isps SET
+		metered = CASE WHEN role = 'primary' THEN metered ELSE ?1 END,
+		primary_metered = CASE WHEN role = 'primary' THEN ?1 ELSE primary_metered END
+		WHERE id = ?2`, metered, id)
 	if err != nil {
 		return err
 	}
@@ -286,7 +292,7 @@ type ISPRow struct {
 	GroupKey    string
 	Role        string
 	Pinned      bool
-	Metered     bool // only a metered backup triggers a failover
+	Metered     bool // a backup's: only a metered one triggers a failover; the primary's: it has a monthly data limit
 	Limits      DataLimits
 	WeekSeconds int64
 	AllSeconds  int64
@@ -304,7 +310,7 @@ type ASNRow struct {
 // ISPs lists every ISP group, primary first, then by time seen this week.
 func (s *Store) ISPs(ctx context.Context, now time.Time) ([]ISPRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT i.id, COALESCE(NULLIF(i.display_name, ''), i.name), i.group_key, i.role, i.pinned, i.metered, i.limit_outage_bytes, i.limit_month_bytes, i.last_seen,
+		SELECT i.id, COALESCE(NULLIF(i.display_name, ''), i.name), i.group_key, i.role, i.pinned, CASE WHEN i.role = 'primary' THEN i.primary_metered ELSE i.metered END, i.limit_outage_bytes, i.limit_month_bytes, i.last_seen,
 			COALESCE((SELECT SUM(d.observed_seconds) FROM asn_daily d JOIN asns a ON a.asn = d.asn
 				WHERE a.isp_id = i.id AND d.day >= ?), 0) AS week,
 			COALESCE((SELECT SUM(a.observed_seconds) FROM asns a WHERE a.isp_id = i.id), 0)

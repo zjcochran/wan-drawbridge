@@ -67,12 +67,13 @@ page. On a backup:
   moves to it, the failback wait starts, as when the primary comes back.
   Use it for a second wired line, or any backup without a data cap.
 
-On the primary, the switch never causes a failover: the primary is never a
-reason to fail over. Metered there means its traffic counts towards its
-[monthly data limit](#data-limits), for an ISP plan with a data cap. Ignored
-ISPs have no switch: they never count. An ISP keeps its setting when its
-role changes, so a former primary that becomes a backup is metered only if
-it was before. The dashboard marks the current ISP **unmetered** when it is
+On the primary, the switch is a separate one, **off** by default, and never
+causes a failover: the primary is never a reason to fail over. Metered there
+means its traffic counts towards its [monthly data limit](#data-limits), for
+an ISP plan with a data cap. Ignored ISPs have no switch: they never count.
+An ISP keeps both settings when its role changes: a primary that becomes a
+backup is a metered backup again if it was one before, whatever its primary
+switch says. The dashboard marks the current ISP **unmetered** when it is
 an unmetered backup. Changes apply from the next check; each one is
 recorded as an `isp_metered` event. On the command line: `drawbridge set-isp
 <id> metered` or `unmetered`.

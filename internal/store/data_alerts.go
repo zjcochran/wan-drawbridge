@@ -74,7 +74,7 @@ func (s *Store) ISPTotalSince(ctx context.Context, isp int, since time.Time) (in
 func (s *Store) PrimaryMeter(ctx context.Context) (isp int, monthBytes int64, err error) {
 	err = s.db.QueryRowContext(ctx, `SELECT i.id, i.limit_month_bytes
 		FROM wan_state w JOIN asns a ON a.asn = w.current_asn JOIN isps i ON i.id = a.isp_id
-		WHERE i.role = 'primary' AND i.metered = 1 AND i.limit_month_bytes > 0`).Scan(&isp, &monthBytes)
+		WHERE i.role = 'primary' AND i.primary_metered = 1 AND i.limit_month_bytes > 0`).Scan(&isp, &monthBytes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, 0, nil
 	}
