@@ -81,7 +81,8 @@ Full documentation is in [`docs/`](docs/README.md).
 [Monitoring](docs/user/monitoring.md) ·
 [Command line](docs/user/cli.md) ·
 [Troubleshooting](docs/user/troubleshooting.md) ·
-[FAQ](docs/user/faq.md)
+[FAQ](docs/user/faq.md) ·
+[Versions and compatibility](docs/user/compatibility.md)
 
 **Technical:**
 [Architecture](docs/technical/architecture.md) ·

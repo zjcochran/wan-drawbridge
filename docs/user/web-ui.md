@@ -101,6 +101,8 @@ failover preview.
 
 ### Failover preview
 
+![Failover preview](../images/preview.jpg)
+
 `/preview` (everyone) shows what a failover would do if it started now,
 without changing anything. It lists every host and refreshes the inventory
 first, as a sync does:
@@ -314,6 +316,8 @@ bookmarked. `/settings` opens the first one.
 Viewers do not see the admin tabs; opening one's address gives 403.
 
 ### Container filters
+
+![Settings, Container filters tab](../images/container-filters.jpg)
 
 **Settings → Container filters** hides containers you don't want to see on
 the Containers page, such as one-off init or backup containers. Admins enter

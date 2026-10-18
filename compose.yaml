@@ -1,6 +1,6 @@
 services:
   drawbridge:
-    image: ghcr.io/zjcochran/wan-drawbridge:latest # or pin a release, e.g. 0.1.0
+    image: ghcr.io/zjcochran/wan-drawbridge:latest # or pin a release, e.g. 1.0.0
     restart: unless-stopped
     ports:
       - "8080:8080"
