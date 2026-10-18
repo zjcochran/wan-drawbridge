@@ -136,8 +136,8 @@ ISP 1 is now primary
 Roles: `primary` (pinned; the previous primary becomes a backup), `backup`,
 `ignored`. See [ISPs and the primary ISP](isps.md#roles). `metered` and
 `unmetered` set the ISP's
-[Metered switch](isps.md#metered-and-unmetered-backups) instead; the `isps`
-command shows an unmetered backup as `backup (unmetered)`.
+[Metered switch](isps.md#metered-and-unmetered-isps) instead; the `isps`
+command shows an unmetered primary or backup as `(unmetered)`.
 
 ## set-data-limits
 

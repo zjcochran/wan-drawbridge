@@ -35,6 +35,7 @@ var historyTables = []struct{ name, column string }{
 	{"asn_daily", "day"},
 	{"outages", "started"},
 	{"outage_usage", "ts"},
+	{"isp_usage", "ts"},
 }
 
 // ErrNoAdmin rejects a backup that would leave nobody able to manage Drawbridge.

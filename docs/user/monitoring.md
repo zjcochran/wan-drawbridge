@@ -152,7 +152,7 @@ $ curl -H "Authorization: Bearer dbt_..." http://drawbridge:8080/api/status
 | `state_label` | The same as the dashboard shows it ("On primary", "Failover", ...) |
 | `since` | When this state began |
 | `due` | When a pending failover or failback completes if nothing interrupts it; `null` in other states |
-| `current_isp` | The ISP of the last conclusive check, or `null`. `metered` is true when traffic on it counts as a failover: a metered backup. It is false for the primary and for an [unmetered backup](isps.md#metered-and-unmetered-backups) |
+| `current_isp` | The ISP of the last conclusive check, or `null`. `metered` is true when traffic on it counts as a failover: a metered backup. It is false for the primary and for an [unmetered backup](isps.md#metered-and-unmetered-isps) |
 | `primary_isp` | The primary ISP, or `null` while none is known |
 | `public_ip` | The public IP of the last conclusive check |
 | `last_check` | When the last check ran, or `null` before the first |
@@ -254,7 +254,7 @@ log (Events page, CSV export). `by` in the details is the user who acted.
 | `manual_restore` | Restore now | `from`, `to`, `by` |
 | `drill_started` | Test failover, by hand or scheduled (`by` = `schedule`) | `by`, `minutes`, `until` (RFC 3339, UTC) |
 | `drill_skipped` | A [scheduled failover test](during-an-outage.md#scheduled-tests) did not run | `reason`, `by` (`schedule`) |
-| `data_alert` | Containers passed an ISP's [data limit](isps.md#data-limits) during its outages | `scope` (`outage` or `month`), `isp`, `used`, `limit` (bytes) |
+| `data_alert` | Containers passed an ISP's [data limit](isps.md#data-limits) | `scope` (`outage` or `month`), `isp`, `used`, `limit` (bytes); `primary` (`true`) for the primary's month |
 | `drill_ended` | A failover test ended: time up (`by=timer`), End test now, Restore now or a failover (`by=failover` when automatic) | `by`; `kept_stopped` when a failover took over |
 | `paused`, `resumed` | Automation paused or resumed (finishing the wizard logs `resumed`; a timed pause ending logs `resumed` with `by=timer`) | `by`; `until` (RFC 3339, UTC) on a timed pause |
 | `primary_learned` | The learner chose a primary | `isp` |

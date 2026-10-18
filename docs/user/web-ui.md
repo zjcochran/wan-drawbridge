@@ -220,8 +220,8 @@ One row per ISP:
 | --- | --- |
 | ISP | Name (editable by admins; empty resets it), "current" badge, group key and when last seen. |
 | Role | Primary (pinned or "learned"), Backup or Ignored. |
-| Metered | For backups: a switch (admins), on for new ISPs. Off means traffic on it counts like the primary; see [Metered and unmetered backups](isps.md#metered-and-unmetered-backups). Viewers see yes or no; the primary and ignored ISPs show –. |
-| Data limits | For metered backups: GB per outage and GB per month, with **Save** (admins); see [Data limits](isps.md#data-limits). Viewers see the limits, or "none"; other ISPs show –. |
+| Metered | For the primary and backups: a switch (admins), on for new ISPs. On a backup, off means traffic on it counts like the primary; on the primary, on means its traffic counts towards its monthly data limit. See [Metered and unmetered ISPs](isps.md#metered-and-unmetered-isps). Viewers see yes or no; ignored ISPs show –. |
+| Data limits | For a metered backup, GB per outage and GB per month; for a metered primary, GB per month; with **Save** (admins). See [Data limits](isps.md#data-limits). Viewers see the limits, or "none"; other ISPs show –. |
 | Last 7 days | Share of observed time, excluding ignored ISPs. |
 | All time | Hours observed. |
 | Networks (ASNs) | Each ASN with its name, "grouped by hand" if moved, and a **Move to…** menu. |

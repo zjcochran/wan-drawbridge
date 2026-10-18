@@ -11,9 +11,10 @@
 <table>
   <thead><tr><th>ISP</th><th>Role</th><th>Metered</th><th>Data limits</th><th>Last 7 days</th><th>All time</th><th>Networks (ASNs)</th></tr></thead>
   <tbody>
-  {{range .ISPs}}{{$isp := .}}
+  {{range .ISPs}}{{$isp := .}}{{$primary := eq .Role "primary"}}{{$backup := eq .Role "backup"}}
   <tr>
     <td>
+      <div class="line">
       {{if $d.IsAdmin}}
       <form hx-post="/isps/{{.ID}}/rename" hx-target="#isps-table" hx-swap="outerHTML" class="inline">
         <input name="name" value="{{.Name}}" aria-label="Name for ISP {{.ID}}" size="18">
@@ -21,44 +22,54 @@
       </form>
       {{else}}<strong>{{.Name}}</strong>{{end}}
       {{if eq .ID $d.CurrentID}}<span class="badge ok">current</span>{{end}}
+      </div>
       <div class="sub">group {{.GroupKey}} · last seen {{ago .LastSeen}}</div>
     </td>
     <td>
+      <div class="line">
       {{if $d.IsAdmin}}
       <select name="role" hx-post="/isps/{{.ID}}/role" hx-target="#isps-table" hx-swap="outerHTML" aria-label="Role for {{.Name}}">
-        <option value="primary" {{if eq .Role "primary"}}selected{{end}}>Primary{{if .Pinned}} (pinned){{end}}</option>
-        <option value="backup" {{if eq .Role "backup"}}selected{{end}}>Backup</option>
+        <option value="primary" {{if $primary}}selected{{end}}>Primary{{if .Pinned}} (pinned){{end}}</option>
+        <option value="backup" {{if $backup}}selected{{end}}>Backup</option>
         <option value="ignored" {{if eq .Role "ignored"}}selected{{end}}>Ignored</option>
       </select>
-      {{if and (eq .Role "primary") (not .Pinned)}}<div class="sub">learned</div>{{end}}
       {{else}}{{.Role}}{{if .Pinned}} (pinned){{end}}{{end}}
+      </div>
+      {{if and $d.IsAdmin $primary (not .Pinned)}}<div class="sub">learned</div>{{end}}
     </td>
     <td>
-      {{if ne .Role "backup"}}<span class="muted" title="Only a backup ISP can be metered">–</span>
+      <div class="line">
+      {{if not (or $primary $backup)}}<span class="muted" title="An ignored ISP never counts">–</span>
       {{else if $d.IsAdmin}}
-      <label class="switch" title="On: traffic on this ISP fails over. Off: it counts like the primary">
+      <label class="switch" title="{{if $primary}}On: traffic on it is measured for its monthly data limit{{else}}On: traffic on this ISP fails over. Off: it counts like the primary{{end}}">
         <input type="checkbox" name="metered" {{if .Metered}}checked{{end}} aria-label="{{.Name}} is metered"
                hx-post="/isps/{{.ID}}/metered" hx-target="#isps-table" hx-swap="outerHTML">
         <span class="slider"></span>
       </label>
       {{else}}{{if .Metered}}yes{{else}}no{{end}}{{end}}
+      </div>
     </td>
     <td>
-      {{if not (and (eq .Role "backup") .Metered)}}<span class="muted" title="Only a metered backup ISP causes outages">–</span>
+      {{if not (and .Metered (or $primary $backup))}}<div class="line"><span class="muted" title="Only a metered primary or backup ISP has data limits">–</span></div>
       {{else if $d.IsAdmin}}
       <form class="limits" hx-post="/isps/{{.ID}}/data-limits" hx-target="#isps-table" hx-swap="outerHTML">
-        <label><input name="outage" type="number" min="0" max="1000000" step="any" inputmode="decimal" value="{{gb .Limits.OutageBytes}}" placeholder="off" aria-label="{{.Name}}: GB per outage"> GB per outage</label>
-        <label><input name="month" type="number" min="0" max="1000000" step="any" inputmode="decimal" value="{{gb .Limits.MonthBytes}}" placeholder="off" aria-label="{{.Name}}: GB per month"> GB per month</label>
+        {{if $backup}}<label class="line"><input name="outage" type="number" min="0" max="1000000" step="any" inputmode="decimal" value="{{gb .Limits.OutageBytes}}" placeholder="off" aria-label="{{.Name}}: GB per outage"> GB per outage</label>
+        {{else}}<input type="hidden" name="outage" value="{{gb .Limits.OutageBytes}}">{{end}}
+        <label class="line"><input name="month" type="number" min="0" max="1000000" step="any" inputmode="decimal" value="{{gb .Limits.MonthBytes}}" placeholder="off" aria-label="{{.Name}}: GB per month"> GB per month</label>
         <button class="link">Save</button>
       </form>
-      {{else}}{{with gb .Limits.OutageBytes}}{{.}} GB per outage{{end}}{{if and .Limits.OutageBytes .Limits.MonthBytes}}<br>{{end}}{{with gb .Limits.MonthBytes}}{{.}} GB per month{{end}}{{if not (or .Limits.OutageBytes .Limits.MonthBytes)}}<span class="muted">none</span>{{end}}{{end}}
+      {{else}}
+        {{if and $backup .Limits.OutageBytes}}<div class="line">{{gb .Limits.OutageBytes}} GB per outage</div>{{end}}
+        {{if .Limits.MonthBytes}}<div class="line">{{gb .Limits.MonthBytes}} GB per month</div>{{end}}
+        {{if not (or .Limits.MonthBytes (and $backup .Limits.OutageBytes))}}<div class="line"><span class="muted">none</span></div>{{end}}
+      {{end}}
     </td>
-    <td>{{if eq .Role "ignored"}}–{{else}}{{pct .WeekSeconds $d.WeekTotal}}{{end}}</td>
-    <td>{{hours .AllSeconds}}</td>
+    <td><div class="line">{{if eq .Role "ignored"}}–{{else}}{{pct .WeekSeconds $d.WeekTotal}}{{end}}</div></td>
+    <td><div class="line">{{hours .AllSeconds}}</div></td>
     <td>
       <ul class="asn-list">
       {{range .ASNs}}
-        <li>AS{{.ASN}} <span class="sub">{{.Name}}{{if .Manual}} · grouped by hand{{end}}</span>
+        <li class="line">AS{{.ASN}} <span class="sub">{{.Name}}{{if .Manual}} · grouped by hand{{end}}</span>
         {{if $d.IsAdmin}}
           <form class="inline" hx-post="/asns/{{.ASN}}/move" hx-target="#isps-table" hx-swap="outerHTML" hx-trigger="change">
             <select name="to" aria-label="Move AS{{.ASN}}">
