@@ -28,6 +28,7 @@ Start here if you run Drawbridge.
 | [Command line](user/cli.md) | Every `drawbridge` subcommand, with examples |
 | [Troubleshooting](user/troubleshooting.md) | Symptoms, causes and fixes |
 | [FAQ](user/faq.md) | Short answers to common questions |
+| [Versions and compatibility](user/compatibility.md) | What a patch, minor and major release may change from 1.0 on: the configuration, labels, APIs, metrics, events, CLI, backups and agents that stay stable |
 
 ## Technical documentation
 

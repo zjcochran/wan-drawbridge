@@ -375,6 +375,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 #isps-table input:not([type="checkbox"]), #isps-table select { height: 2.4rem; }
 #isps-table .line { display: flex; align-items: center; gap: 0.5rem; min-height: 2.4rem; }
 #isps-table form.inline { flex-wrap: nowrap; }
+/* An ASN's name stays whole; its Move to… menu wraps under it when narrow. */
+#isps-table .asn-list li.line { flex-wrap: wrap; row-gap: 0.3rem; }
+#isps-table .asn-list .sub { white-space: nowrap; }
 /* ISPs page: an ISP's data limits. */
 .limits { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
 .limits label { font-weight: 400; white-space: nowrap; }

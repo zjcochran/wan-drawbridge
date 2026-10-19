@@ -29,7 +29,7 @@ on.
 
 Every release is published as a multi-arch image (`amd64`, `arm64`) to the
 public GitHub Container Registry package `ghcr.io/zjcochran/wan-drawbridge`,
-tagged with the version (`0.1.0`), the minor version (`0.1`) and `latest`.
+tagged with the version (`1.0.0`), the minor version (`1.0`) and `latest`.
 No `docker login` is needed to pull it. Release notes are on GitHub
 (**Releases**).
 
@@ -39,7 +39,7 @@ you upgrade, use the minor version instead:
 ```yaml
 services:
   drawbridge:
-    image: ghcr.io/zjcochran/wan-drawbridge:0.1   # follows 0.1.x fixes; pin 0.1.0 to stay put
+    image: ghcr.io/zjcochran/wan-drawbridge:1.0   # follows 1.0.x fixes; pin 1.0.0 to stay put
 ```
 
 ### From source
@@ -47,7 +47,7 @@ services:
 ```sh
 git clone https://github.com/zjcochran/wan-drawbridge.git
 cd wan-drawbridge
-git checkout v0.1.0   # or the latest release
+git checkout v1.0.0   # or the latest release
 ```
 
 Then build the image instead of pulling it: in the Compose file, replace the
@@ -67,7 +67,7 @@ The repository's `compose.yaml`:
 ```yaml
 services:
   drawbridge:
-    image: ghcr.io/zjcochran/wan-drawbridge:latest # or pin a release, e.g. 0.1.0
+    image: ghcr.io/zjcochran/wan-drawbridge:latest # or pin a release, e.g. 1.0.0
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -188,7 +188,7 @@ web UI address, no open port.
 2. Fetch the new version and rebuild:
 
    With the published image, change the tag in the Compose file (`latest`
-   and `0.1` move on their own) and run:
+   and the minor tag, such as `1.0`, move on their own) and run:
 
    ```sh
    docker compose pull && docker compose up -d
@@ -198,12 +198,14 @@ web UI address, no open port.
 
    ```sh
    git fetch --tags
-   git checkout v0.1.1   # the release you want; read its release notes first
+   git checkout v1.0.0   # the release you want; read its release notes first
    docker compose up -d --build
    ```
 
    Releases with a new **major** version (the first number) may need changes
-   to your setup; their notes say which.
+   to your setup; their notes say which. [Versions and
+   compatibility](compatibility.md) lists what minor and patch releases keep
+   stable.
 
 3. Check the logs. Database migrations run automatically at start-up; a
    failed migration stops the container with `migrate: …` in the log and

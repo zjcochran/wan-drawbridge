@@ -46,6 +46,7 @@ every start-up (`goose.Up`). Applied versions are tracked in
 | 17 | `00017_workload_warning.sql` | `containers` gains `warning` |
 | 18 | `00018_isp_data_limits.sql` | `isps` gains `limit_outage_bytes`, `limit_month_bytes`; the global `data_alerts` setting's values go to every backup ISP, and it and `data_alerts_sent` are deleted |
 | 19 | `00019_isp_usage.sql` | `isp_usage` |
+| 20 | `00020_primary_metered.sql` | `isps` gains `primary_metered` (default 0). A primary whose `metered` was last turned off on the ISPs page after migration 19 (by its latest `isp_metered` event) gets `metered` back to 1: that switch was meant for the primary only |
 
 Each file has an `Up` and a `Down` section. Downgrades are not run by
 Drawbridge.
@@ -101,6 +102,7 @@ ISP groups.
 | `role` | TEXT | `primary`, `backup` (default), `ignored` |
 | `pinned` | INTEGER | Primary chosen by a person |
 | `metered` | INTEGER | Default 1. Only a metered backup triggers a failover; an unmetered one counts like the primary |
+| `primary_metered` | INTEGER | Default 0. The primary's own Metered switch: on, its traffic counts towards `limit_month_bytes`. The backup flag `metered` is not used while the ISP is primary |
 | `limit_outage_bytes`, `limit_month_bytes` | INTEGER | [Data limits](../user/isps.md#data-limits) in bytes; default 0, off |
 | `first_seen`, `last_seen` | INTEGER | |
 

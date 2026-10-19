@@ -197,8 +197,11 @@ func (c cmdEnv) isps([]string) error {
 		if r.Pinned {
 			role += " (pinned)"
 		}
-		if (r.Role == store.RoleBackup || r.Role == store.RolePrimary) && !r.Metered {
+		switch {
+		case r.Role == store.RoleBackup && !r.Metered:
 			role += " (unmetered)"
+		case r.Role == store.RolePrimary && r.Metered:
+			role += " (metered)"
 		}
 		limits := "-"
 		if r.Limits.OutageBytes > 0 || r.Limits.MonthBytes > 0 {
