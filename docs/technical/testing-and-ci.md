@@ -167,7 +167,20 @@ earlier check (a `deps/` branch) is still open. Otherwise:
    that name them, runs the checks and fixes what the updates broke. It writes
    the commit message and the merge request description to `.deps/`.
 2. The script runs the checks again and `ci/leak-check.sh tree .`.
-3. It commits to `deps/YYYY-MM-DD`, pushes with `ci.skip` and opens a merge
+3. `ci/deps-advisories.sh` lists the vulnerabilities the updates fix. It
+   compares `go.mod` on the default branch with the updated one, and for
+   each changed module, and for Go itself (the `go` and `toolchain` lines),
+   asks the OSV.dev API (`POST https://api.osv.dev/v1/query`) for the
+   advisories affecting the old version and the new one. Those that affect
+   only the old version go in a table: the update, the advisory (a Go
+   advisory links to pkg.go.dev, a GitHub one to github.com/advisories),
+   its CVE IDs linked to cve.org ("none" when it has none), its summary,
+   and whether govulncheck found that Drawbridge's code reaches it. When OSV
+   lists one vulnerability under both a Go and a GitHub ID, only the Go one
+   is shown. The table is appended to the merge request description, after
+   Claude Code's text. If OSV.dev cannot be reached, the section says so
+   and names the updates to check by hand; the merge request is still opened.
+4. It commits to `deps/YYYY-MM-DD`, pushes with `ci.skip` and opens a merge
    request labelled `patch` against the default branch, as a draft with the
    failing output when the checks failed. The merge request pipeline then
    runs as usual; only the user merges.
@@ -181,7 +194,8 @@ It uses two CI/CD variables, both **masked** and **protected**:
 
 Both expire (the Claude token after about a year); `deps-fix` then fails at
 sign-in or push. The `.deps/` artifact keeps the report, the govulncheck
-output, Claude Code's log and the checks' output for 30 days.
+output, Claude Code's log, the checks' output and the advisories table
+(`advisories.md`) for 30 days.
 
 ### What blocks a merge
 
