@@ -2,6 +2,11 @@
 # on any issue; the report is published to GitLab's Code Quality widget.
 version: "2"
 
+run:
+  # Lint for the minimum Go version (the go line in go.mod), which CI and the
+  # image build with, not the newer local toolchain line.
+  go: "1.26"
+
 linters:
   default: standard # errcheck, govet, ineffassign, staticcheck, unused
   enable:
