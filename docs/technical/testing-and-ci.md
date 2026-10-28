@@ -166,7 +166,9 @@ earlier check (a `deps/` branch) is still open. Otherwise:
    --` and fetching files from unpkg. It updates the dependencies and the docs
    that name them, runs the checks and fixes what the updates broke. It writes
    the commit message and the merge request description to `.deps/`.
-2. The script runs the checks again and `ci/leak-check.sh tree .`.
+2. The script runs the checks again, with `GOTOOLCHAIN` set to the Go on
+   the `go` line of `go.mod` as in CI (the job otherwise uses `auto`, which
+   would switch to the newer `toolchain` line), and `ci/leak-check.sh tree .`.
 3. `ci/deps-advisories.sh` lists the vulnerabilities the updates fix. It
    compares `go.mod` on the default branch with the updated one, and for
    each changed module, and for Go itself (the `go` and `toolchain` lines),
@@ -182,7 +184,9 @@ earlier check (a `deps/` branch) is still open. Otherwise:
    and names the updates to check by hand; the merge request is still opened.
 4. It commits to `deps/YYYY-MM-DD`, pushes with `ci.skip` and opens a merge
    request labelled `patch` against the default branch, as a draft with the
-   failing output when the checks failed. The merge request pipeline then
+   failing output when the checks failed. It is assigned to the bot
+   (`GET /user` with `DEPS_BOT_TOKEN`), with the schedule's owner
+   (`GITLAB_USER_ID`) asked to review. The merge request pipeline then
    runs as usual; only the user merges.
 
 It uses two CI/CD variables, both **masked** and **protected**:
