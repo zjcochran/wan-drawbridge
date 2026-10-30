@@ -4,7 +4,8 @@ go 1.26.10
 
 toolchain go1.27.3
 
-// Plain TCP only: since Go 1.24, listeners use MPTCP by default.
+// Plain TCP only: since Go 1.24, listeners use MPTCP by default. Turned off
+// to reduce the kernel attack surface (prompted by CVE-2026-98432).
 godebug multipathtcp=0
 
 require (
