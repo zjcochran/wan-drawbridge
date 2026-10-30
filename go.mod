@@ -4,6 +4,9 @@ go 1.26.10
 
 toolchain go1.27.3
 
+// Plain TCP only: since Go 1.24, listeners use MPTCP by default.
+godebug multipathtcp=0
+
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/go-jose/go-jose/v4 v4.1.6

@@ -567,3 +567,12 @@ func TestSetDataLimits(t *testing.T) {
 		}
 	}
 }
+
+// TestNoMultipathTCP checks the godebug line in go.mod: listeners use plain
+// TCP, not MPTCP, which Go 1.24 and later turn on for them by default.
+func TestNoMultipathTCP(t *testing.T) {
+	var lc net.ListenConfig
+	if lc.MultipathTCP() {
+		t.Fatal("listeners use MPTCP; go.mod needs godebug multipathtcp=0")
+	}
+}
