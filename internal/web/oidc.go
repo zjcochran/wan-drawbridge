@@ -114,7 +114,7 @@ type hmacKeySet struct {
 }
 
 func (k hmacKeySet) VerifySignature(ctx context.Context, raw string) ([]byte, error) {
-	jws, err := jose.ParseSigned(raw, []jose.SignatureAlgorithm{jose.HS256})
+	jws, err := jose.ParseSignedCompact(raw, []jose.SignatureAlgorithm{jose.HS256})
 	if err != nil {
 		return k.keys.VerifySignature(ctx, raw) // not HS256
 	}

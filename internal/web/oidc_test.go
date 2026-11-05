@@ -412,5 +412,5 @@ func (h hmacSigner) Sign(payload []byte) (*jose.JSONWebSignature, error) {
 	body := header + "." + base64.RawURLEncoding.EncodeToString(payload)
 	mac := hmac.New(sha256.New, h.key)
 	mac.Write([]byte(body))
-	return jose.ParseSigned(body+"."+base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), []jose.SignatureAlgorithm{jose.HS256})
+	return jose.ParseSignedCompact(body+"."+base64.RawURLEncoding.EncodeToString(mac.Sum(nil)), []jose.SignatureAlgorithm{jose.HS256})
 }
