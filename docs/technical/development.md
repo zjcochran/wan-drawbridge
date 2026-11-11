@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Go 1.26.10 or later (the `go` line in `go.mod`), no cgo needed. The
+- Go 1.26.11 or later (the `go` line in `go.mod`), no cgo needed. The
   `toolchain` line asks for Go 1.27.3: with the default `GOTOOLCHAIN=auto`,
   an older Go downloads and uses it. CI and the image build with the
   `golang:1.26` images, which set `GOTOOLCHAIN=local` and ignore that line.
