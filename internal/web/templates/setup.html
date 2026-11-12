@@ -84,7 +84,7 @@
   {{else if eq $d.Step 6}}
     <h2>What to stop on failover</h2>
     <p>Turn on the stacks to stop when traffic moves to a backup ISP. Exceptions for single containers are on the Containers page.</p>
-    {{template "stacks-table" (dict "Stacks" $d.Stacks "IsAdmin" true)}}
+    {{template "stacks-table" $d.Stacks}}
     <div class="actions"><a class="button" href="/setup?step=7">Continue</a></div>
 
   {{else}}

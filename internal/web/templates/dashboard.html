@@ -1,42 +1,61 @@
 {{define "content"}}
 {{$d := .Data}}
-<h1>Dashboard</h1>
+{{$o := $d.Overview}}
+<header class="greeting">
+  <p class="date">{{$o.Date}}</p>
+  <h1>{{$o.Greeting}} <span>{{$o.Summary}}</span></h1>
+  <p class="visually-hidden">Dashboard</p>
+</header>
 {{if $d.NeedsReview}}<div class="banner warn">{{$d.NeedsReview}} new containers joined stacks with per-container settings and keep running until you decide. <a href="/containers?policy=review">Review them</a></div>{{end}}
 {{template "status" $d.Status}}
+<section class="stats" aria-label="The last 30 days">
+  <div class="stat"><span class="stat-label">On primary, 30 days</span><b>{{$o.OnPrimary}}</b>
+    <span class="sub">{{if $o.Backup}}{{span $o.Backup}} on a backup{{else}}never on a backup{{end}}</span></div>
+  <div class="stat"><span class="stat-label">Failovers, 30 days</span><b>{{$o.Failovers}}</b>
+    <span class="sub">{{if $o.LastFailover.IsZero}}none yet{{else}}last: <time title="{{datetime $o.LastFailover}}">{{ago $o.LastFailover}}</time>{{end}}</span></div>
+  <div class="stat"><span class="stat-label">Hosts</span><b>{{$o.HostsUp}} / {{$o.HostsAll}}</b>
+    <span class="sub">{{join $o.HostNames " · "}}</span></div>
+  <div class="stat"><span class="stat-label">Stopped by Drawbridge</span><b>{{$o.Stopped}}</b>
+    <span class="sub">{{if $o.Stopped}}until the primary is back{{else}}every container as you left it{{end}}</span></div>
+</section>
 <section class="card">
-  <h2>Last 24 hours</h2>
   {{template "timeline" $d.Timeline}}
 </section>
 <section class="card">
-  <h2>Recent events</h2>
+  <div class="card-head"><h2>Latest changes</h2><a href="/events">All events</a></div>
   <ul class="events">
-  {{range $d.Events}}<li><time title="{{datetime .TS}}">{{ago .TS}}</time> <strong>{{.Type}}</strong> <span class="sub">{{summary .Payload}}</span></li>
+  {{range $d.Events}}<li><span class="ev-dot ev-{{.Type}}" aria-hidden="true"></span><span class="ev-text"><strong>{{.Title}}</strong>{{with .Text}} <span class="sub">{{.}}</span>{{end}}</span><time title="{{datetime .TS}}">{{ago .TS}}</time></li>
   {{else}}<li class="muted">No events yet.</li>{{end}}
   </ul>
-  <a href="/events">All events</a>
 </section>
 {{end}}
 
 {{define "status"}}
-<section id="status" class="grid two" hx-get="/partials/status" hx-trigger="sse:state, sse:inventory" hx-swap="outerHTML">
-  <div class="card">
+<section id="status" class="status-grid" hx-get="/partials/status" hx-trigger="sse:state, sse:inventory" hx-swap="outerHTML">
+  <div class="card hero {{stateClass .S.State}}">
     <div class="state {{stateClass .S.State}}">
-      <span class="state-label">{{stateLabel .S.State}}</span>
-      {{if eq .S.State "failover_pending"}}<span class="sub">failing over in {{until .S.Due}} unless the primary returns</span>{{end}}
-      {{if eq .S.State "failback_pending"}}<span class="sub">failing back in {{until .S.Due}} if the primary stays stable</span>{{end}}
+      <span class="state-pill">{{if .S.Paused}}Paused{{else if eq .S.State "primary"}}Running normally{{else if eq .S.State "failover"}}Failover: containers stopped{{else if eq .S.State "learning"}}Learning{{else}}Change pending{{end}}</span>
       {{if .S.Paused}}<span class="badge warn">Paused{{if not .S.PausedTill.IsZero}} until {{clock .S.PausedTill}}{{end}}</span>{{end}}
       {{with .S.Busy}}<span class="badge muted spinner">{{.}} containers</span>{{end}}
       {{if not .S.DrillTill.IsZero}}<span class="badge warn">Failover test until {{clock .S.DrillTill}}</span>{{end}}
+      {{if not .S.Since.IsZero}}<span class="in-state" title="In this state since {{datetime .S.Since}}">{{span (since .S.Since)}}</span>{{end}}
     </div>
+    <h2 class="state-label">{{if eq .S.State "failover"}}On backup{{else}}{{stateLabel .S.State}}{{end}}{{if and .ISPName (or (eq .S.State "failover") (eq .S.State "failover_pending"))}}: {{.ISPName}}{{end}}</h2>
+    {{if eq .S.State "failover_pending"}}<p class="sub">Failing over in {{until .S.Due}} unless the primary returns.</p>
+    {{else if eq .S.State "failback_pending"}}<p class="sub">Failing back in {{until .S.Due}} if the primary stays stable.</p>
+    {{else if eq .S.State "failover"}}<p class="sub">Since {{clock .S.Since}}. Drawbridge starts the containers again once {{or .Primary "the primary"}} is back and stable for {{duration .Rules.FailbackAfter}}.</p>
+    {{else if and (eq .S.State "primary") .Last (not .Last.Open)}}<p class="sub">Back on {{or .Primary "the primary"}} since {{clock .Last.Ended}}{{if not (today .Last.Ended)}} on {{.Last.Ended.Local.Format "Jan 2"}}{{end}}, after {{span (.Last.Duration .Last.Ended)}} on {{or .Last.ISPName "a backup"}}.</p>{{end}}
     {{if .S.Flaps}}<div class="banner warn">The primary ISP has been flapping, so failback now waits {{duration .S.Hold}} of stable connection (normally less). This resets after six hours without a failover.</div>{{end}}
-    <dl class="facts">
-      <dt>Current ISP</dt>
-      <dd>{{if .ISPName}}{{.ISPName}} <span class="sub">AS{{.S.ASN}}</span>{{if and .S.Unmetered (ne .S.ISP .S.PrimaryISP)}} <span class="badge muted" title="Counts like the primary: no failover">unmetered</span>{{end}}{{else}}–{{end}}</dd>
-      <dt>Primary ISP</dt>
-      <dd>{{if .Primary}}{{.Primary}}{{else}}<span class="warn-text">Not known yet</span> <a href="/isps">Set it</a>{{end}}</dd>
-      <dt>Public IP</dt><dd>{{or .S.LastIP "–"}}</dd>
-      <dt>Last check</dt><dd><time title="{{datetime .S.LastCheck}}">{{ago .S.LastCheck}}</time>{{if and (not .S.LastCheck.IsZero) (not .S.Conclusive)}} · inconclusive{{end}}</dd>
-      <dt>In this state</dt><dd>since {{ago .S.Since}}</dd>
+    <dl class="tiles">
+      <div class="tile"><dt>Current ISP</dt>
+        <dd>{{if .ISPName}}{{.ISPName}} <span class="sub mono">AS{{.S.ASN}}</span>{{if and .S.Unmetered (ne .S.ISP .S.PrimaryISP)}} <span class="badge muted" title="Counts like the primary: no failover">unmetered</span>{{end}}{{else}}–{{end}}</dd></div>
+      <div class="tile"><dt>Public IP</dt><dd class="mono">{{or .S.LastIP "–"}}</dd></div>
+      <div class="tile"><dt>Last check</dt>
+        <dd><time class="mono" title="{{datetime .S.LastCheck}}"{{if not .S.LastCheck.IsZero}} data-live="{{isodate .S.LastCheck}}"{{end}}{{if .S.Interval}} data-every="{{printf "%.0f" .S.Interval.Seconds}}"{{end}}>{{ago .S.LastCheck}}</time>{{if and (not .S.LastCheck.IsZero) (not .S.Conclusive)}} · inconclusive{{end}}
+          <span class="sub next-check" aria-hidden="true"></span></dd>
+        <span class="check-progress" aria-hidden="true"></span></div>
+      <div class="tile"><dt>Primary ISP</dt>
+        <dd>{{if .Primary}}{{.Primary}}{{else}}<span class="warn-text">Not known yet</span> <a href="/isps">Set it</a>{{end}}</dd></div>
     </dl>
     {{if .IsAdmin}}
     <div class="actions">
@@ -75,6 +94,8 @@
     </div>
     {{end}}
   </div>
+  <div class="side">
+  {{if or .Run .Owed}}
   <div class="card">
     <h2>Stopped by Drawbridge</h2>
     {{if .Run}}
@@ -99,12 +120,37 @@
     {{end}}
     <p class="sub"><a href="/preview">Preview what a failover would stop</a></p>
   </div>
+  {{else}}
+  <div class="card plan">
+    <h2>If the WAN fails over</h2>
+    <p class="plan-count"><b>{{.Plan.Stop}}</b> <span>{{if eq .Plan.Stop 1}}container stops{{else}}containers stop{{end}} · {{.Plan.Keep}} keep running</span></p>
+    {{if .Plan.Stacks}}<ul class="plan-stacks">{{range .Plan.Stacks}}<li><span>{{.Name}}</span><span class="sub">{{.N}} stop</span></li>{{end}}</ul>{{end}}
+    <a href="/preview">Preview what a failover would stop →</a>
+  </div>
+  {{end}}
+  <div class="card rules">
+    <h2>The rules</h2>
+    <dl>
+      <div><dt>Fail over after a backup is seen for</dt><dd class="mono">{{duration .Rules.FailoverAfter}}</dd></div>
+      <div><dt>Fail back after the primary is stable for</dt><dd class="mono">{{duration .Rules.FailbackAfter}}</dd></div>
+      <div><dt>Check every</dt><dd class="mono">{{duration .Rules.CheckInterval}}</dd></div>
+    </dl>
+    {{if .IsAdmin}}<a href="/settings/detection">Change them</a>{{end}}
+  </div>
+  </div>
 </section>
 {{end}}
 
 {{define "timeline"}}
-<div id="timeline" hx-get="/partials/timeline" hx-trigger="sse:state" hx-swap="outerHTML">
-  <svg class="timeline" viewBox="0 0 1000 32" preserveAspectRatio="none" role="img" aria-label="Which ISP carried traffic over the last 24 hours">
+<div id="timeline" hx-get="/partials/timeline?range={{.Range.ID}}" hx-trigger="sse:state" hx-swap="outerHTML">
+  <div class="card-head">
+    <h2>{{.Range.Title}}</h2>
+    <div class="range" role="group" aria-label="Time range">
+      {{range .Ranges}}<button type="button" class="{{if eq .ID $.Range.ID}}on{{end}}" aria-pressed="{{eq .ID $.Range.ID}}"
+        hx-get="/partials/timeline?range={{.ID}}" hx-target="#timeline" hx-swap="outerHTML">{{.Label}}</button>{{end}}
+    </div>
+  </div>
+  <svg class="timeline" viewBox="0 0 1000 32" preserveAspectRatio="none" role="img" aria-label="Which ISP carried traffic, {{.Range.Title}}">
     <rect class="seg-none" x="0" y="0" width="1000" height="32"></rect>
     {{range .Segments}}<rect class="seg-{{.Class}}" x="{{printf "%.2f" .X}}" y="0" width="{{printf "%.2f" .W}}" height="32"><title>{{.Title}}</title></rect>{{end}}
   </svg>

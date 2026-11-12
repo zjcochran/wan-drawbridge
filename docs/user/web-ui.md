@@ -2,13 +2,26 @@
 
 The web UI is a set of server-rendered pages that update themselves live: when
 the WAN state changes or a container starts or stops, open pages refresh the
-affected part within a second, without reloading. It works on phones (the
-navigation bar and the Settings tabs scroll sideways) and follows your system's light or dark mode,
-in the colour theme you choose (see [Appearance](#appearance)).
+affected part within a second, without reloading. It follows your system's
+light or dark mode, in the colour theme you choose (see [Appearance](#appearance)).
 
-Your picture and username sit at the top right. Click them for a menu with
-**Your account** (Settings → Your account) and **Sign out**; a click elsewhere
-or Escape closes it. On a phone only the picture is shown.
+The pages are listed in a sidebar on the left. Above them, **Search or jump
+to…** (or ⌘K, Ctrl+K elsewhere) opens a box that finds pages, Settings tabs,
+stacks and containers as you type; arrow keys choose and Enter opens. A stack
+or container opens the Stacks page searched for it. Your picture and username sit at
+its foot: click them for a menu with **Your account** (Settings → Your account)
+and **Sign out**; a click elsewhere or Escape closes it.
+
+On a phone (a screen narrower than 48rem) the name and your picture sit in a bar
+along the top, and the pages are a tab bar along the bottom: **Dashboard**,
+**Stacks**, **Containers**, **ISPs** and **More**, which opens **Events**,
+**Reports** and **Settings**. The tab bar keeps clear of the notch and the home
+indicator.
+
+A phone can add Drawbridge to its home screen (Safari: Share, then **Add to
+Home Screen**; Chrome: **Install app** or **Add to Home screen**). It then opens
+full screen with its own icon, named "Drawbridge", without the browser's
+address bar.
 
 There are two roles:
 
@@ -18,27 +31,60 @@ There are two roles:
   own password, single sign-on link and appearance. Controls they cannot use
   are not shown.
 
-Every page footer shows the version and links to the source code, as the AGPL
-requires, and credits the app icon (Drawbridge icons created by Magnific -
-Flaticon).
+Every page footer shows the version, the licence (AGPL-3.0-or-later) and a
+link to the source code, as the AGPL requires.
+
+On a phone, Drawbridge can be added to the home screen (Safari: Share, then
+**Add to Home Screen**; Chrome: **Install app** or **Add to Home screen**). It
+then opens full screen with its own icon, named "Drawbridge", without the
+browser's address bar.
 
 ## Dashboard
 
 ![Dashboard on the primary ISP](../images/dashboard.jpg)
 
+The page opens with the date, a greeting by the server's time of day, and one
+sentence on where things stand ("All quiet on EXAMPLENET.", "On SKYLINK since
+14:02.").
+
+Under the status card, four tiles cover the last 30 days and now:
+
+| Tile | Meaning |
+| --- | --- |
+| On primary, 30 days | The share of the last 30 days not in a failover, and the time on a backup. |
+| Failovers, 30 days | Outages that started in the last 30 days, and how long ago the newest started. |
+| Hosts | Hosts up out of those not disabled (the local host always counts as up), and their names. |
+| Stopped by Drawbridge | Containers Drawbridge has stopped now. |
+
+Beside the status card:
+
+- **If the WAN fails over**: how many containers would stop and how many keep
+  running, by their settings now, with the stacks they are in; and a link to the
+  [failover preview](#failover-preview). While a failover run is open, or starts
+  are owed to an unreachable host, **Stopped by Drawbridge** (below) takes its
+  place.
+- **The rules**: the failover delay, the failback delay and the check
+  interval, with a link to change them (admins).
+
 ### Status card
 
-The coloured dot and label show the state:
+The large card at the top shows the state as a coloured badge and a heading,
+with the time in this state at the right:
 
-| Label | Colour | Meaning |
+| Heading | Badge | Meaning |
 | --- | --- | --- |
-| Learning | grey | No primary ISP is known yet. Nothing is stopped. |
-| On primary | green | Traffic leaves through the primary ISP. |
-| Failover pending | amber | Traffic is on a backup ISP; Drawbridge is confirming it. Shows "failing over in 32s unless the primary returns". |
-| Failover | red | Confirmed on a backup. Selected containers are stopped. |
-| Failback pending | amber | The primary is back; Drawbridge is making sure it stays. Shows "failing back in 4m 56s if the primary stays stable". |
+| Learning | Learning (grey) | No primary ISP is known yet. Nothing is stopped. |
+| On primary | Running normally (green) | Traffic leaves through the primary ISP. |
+| Failover pending: *ISP* | Change pending (amber) | Traffic is on a backup ISP; Drawbridge is confirming it. Shows "Failing over in 32s unless the primary returns." |
+| On backup: *ISP* | Failover: containers stopped (amber, with an amber edge on the card) | Confirmed on a backup. Selected containers are stopped. |
+| Failback pending | Change pending (amber) | The primary is back; Drawbridge is making sure it stays. Shows "Failing back in 4m 56s if the primary stays stable." |
 
-Badges next to the label:
+While automation is paused the badge reads **Paused**. Under the heading, on
+the primary after an outage: "Back on EXAMPLENET since 14:27, after 25m on
+SKYLINK." (with the date when it was not today); in a failover, when the
+containers start again.
+
+Badges next to it:
 
 - **Paused**: automation is paused; states still change but no container is
   touched.
@@ -48,14 +94,14 @@ Badges next to the label:
 If the primary ISP has been flapping, a banner explains how long failback now
 waits (see [flapping](during-an-outage.md#flapping)).
 
-The facts below the label:
+The tiles below the heading:
 
-| Fact | Meaning |
+| Tile | Meaning |
 | --- | --- |
 | Current ISP | The ISP of the last conclusive check, with the ASN that announced the IP. |
 | Primary ISP | The primary, or "Not known yet" with a link to the ISPs page. |
 | Public IP | The IPv4 address the providers agreed on. |
-| Last check | How long ago; "· inconclusive" if the last check could not determine the IP. |
+| Last check | How long ago, counting up every second; "· inconclusive" if the last check could not determine the IP. Below it, "next in 34s", and a bar along the tile's foot fills towards the next check: one check interval after the last, or `min(15s, interval)` while a change is pending. |
 | In this state | How long the current state has lasted. |
 
 ### Buttons (admins)
@@ -124,16 +170,22 @@ A banner says when a failover is already in effect (the containers it stopped
 then show as already stopped), and how many new containers are not configured
 yet and would keep running, with a link to review them.
 
-### Last 24 hours
+### Timeline
 
 A timeline of every check: green for the primary, amber for a backup, grey for
 inconclusive checks and light grey for no data (Drawbridge not running, or a
 gap longer than three check intervals). Hover a segment for the ISP and times.
-A short failover is a thin sliver at this scale.
+**24 h**, **7 d** and **30 d** choose the window (24 hours by default; checks
+are kept for the retention set in WAN detection, 30 days by default). A short
+failover is a thin sliver at the longer scales.
 
-### Recent events
+### Latest changes
 
-The last few audit events. **All events** opens the Events page.
+The last eight audit events, each as a sentence: the wording of its
+[notification](notifications.md) where it has one ("Failed over to a backup
+ISP"), else a short line such as "admin set the stack media to stop on
+failover". A coloured dot marks failovers (amber), failbacks (green) and
+failures (red). **All events** opens the Events page.
 
 ### New containers banner
 
@@ -146,23 +198,31 @@ them. See [new containers](stacks-and-containers.md#new-containers).
 
 ![Stacks page](../images/stacks.jpg)
 
-One row per Docker Compose project on each host:
+One card per Docker Compose project on each host, then one per host for its
+**Standalone** containers. A card's line shows how many containers it has, how
+many run, and what they do on failover: "keep running", "stop on failover", or
+"split: 5 stop, 2 keep running", with a **Stops** or **Split** badge. "host
+offline" (the card dimmed) means its host cannot be reached. With more than one
+host, each card names its host.
 
-| Column | Meaning |
-| --- | --- |
-| Stack | The Compose project name. |
-| Host | The host it is on. Shown only when Drawbridge has more than one host; click it to show that host's stacks only. |
-| Containers | "3 running of 5", or "host offline" (the row dimmed) when its host cannot be reached. |
-| On failover | **Stops (stack rule)**: the stack switch is on. **Partial · 4 of 5**: some containers stop through their own settings. **Not affected**: nothing in it stops. |
-| Stop whole stack | The switch (admins). |
-| Show containers | Expands the stack's containers with their state and whether each stops; it then reads Hide containers, which collapses them again. |
+A stack's line also holds its switch (admins): **Keep running** or **Stop**,
+with **Split** between them while its containers differ. Choosing either
+**resets every container in the stack** to follow it; from Split this asks for
+confirmation.
 
-Flipping the switch **resets every container in the stack** to follow it, on or
-off. Exceptions are made on the Containers page.
+Cards that stop or are split start open; click a card's line to open or close
+it. An open card lists each container: its state dot, name and key, a **New**
+badge while it [needs review](stacks-and-containers.md#new-containers), what it
+does on failover and why ("from stack", "own setting", "default", "from label", or "until
+reviewed"), and its setting (admins): *Follow stack* (*Default (keep
+running)* when standalone), *Stop on failover* or *Keep running*. Choosing
+*Keep running* in a stack that is switched to Stop asks for confirmation,
+because it converts the stack rule into per-container settings.
 
-With more than one host, a **host filter** above the table shows all hosts or
-one; the URL keeps it (`/stacks?host=<id>`). The same project on two hosts is
-two rows with their own switches.
+**Filters** (the URL keeps them): a search by container name or key, the host
+(with more than one host), and chips with counts: **All**, **Stop**, **Keep
+running** and **Needs review**. While searching or filtering, only cards with a
+matching container are shown, open, with only those containers.
 
 ![Stacks on two hosts](../images/stacks-hosts.jpg)
 
@@ -216,17 +276,24 @@ a setting next to "Apply to selected", and apply.
 
 ![ISPs page](../images/isps.jpg)
 
-One row per ISP:
+One card per ISP, the primary first:
 
-| Column | Meaning |
+| Part | Meaning |
 | --- | --- |
-| ISP | Name (editable by admins; empty resets it), "current" badge, group key and when last seen. |
-| Role | Primary (pinned or "learned"), Backup or Ignored. |
-| Metered | For the primary and backups: a switch (admins). On a backup it is on for new ISPs, and off means traffic on it counts like the primary. On the primary it is a separate switch, off by default; on means its traffic counts towards its monthly data limit. See [Metered and unmetered ISPs](isps.md#metered-and-unmetered-isps). Viewers see yes or no; ignored ISPs show –. |
-| Data limits | For a metered backup, GB per outage and GB per month; for a metered primary, GB per month; with **Save** (admins). See [Data limits](isps.md#data-limits). Viewers see the limits, or "none"; other ISPs show –. |
-| Last 7 days | Share of observed time, excluding ignored ISPs. |
+| Name | Editable by admins (empty resets it), with its role badge (Primary, Backup or Ignored) and "current" while traffic is on it. Below: the group key, when it was last seen, and for the primary whether it is pinned or learned. |
+| Seen, 30 days | Its share of the time observed in the last 30 days, excluding ignored ISPs. |
+| Last 7 days | The same over the last 7 days. |
 | All time | Hours observed. |
-| Networks (ASNs) | Each ASN with its name, "grouped by hand" if moved, and a **Move to…** menu. |
+| Role | Primary (pinned when set by hand), Backup or Ignored (admins). |
+| Metered | For the primary and backups: a switch (admins) with what it means. On a backup it is on for new ISPs, and off means traffic on it counts like the primary. On the primary it is a separate switch, off by default; on means its traffic counts towards its monthly data limit. See [Metered and unmetered ISPs](isps.md#metered-and-unmetered-isps). Viewers see yes or no; ignored ISPs show –. |
+| Data limits | Only for a metered primary or backup: GB per outage (backups) and GB per month, with **Save** (admins). See [Data limits](isps.md#data-limits). Viewers see the limits, or "none". |
+| Networks | Each ASN with its name, "grouped by hand" if moved, and a **Move to…** menu (admins). |
+
+**Every ISP, every day** shows the last 30 days (UTC), one square per day and
+ISP: solid when it was seen at least 95% of the day (of the day so far, for
+today), lighter when seen for part of it, empty when not seen. Green for the
+primary, amber for backups, grey for ignored ISPs. Hover a square for the time
+seen that day.
 
 **Re-learn primary ISP** forgets the primary and starts a new learning period.
 See [ISPs and the primary ISP](isps.md).
@@ -298,20 +365,22 @@ sizes are in decimal units (1 MB = 1,000,000 bytes).
 ![Settings, WAN detection tab](../images/settings.jpg)
 
 Settings has one tab per section, each at its own address, so a tab can be
-bookmarked. `/settings` opens the first one.
+bookmarked. `/settings` opens the first one. The tabs are a menu down the left,
+grouped under **Failover**, **Alerts**, **Access**, **Data** and **You**; on a
+narrow screen they become one row that scrolls sideways.
 
-| Tab | Address | Who | Contents |
-| --- | --- | --- | --- |
-| WAN detection | `/settings/detection` | everyone | The detection settings described in the [setup wizard](setup-wizard.md#4-wan-detection), and the [scheduled failover test](during-an-outage.md#scheduled-tests). Viewers see them read-only. Changes apply from the next check. |
-| Notifications | `/settings/notifications` | admins | Channels that get events; see [Notifications](notifications.md). |
-| Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
-| Users | `/settings/users` | admins | Accounts; see [Users](#users). |
-| Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
-| API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
-| Container filters | `/settings/container-filters` | everyone | Patterns of containers the Containers page hides; see [Container filters](#container-filters). Viewers see them read-only. |
-| Hosts | `/settings/hosts` | everyone | The local host and the agent hosts, with their status, version and key (Swarm, Proxmox VE and Kubernetes hosts marked **experimental**, as they are [not yet tested on real equipment](hosts.md#tested-so-far)); admins add hosts, rotate keys, revoke, disable, rename and remove them. See [Hosts and agents](hosts.md). Viewers see the list read-only, without the manager key. |
-| Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); [two-factor sign-in](#two-factor-sign-in); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
-| System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
+| Group | Tab | Address | Who | Contents |
+| --- | --- | --- | --- | --- |
+| Failover | WAN detection | `/settings/detection` | everyone | The detection settings described in the [setup wizard](setup-wizard.md#4-wan-detection), and the [scheduled failover test](during-an-outage.md#scheduled-tests). Viewers see them read-only. Changes apply from the next check. |
+| Failover | Hosts | `/settings/hosts` | everyone | The local host and the agent hosts, with their status, version and key (Swarm, Proxmox VE and Kubernetes hosts marked **experimental**, as they are [not yet tested on real equipment](hosts.md#tested-so-far)); admins add hosts, rotate keys, revoke, disable, rename and remove them. See [Hosts and agents](hosts.md). Viewers see the list read-only, without the manager key. |
+| Failover | Container filters | `/settings/container-filters` | everyone | Patterns of containers the Containers page hides; see [Container filters](#container-filters). Viewers see them read-only. |
+| Alerts | Notifications | `/settings/notifications` | admins | Channels that get events; see [Notifications](notifications.md). |
+| Access | Users | `/settings/users` | admins | Accounts; see [Users](#users). |
+| Access | Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
+| Access | API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
+| Data | Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
+| You | Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); [two-factor sign-in](#two-factor-sign-in); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
+| You | System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
 
 Viewers do not see the admin tabs; opening one's address gives 403.
 

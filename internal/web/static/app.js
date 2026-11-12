@@ -51,15 +51,16 @@
     if (auto && auto.form) auto.form.requestSubmit();
   });
 
-  // The account menu closes on a click elsewhere or on Escape.
+  // The account menu and a phone's More menu close on a click elsewhere or on Escape.
+  const menus = "details.usermenu[open], details.more[open]";
   document.addEventListener("click", (e) => {
-    document.querySelectorAll("details.usermenu[open]").forEach((d) => {
+    document.querySelectorAll(menus).forEach((d) => {
       if (!d.contains(e.target)) d.open = false;
     });
   });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    document.querySelectorAll("details.usermenu[open]").forEach((d) => {
+    document.querySelectorAll(menus).forEach((d) => {
       d.open = false;
       d.querySelector("summary").focus();
     });
@@ -98,6 +99,83 @@
     btn.dataset.expand = btn.textContent;
     btn.textContent = btn.dataset.collapse;
     btn.setAttribute("aria-expanded", "true");
+  });
+
+  // The dashboard's last check counts up every second, with the time to the
+  // next check and a bar filling towards it. The status card is replaced on
+  // each check, so this reads the elements afresh each time.
+  function ago(sec) {
+    if (sec < 10) return "just now";
+    if (sec < 60) return sec + "s ago";
+    return Math.floor(sec / 60) + "m ago";
+  }
+  function tick() {
+    document.querySelectorAll("time[data-live]").forEach((t) => {
+      const sec = Math.max(0, Math.floor((Date.now() - Date.parse(t.dataset.live)) / 1000));
+      if (sec >= 3600) return; // older checks keep the server's wording
+      t.textContent = ago(sec);
+      const every = Number(t.dataset.every);
+      const tile = t.closest(".tile");
+      if (!every || !tile) return;
+      const left = every - sec;
+      tile.querySelector(".next-check").textContent = left > 0 ? "next in " + left + "s" : "checking…";
+      tile.querySelector(".check-progress").style.width = Math.min(100, (sec / every) * 100) + "%";
+    });
+  }
+  setInterval(tick, 1000);
+  document.addEventListener("DOMContentLoaded", tick);
+  document.addEventListener("htmx:afterSwap", tick);
+
+  // The jump box: ⌘K or Ctrl+K (or the sidebar button) opens it; arrow keys
+  // move between the results and Enter opens the chosen one.
+  function openJump() {
+    const dlg = document.getElementById("jump");
+    if (!dlg || dlg.open) return;
+    const input = dlg.querySelector("input");
+    input.value = "";
+    dlg.showModal();
+    input.focus();
+    htmx.trigger(input, "jump-open");
+  }
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      openJump();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-jump]")) openJump();
+    if (e.target.id === "jump") e.target.close(); // a click on the backdrop
+  });
+  document.addEventListener("keydown", (e) => {
+    const dlg = e.target.closest && e.target.closest("#jump");
+    if (!dlg || !["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) return;
+    const links = [...dlg.querySelectorAll("#jump-results a")];
+    const at = links.findIndex((a) => a.classList.contains("active"));
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (links[at]) links[at].click();
+      return;
+    }
+    e.preventDefault();
+    const next = links[(at + (e.key === "ArrowDown" ? 1 : -1) + links.length) % links.length];
+    links.forEach((a) => a.classList.toggle("active", a === next));
+    if (next) next.scrollIntoView({ block: "nearest" });
+  });
+
+  // An open stack card stays open when the list refreshes.
+  let openStacks = [];
+  document.addEventListener("htmx:beforeSwap", (e) => {
+    if (e.detail.target.id === "stacks-table") {
+      openStacks = [...e.detail.target.querySelectorAll("details.stack-card[open]")].map((d) => d.id);
+    }
+  });
+  document.addEventListener("htmx:afterSwap", (e) => {
+    if (e.detail.target.id !== "stacks-table" && !document.getElementById("stacks-table")) return;
+    openStacks.forEach((id) => {
+      const d = document.getElementById(id);
+      if (d) d.open = true;
+    });
   });
 
   // Forms marked data-reset-on-success clear after a successful HTMX post.

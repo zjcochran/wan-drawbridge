@@ -44,6 +44,7 @@ type Status struct {
 	PausedTill time.Time // when a timed pause ends; zero until resumed by hand
 	DrillTill  time.Time // when a failover test ends; zero when none is running
 	LastCheck  time.Time
+	Interval   time.Duration // time between checks now: shorter while a change is pending
 	LastIP     string
 	Conclusive bool
 	ASN        int    // last conclusive ASN
@@ -194,11 +195,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 			}
 		case <-next:
 			m.Check(ctx)
-			wait := m.cfg.CheckInterval
-			if m.state.Machine.IsPending() {
-				wait = m.cfg.PendingCheck()
-			}
-			next = time.After(wait)
+			next = time.After(m.checkEvery())
 		}
 	}
 }
@@ -771,10 +768,19 @@ func (m *Monitor) publish(fn func(*Status)) {
 	m.status.Paused = m.paused
 	m.status.PausedTill = m.pausedTil
 	m.status.DrillTill = m.drillTil
+	m.status.Interval = m.checkEvery()
 	m.mu.Unlock()
 	if m.notify != nil {
 		m.notify()
 	}
+}
+
+// checkEvery is the time until the next check: shorter while a change is pending.
+func (m *Monitor) checkEvery() time.Duration {
+	if m.state.Machine.IsPending() {
+		return m.cfg.PendingCheck()
+	}
+	return m.cfg.CheckInterval
 }
 
 func (m *Monitor) event(ctx context.Context, typ string, payload map[string]any) {

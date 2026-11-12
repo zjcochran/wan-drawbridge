@@ -57,11 +57,11 @@ func TestStacksPerHost(t *testing.T) {
 	nas := strconv.FormatInt(id, 10)
 
 	_, body := c.get("/stacks")
-	if !strings.Contains(body, "<th>Host</th>") || !strings.Contains(body, `<option value="`+nas+`" >nas</option>`) ||
+	if !strings.Contains(body, `<span class="badge muted">nas</span>`) || !strings.Contains(body, `<option value="`+nas+`" >nas</option>`) ||
 		!strings.Contains(body, `hx-post="/stacks/`+nas+`/media/policy"`) || !strings.Contains(body, `hx-post="/stacks/1/media/policy"`) {
 		t.Fatalf("stacks page:\n%s", body)
 	}
-	if _, body := c.get("/stacks?host=" + nas); strings.Contains(body, `/stacks/1/media/policy`) || !strings.Contains(body, "1 running of 2") {
+	if _, body := c.get("/stacks?host=" + nas); strings.Contains(body, `/stacks/1/media/policy`) || !strings.Contains(body, "2 containers · 1 running") {
 		t.Errorf("host filter on stacks:\n%s", body)
 	}
 
@@ -124,7 +124,7 @@ func TestOfflineHost(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
 	addHost(t, e, true)
-	if _, body := c.get("/stacks"); !strings.Contains(body, `<tr class="dim">`) || !strings.Contains(body, "host offline") {
+	if _, body := c.get("/stacks"); !strings.Contains(body, `class="stack-card dim"`) || !strings.Contains(body, "host offline") {
 		t.Errorf("stacks with an offline host:\n%s", body)
 	}
 	if _, body := c.get("/containers"); !strings.Contains(body, "host offline") || !strings.Contains(body, "media-fetcher-1") {

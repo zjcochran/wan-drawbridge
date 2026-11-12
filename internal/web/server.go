@@ -175,6 +175,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /{$}", s.auth(s.dashboard))
 	mux.Handle("GET /partials/status", s.auth(s.statusPartial))
 	mux.Handle("GET /partials/timeline", s.auth(s.timelinePartial))
+	mux.Handle("GET /jump", s.auth(s.jump))
 	mux.Handle("GET /sse", s.auth(s.Hub.ServeHTTP))
 	mux.Handle("POST /actions/{action}", s.admin(s.action))
 
@@ -268,6 +269,10 @@ func cacheStatic(h http.Handler) http.Handler {
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		} else {
 			w.Header().Set("Cache-Control", "public, max-age=3600")
+		}
+		// Go knows no font types, and the image has no mime.types.
+		if strings.HasSuffix(r.URL.Path, ".woff2") {
+			w.Header().Set("Content-Type", "font/woff2")
 		}
 		h.ServeHTTP(w, r)
 	})

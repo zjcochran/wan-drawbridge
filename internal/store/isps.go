@@ -195,6 +195,35 @@ func (s *Store) Shares(ctx context.Context, since time.Time) ([]learner.Share, e
 	return out, rows.Err()
 }
 
+// DailySeconds returns, per ISP group, the time it was seen on each UTC day
+// (YYYY-MM-DD) on or after since, summed through the current grouping.
+func (s *Store) DailySeconds(ctx context.Context, since time.Time) (map[int]map[string]int64, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT a.isp_id, d.day, SUM(d.observed_seconds) FROM asn_daily d
+		JOIN asns a ON a.asn = d.asn
+		WHERE d.day >= ? GROUP BY a.isp_id, d.day`, day(since))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int]map[string]int64{}
+	for rows.Next() {
+		var (
+			isp int
+			d   string
+			sec int64
+		)
+		if err := rows.Scan(&isp, &d, &sec); err != nil {
+			return nil, err
+		}
+		if out[isp] == nil {
+			out[isp] = map[string]int64{}
+		}
+		out[isp][d] = sec
+	}
+	return out, rows.Err()
+}
+
 // Primary returns the primary ISP group (0 if none) and whether it is pinned.
 func (s *Store) Primary(ctx context.Context) (id int, pinned bool, err error) {
 	err = s.db.QueryRowContext(ctx, `SELECT id, pinned FROM isps WHERE role = 'primary'`).Scan(&id, &pinned)

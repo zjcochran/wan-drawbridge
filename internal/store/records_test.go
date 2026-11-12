@@ -289,6 +289,7 @@ func TestClosedStoreReturnsErrors(t *testing.T) {
 		"ISPOfASN":      func() error { _, err := s.ISPOfASN(ctx, 1); return err },
 		"Observe":       func() error { return s.Observe(ctx, 1, 1, t0) },
 		"Shares":        func() error { _, err := s.Shares(ctx, t0); return err },
+		"DailySeconds":  func() error { _, err := s.DailySeconds(ctx, t0); return err },
 		"Primary":       func() error { _, _, err := s.Primary(ctx); return err },
 		"SetRole":       func() error { return s.SetRole(ctx, 1, RolePrimary, true) },
 		"MoveASN":       func() error { _, err := s.MoveASN(ctx, 1, 0, t0); return err },

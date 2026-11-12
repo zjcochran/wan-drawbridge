@@ -1,10 +1,13 @@
 {{define "content"}}
 {{$d := .Data}}
 <h1>Settings</h1>
+<div class="settings">
 <nav class="tabs" aria-label="Settings sections">
-  {{range $d.Tabs}}<a href="/settings/{{.ID}}" {{if eq .ID $d.Tab}}aria-current="page"{{end}}>{{.Name}}</a>
+  {{$g := ""}}{{range $d.Tabs}}{{if ne .Group $g}}{{$g = .Group}}<h2>{{.Group}}</h2>{{end}}
+  <a href="/settings/{{.ID}}" {{if eq .ID $d.Tab}}aria-current="page"{{end}}>{{.Name}}</a>
   {{end}}
 </nav>
+<div class="tab">
 
 {{if eq $d.Tab "detection"}}
 <section class="card">
@@ -168,8 +171,9 @@
   </dl>
 </section>
 {{end}}
+</div>
+</div>
 {{end}}
-
 
 {{define "container-filters-form"}}
 <form id="container-filters-form" hx-post="/settings/container-filters" hx-target="#container-filters-form" hx-swap="outerHTML" class="stack">

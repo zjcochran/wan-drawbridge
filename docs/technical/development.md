@@ -52,7 +52,7 @@ internal/
   secrets/             AES-GCM sealing
   web/                 HTTP, templates, OIDC, metrics, SSE
     templates/         html/template pages and partials
-    static/            htmx, sse extension, app.js, app.css, icon
+    static/            htmx, sse extension, app.js, app.css, icons, web app manifest
   e2e/                 end-to-end test
 test/
   coverage.sh          per-package coverage gate
@@ -120,10 +120,19 @@ Migrations run in a transaction per file at start-up.
 ## UI screenshots
 
 The screenshots in `docs/images` were taken with headless Chrome (chromedp)
-against a running Drawbridge with a fake Docker API (nine containers in
-`media`, `proxy` and two standalone) and a fake IP service switched between
-`203.0.113.3` (Examplenet, AS64500) and `198.51.100.2` (Skylink, AS64510). Retake them
-when the UI changes visibly.
+against a running Drawbridge, all with fictional data:
+
+- a fake Docker API for the local host (`media`: db, web, indexer, downloader,
+  transcoder; `proxy`: gateway, certs; standalone `dns` and `backup-sync`) and a
+  second one behind a real agent named `nas`;
+- a fake IP service switched between `203.0.113.3` (EXAMPLENET, AS64500) and
+  `198.51.100.2` (SKYLINK, AS64510), with a seeded `ip2asn-v4.tsv.gz` in the
+  cache folder so nothing is looked up online;
+- a year of outages and a day of checks written into the database for Reports
+  and the timeline.
+
+Desktop shots are 1280 px wide (ISPs 1600 px, for its wide table); phone shots
+are 390 × 844 at 2×. Retake them when the UI changes visibly.
 
 ## Workflow and releasing
 

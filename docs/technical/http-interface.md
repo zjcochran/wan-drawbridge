@@ -59,9 +59,10 @@ Non-admins get 403 "admins only" on admin routes.
 | --- | --- | --- | --- |
 | GET | `/` | auth | Dashboard. Query `flash` shows a message. |
 | GET | `/partials/status` | auth | Status card fragment (refreshed on SSE `state`/`inventory`). |
-| GET | `/partials/timeline` | auth | 24-hour timeline fragment. |
+| GET | `/partials/timeline` | auth | Timeline fragment. `range`: `24h` (the default, also for an unknown value), `7d` or `30d`. |
+| GET | `/jump` | auth | The jump box's results for `q`: pages, Settings tabs the user may open, and (when `q` is not empty) stacks and containers whose name contains it; at most 12. |
 | GET | `/sse` | auth | Server-Sent Events stream (below). |
-| GET | `/stacks` | auth | Filter `host` (a host ID). `?partial=1` with `HX-Request` returns the table only. |
+| GET | `/stacks` | auth | Filters `host` (a host ID), `q` (container name or key) and `show` (`stop`, `keep` or `review`). `?partial=1` with `HX-Request` returns the list only. |
 | GET | `/stacks/{host}/{project}/containers` | auth | Container list fragment for one stack on one host (host ID). 404 if `{host}` is not a number. |
 | GET | `/containers` | auth | Filters: `q`, `host` (a host ID), `stack` (`-` = standalone), `state` (`running`, `stopped`), `policy` (`disable`, `keep`, `review`), `hidden=1` (include containers matching a container filter); `partial=1`. |
 | GET | `/isps` | auth | |
@@ -91,8 +92,8 @@ token.
 | `/actions/drill` | admin | `for`: `2m`, `5m`, `10m`, `15m`; anything else is 400 | Start a failover test; 422 if containers are already stopped or the state is not primary or learning |
 | `/actions/drill-end` | admin | | End a failover test now |
 | `/actions/restore` | admin | | Restore now |
-| `/stacks/{host}/{project}/policy` | admin | `disable=on` or absent; `host` = the page's host filter, echoed back | Set the stack switch of a stack on one host (host ID); 404 if `{host}` is not a number |
-| `/containers/policy` | admin | `container_host` (host ID; the local host when absent), `key`, `policy` | Set one container (filters are echoed back) |
+| `/stacks/{host}/{project}/policy` | admin | `disable=on` or absent (empty); the page's filters `host`, `q` and `show`, echoed back | Set the stack switch of a stack on one host (host ID); 404 if `{host}` is not a number |
+| `/containers/policy` | admin | `container_host` (host ID; the local host when absent), `key`, `policy`; `view=stacks` from the Stacks page | Set one container (filters are echoed back). With `view=stacks` it returns the Stacks list, with its filters `host`, `q` and `show`, instead of the Containers table |
 | `/containers/bulk` | admin | `keys` (repeated, each `<host ID>:<key>`; 422 if one is not), `bulk_policy` | Set several containers |
 | `/isps/{id}/role` | admin | `role` | Primary (pinned), backup or ignored |
 | `/isps/{id}/rename` | admin | `name` | Empty resets |

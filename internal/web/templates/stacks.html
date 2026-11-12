@@ -1,11 +1,12 @@
 {{define "content"}}
+{{$d := .Data}}
 <h1>Stacks</h1>
-<p class="lead">A stack is a Docker Compose project. Turn one on to stop all of its containers while traffic runs over a backup ISP.</p>
-{{if .Data.MultiHost}}
-<form id="stack-filters" class="filters" hx-get="/stacks" hx-target="#stacks-table" hx-swap="outerHTML" hx-push-url="true" hx-trigger="change">
+<p class="lead">A stack is a Docker Compose project. Switch one to <strong>Stop</strong> to stop all of its containers while traffic runs over a backup ISP; give single containers their own setting to make exceptions.</p>
+<form id="stack-filters" class="filters" hx-get="/stacks" hx-include="#stacks-table input[name=show]" hx-target="#stacks-table" hx-swap="outerHTML" hx-push-url="true"
+      hx-trigger="change, input changed delay:300ms from:input[name=q]">
   <input type="hidden" name="partial" value="1">
-  {{template "host-filter" .Data}}
+  <input type="search" name="q" value="{{$d.Filter.Q}}" placeholder="Search containers" aria-label="Search containers">
+  {{if $d.MultiHost}}{{template "host-filter" $d}}{{end}}
 </form>
-{{end}}
-<section class="card">{{template "stacks-table" .Data}}</section>
+{{template "stacks-table" $d}}
 {{end}}

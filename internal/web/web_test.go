@@ -600,7 +600,7 @@ func TestFooterLinksSource(t *testing.T) {
 	e.ui.SourceURL = "https://gitlab.example/me/wan-drawbridge"
 	e.admin()
 	_, body := e.client().get("/login")
-	if !strings.Contains(body, `href="https://gitlab.example/me/wan-drawbridge"`) || !strings.Contains(body, "AGPL v3 or later") {
+	if !strings.Contains(body, `href="https://gitlab.example/me/wan-drawbridge"`) || !strings.Contains(body, ">AGPL-3.0-or-later<") {
 		t.Fatal("login page lacks the license and source link")
 	}
 }
