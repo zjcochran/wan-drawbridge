@@ -8,35 +8,38 @@
   {{template "timeline" $d.Timeline}}
 </section>
 <section class="card">
-  <h2>Recent events</h2>
+  <div class="card-head"><h2>Recent events</h2><a href="/events">All events</a></div>
   <ul class="events">
-  {{range $d.Events}}<li><time title="{{datetime .TS}}">{{ago .TS}}</time> <strong>{{.Type}}</strong> <span class="sub">{{summary .Payload}}</span></li>
+  {{range $d.Events}}<li><strong>{{.Type}}</strong> <span class="sub">{{summary .Payload}}</span><time title="{{datetime .TS}}">{{ago .TS}}</time></li>
   {{else}}<li class="muted">No events yet.</li>{{end}}
   </ul>
-  <a href="/events">All events</a>
 </section>
 {{end}}
 
 {{define "status"}}
 <section id="status" class="grid two" hx-get="/partials/status" hx-trigger="sse:state, sse:inventory" hx-swap="outerHTML">
-  <div class="card">
+  <div class="card hero {{stateClass .S.State}}">
     <div class="state {{stateClass .S.State}}">
-      <span class="state-label">{{stateLabel .S.State}}</span>
-      {{if eq .S.State "failover_pending"}}<span class="sub">failing over in {{until .S.Due}} unless the primary returns</span>{{end}}
-      {{if eq .S.State "failback_pending"}}<span class="sub">failing back in {{until .S.Due}} if the primary stays stable</span>{{end}}
+      <span class="state-pill">{{if .S.Paused}}Paused{{else if eq .S.State "primary"}}Running normally{{else if eq .S.State "failover"}}Failover: containers stopped{{else if eq .S.State "learning"}}Learning{{else}}Change pending{{end}}</span>
       {{if .S.Paused}}<span class="badge warn">Paused{{if not .S.PausedTill.IsZero}} until {{clock .S.PausedTill}}{{end}}</span>{{end}}
       {{with .S.Busy}}<span class="badge muted spinner">{{.}} containers</span>{{end}}
       {{if not .S.DrillTill.IsZero}}<span class="badge warn">Failover test until {{clock .S.DrillTill}}</span>{{end}}
     </div>
+    <h2 class="state-label">{{if eq .S.State "failover"}}On backup{{else}}{{stateLabel .S.State}}{{end}}{{if and .ISPName (or (eq .S.State "failover") (eq .S.State "failover_pending"))}}: {{.ISPName}}{{end}}</h2>
+    {{if eq .S.State "failover_pending"}}<p class="sub">Failing over in {{until .S.Due}} unless the primary returns.</p>{{end}}
+    {{if eq .S.State "failback_pending"}}<p class="sub">Failing back in {{until .S.Due}} if the primary stays stable.</p>{{end}}
     {{if .S.Flaps}}<div class="banner warn">The primary ISP has been flapping, so failback now waits {{duration .S.Hold}} of stable connection (normally less). This resets after six hours without a failover.</div>{{end}}
-    <dl class="facts">
-      <dt>Current ISP</dt>
-      <dd>{{if .ISPName}}{{.ISPName}} <span class="sub">AS{{.S.ASN}}</span>{{if and .S.Unmetered (ne .S.ISP .S.PrimaryISP)}} <span class="badge muted" title="Counts like the primary: no failover">unmetered</span>{{end}}{{else}}–{{end}}</dd>
-      <dt>Primary ISP</dt>
-      <dd>{{if .Primary}}{{.Primary}}{{else}}<span class="warn-text">Not known yet</span> <a href="/isps">Set it</a>{{end}}</dd>
-      <dt>Public IP</dt><dd>{{or .S.LastIP "–"}}</dd>
-      <dt>Last check</dt><dd><time title="{{datetime .S.LastCheck}}">{{ago .S.LastCheck}}</time>{{if and (not .S.LastCheck.IsZero) (not .S.Conclusive)}} · inconclusive{{end}}</dd>
-      <dt>In this state</dt><dd>since {{ago .S.Since}}</dd>
+    <dl class="tiles">
+      <div class="tile"><dt>Current ISP</dt>
+        <dd>{{if .ISPName}}{{.ISPName}} <span class="sub mono">AS{{.S.ASN}}</span>{{if and .S.Unmetered (ne .S.ISP .S.PrimaryISP)}} <span class="badge muted" title="Counts like the primary: no failover">unmetered</span>{{end}}{{else}}–{{end}}</dd></div>
+      <div class="tile"><dt>Primary ISP</dt>
+        <dd>{{if .Primary}}{{.Primary}}{{else}}<span class="warn-text">Not known yet</span> <a href="/isps">Set it</a>{{end}}</dd></div>
+      <div class="tile"><dt>Public IP</dt><dd class="mono">{{or .S.LastIP "–"}}</dd></div>
+      <div class="tile"><dt>Last check</dt>
+        <dd><time class="mono" title="{{datetime .S.LastCheck}}"{{if not .S.LastCheck.IsZero}} data-live="{{isodate .S.LastCheck}}"{{end}}{{if .S.Interval}} data-every="{{printf "%.0f" .S.Interval.Seconds}}"{{end}}>{{ago .S.LastCheck}}</time>{{if and (not .S.LastCheck.IsZero) (not .S.Conclusive)}} · inconclusive{{end}}
+          <span class="sub next-check" aria-hidden="true"></span></dd>
+        <span class="check-progress" aria-hidden="true"></span></div>
+      <div class="tile"><dt>In this state</dt><dd>since {{ago .S.Since}}</dd></div>
     </dl>
     {{if .IsAdmin}}
     <div class="actions">

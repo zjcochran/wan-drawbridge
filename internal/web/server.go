@@ -269,6 +269,10 @@ func cacheStatic(h http.Handler) http.Handler {
 		} else {
 			w.Header().Set("Cache-Control", "public, max-age=3600")
 		}
+		// Go knows no font types, and the image has no mime.types.
+		if strings.HasSuffix(r.URL.Path, ".woff2") {
+			w.Header().Set("Content-Type", "font/woff2")
+		}
 		h.ServeHTTP(w, r)
 	})
 }

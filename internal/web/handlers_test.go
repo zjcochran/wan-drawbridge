@@ -429,6 +429,21 @@ func TestHomeScreenManifest(t *testing.T) {
 	}
 }
 
+func TestFontsAndSettingsMenu(t *testing.T) {
+	e := newEnv(t)
+	c := e.admin()
+	resp, _ := c.get("/static/fonts/geist.woff2")
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "font/woff2" {
+		t.Fatalf("font: %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	_, page := c.get("/settings")
+	for _, g := range []string{"Failover", "Alerts", "Access", "Data", "You"} {
+		if !strings.Contains(page, "<h2>"+g+"</h2>") {
+			t.Errorf("the settings menu lacks the %s group", g)
+		}
+	}
+}
+
 func TestDatabaseFailureShowsError(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()

@@ -51,15 +51,16 @@
     if (auto && auto.form) auto.form.requestSubmit();
   });
 
-  // The account menu closes on a click elsewhere or on Escape.
+  // The account menu and a phone's More menu close on a click elsewhere or on Escape.
+  const menus = "details.usermenu[open], details.more[open]";
   document.addEventListener("click", (e) => {
-    document.querySelectorAll("details.usermenu[open]").forEach((d) => {
+    document.querySelectorAll(menus).forEach((d) => {
       if (!d.contains(e.target)) d.open = false;
     });
   });
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
-    document.querySelectorAll("details.usermenu[open]").forEach((d) => {
+    document.querySelectorAll(menus).forEach((d) => {
       d.open = false;
       d.querySelector("summary").focus();
     });
@@ -99,6 +100,31 @@
     btn.textContent = btn.dataset.collapse;
     btn.setAttribute("aria-expanded", "true");
   });
+
+  // The dashboard's last check counts up every second, with the time to the
+  // next check and a bar filling towards it. The status card is replaced on
+  // each check, so this reads the elements afresh each time.
+  function ago(sec) {
+    if (sec < 10) return "just now";
+    if (sec < 60) return sec + "s ago";
+    return Math.floor(sec / 60) + "m ago";
+  }
+  function tick() {
+    document.querySelectorAll("time[data-live]").forEach((t) => {
+      const sec = Math.max(0, Math.floor((Date.now() - Date.parse(t.dataset.live)) / 1000));
+      if (sec >= 3600) return; // older checks keep the server's wording
+      t.textContent = ago(sec);
+      const every = Number(t.dataset.every);
+      const tile = t.closest(".tile");
+      if (!every || !tile) return;
+      const left = every - sec;
+      tile.querySelector(".next-check").textContent = left > 0 ? "next in " + left + "s" : "checking…";
+      tile.querySelector(".check-progress").style.width = Math.min(100, (sec / every) * 100) + "%";
+    });
+  }
+  setInterval(tick, 1000);
+  document.addEventListener("DOMContentLoaded", tick);
+  document.addEventListener("htmx:afterSwap", tick);
 
   // Forms marked data-reset-on-success clear after a successful HTMX post.
   document.addEventListener("htmx:afterRequest", (e) => {

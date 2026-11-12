@@ -242,6 +242,22 @@ func TestSameISPOnAnotherASNIsNotAFailover(t *testing.T) {
 	}
 }
 
+func TestStatusInterval(t *testing.T) {
+	ctx := context.Background()
+	f := newFakeWAN(t)
+	m := newMonitor(t, f, &countingActor{})
+	m.cfg.PrimaryASN = 64500
+	m.Check(ctx)
+	if got := m.Status().Interval; got != m.cfg.CheckInterval {
+		t.Fatalf("on the primary: interval %s, want %s", got, m.cfg.CheckInterval)
+	}
+	f.ip.Store("198.51.100.3")
+	m.Check(ctx)
+	if got := m.Status().Interval; m.state.Machine.State != wan.FailoverPending || got != m.cfg.PendingCheck() {
+		t.Fatalf("pending: state %s, interval %s, want %s", m.state.Machine.State, got, m.cfg.PendingCheck())
+	}
+}
+
 func TestUnmeteredBackupIsNotAFailover(t *testing.T) {
 	ctx := context.Background()
 	f := newFakeWAN(t)

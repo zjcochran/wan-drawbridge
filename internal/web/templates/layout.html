@@ -2,18 +2,19 @@
 <html lang="en"{{with .Session}} data-theme="{{.User.Theme}}" data-mode="{{.User.Mode}}"{{end}}>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{.Title}} · WAN Drawbridge</title>
 <link rel="icon" href="{{static "icon.png"}}" type="image/png">
 <!-- Added to a phone's home screen, Drawbridge opens as an app of its own:
      full screen, with its icon. -->
 <link rel="manifest" href="{{static "manifest.json"}}">
 <link rel="apple-touch-icon" href="{{static "apple-touch-icon.png"}}">
-<meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0f1216" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f5f6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111214" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Drawbridge">
+<link rel="preload" href="/static/fonts/geist.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{{static "app.css"}}">
 <script src="{{static "htmx.min.js"}}" defer></script>
 <script src="{{static "htmx-sse.min.js"}}" defer></script>
@@ -21,16 +22,25 @@
 </head>
 <body{{with .Session}} hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}' hx-ext="sse" sse-connect="/sse"{{end}}>
 {{if .Session}}
-<header class="topbar">
-  <a class="brand" href="/"><img src="{{static "icon.png"}}" alt="" width="22" height="22"> WAN Drawbridge</a>
-  <nav>
-    <a href="/" {{if eq .Nav "dashboard"}}aria-current="page"{{end}}>Dashboard</a>
-    <a href="/stacks" {{if eq .Nav "stacks"}}aria-current="page"{{end}}>Stacks</a>
-    <a href="/containers" {{if eq .Nav "containers"}}aria-current="page"{{end}}>Containers</a>
-    <a href="/isps" {{if eq .Nav "isps"}}aria-current="page"{{end}}>ISPs</a>
-    <a href="/events" {{if eq .Nav "events"}}aria-current="page"{{end}}>Events</a>
-    <a href="/reports" {{if or (eq .Nav "reports") (eq .Nav "outage")}}aria-current="page"{{end}}>Reports</a>
-    <a href="/settings" {{if eq .Nav "settings"}}aria-current="page"{{end}}>Settings</a>
+<div class="shell">
+<aside class="sidebar"><div class="sidebar-in">
+  <a class="brand" href="/"><img src="{{static "icon.png"}}" alt="" width="30" height="30"> WAN Drawbridge</a>
+  <nav class="mainnav" aria-label="Main">
+    {{template "navlink" (dict "Href" "/" "Label" "Dashboard" "Icon" "dashboard" "On" (eq .Nav "dashboard"))}}
+    {{template "navlink" (dict "Href" "/stacks" "Label" "Stacks" "Icon" "stacks" "On" (eq .Nav "stacks"))}}
+    {{template "navlink" (dict "Href" "/containers" "Label" "Containers" "Icon" "containers" "On" (eq .Nav "containers"))}}
+    {{template "navlink" (dict "Href" "/isps" "Label" "ISPs" "Icon" "isps" "On" (eq .Nav "isps"))}}
+    {{template "navlink" (dict "Href" "/events" "Label" "Events" "Icon" "events" "On" (eq .Nav "events") "Extra" true)}}
+    {{template "navlink" (dict "Href" "/reports" "Label" "Reports" "Icon" "reports" "On" (or (eq .Nav "reports") (eq .Nav "outage")) "Extra" true)}}
+    {{template "navlink" (dict "Href" "/settings" "Label" "Settings" "Icon" "settings" "On" (eq .Nav "settings") "Extra" true)}}
+    <details class="more{{if or (eq .Nav "events") (eq .Nav "reports") (eq .Nav "outage") (eq .Nav "settings")}} on{{end}}">
+      <summary>{{template "icon" "more"}}<span>More</span></summary>
+      <div class="more-list">
+        <a href="/events">{{template "icon" "events"}}Events</a>
+        <a href="/reports">{{template "icon" "reports"}}Reports</a>
+        <a href="/settings">{{template "icon" "settings"}}Settings</a>
+      </div>
+    </details>
   </nav>
   <details class="usermenu">
     <summary aria-label="Account menu for {{.Session.User.Username}}">{{template "avatar" .Session.User}}<span class="usermenu-name">{{.Session.User.Username}}</span></summary>
@@ -42,20 +52,49 @@
       </form>
     </div>
   </details>
-</header>
+</div></aside>
+<div class="page">
 {{if not .Setup}}{{if and .Session.User.IsAdmin (ne .Nav "setup")}}<div class="banner warn">Setup is not finished, so Drawbridge is only watching. <a href="/setup?step=2">Finish setup</a></div>{{end}}
 {{else if .Status.Paused}}<div class="banner warn">Automation is paused{{if not .Status.PausedTill.IsZero}} until {{clock .Status.PausedTill}} (in {{until .Status.PausedTill}}){{end}}: Drawbridge keeps checking but will not stop or start containers.</div>{{end}}
+{{template "main" .}}
+{{template "footer" .}}
+</div>
+</div>
+{{else}}
+{{template "main" .}}
+{{template "footer" .}}
 {{end}}
+<div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
+{{end}}
+
+{{define "main"}}
 <main class="{{if not .Session}}narrow{{else if eq .Nav "isps"}}wide{{end}}">
 {{with .Flash}}<div class="banner ok">{{.}}</div>{{end}}
 {{template "content" .}}
 </main>
+{{end}}
+
+{{define "footer"}}
 <footer class="footer">
   WAN Drawbridge {{or .Version "dev"}} ·
   <a href="https://www.gnu.org/licenses/agpl-3.0.html" rel="license noreferrer" target="_blank">AGPL-3.0-or-later</a>{{with .Source}}
   · <a href="{{.}}" rel="noreferrer" target="_blank">Source code</a>{{end}}
 </footer>
-<div id="toast" role="status" aria-live="polite"></div>
-</body>
-</html>
 {{end}}
+
+{{/* navlink is one page in the main menu. Extra pages sit under More in a phone's tab bar. */}}
+{{define "navlink"}}<a href="{{.Href}}"{{if .Extra}} class="extra"{{end}}{{if .On}} aria-current="page"{{end}}>{{template "icon" .Icon}}<span>{{.Label}}</span></a>{{end}}
+
+{{/* icon is a line icon from the menu, drawn in the text colour. */}}
+{{define "icon"}}<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+{{- if eq . "dashboard"}}<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+{{- else if eq . "stacks"}}<path d="m12 3 9 4.5-9 4.5-9-4.5Z"/><path d="m3 12 9 4.5 9-4.5M3 16.5 12 21l9-4.5"/>
+{{- else if eq . "containers"}}<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>
+{{- else if eq . "isps"}}<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>
+{{- else if eq . "events"}}<path d="M3 12h4l3-8 4 16 3-8h4"/>
+{{- else if eq . "reports"}}<path d="M5 20V11M11 20V4M17 20v-6M3 20h18"/>
+{{- else if eq . "settings"}}<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>
+{{- else if eq . "more"}}<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
+{{- end}}</svg>{{end}}

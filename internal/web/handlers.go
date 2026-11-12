@@ -886,21 +886,23 @@ func (s *Server) saveAppearance(w http.ResponseWriter, r *http.Request) {
 // settingsTab is one tab of the Settings page, at /settings/{ID}.
 type settingsTab struct {
 	ID, Name string
-	Admin    bool // only admins see and open it
+	Group    string // the heading it sits under in the menu
+	Admin    bool   // only admins see and open it
 }
 
-// settingsTabs are the Settings tabs in order. The first is also /settings.
+// settingsTabs are the Settings tabs in menu order, grouped. The first is
+// also /settings.
 var settingsTabs = []settingsTab{
-	{ID: "detection", Name: "WAN detection"},
-	{ID: "notifications", Name: "Notifications", Admin: true},
-	{ID: "backup", Name: "Backup and restore", Admin: true},
-	{ID: "users", Name: "Users", Admin: true},
-	{ID: "sso", Name: "Single sign-on", Admin: true},
-	{ID: "api", Name: "API tokens", Admin: true},
-	{ID: "hosts", Name: "Hosts"},
-	{ID: "container-filters", Name: "Container filters"},
-	{ID: "account", Name: "Your account"},
-	{ID: "system", Name: "System"},
+	{ID: "detection", Name: "WAN detection", Group: "Failover"},
+	{ID: "hosts", Name: "Hosts", Group: "Failover"},
+	{ID: "container-filters", Name: "Container filters", Group: "Failover"},
+	{ID: "notifications", Name: "Notifications", Group: "Alerts", Admin: true},
+	{ID: "users", Name: "Users", Group: "Access", Admin: true},
+	{ID: "sso", Name: "Single sign-on", Group: "Access", Admin: true},
+	{ID: "api", Name: "API tokens", Group: "Access", Admin: true},
+	{ID: "backup", Name: "Backup and restore", Group: "Data", Admin: true},
+	{ID: "account", Name: "Your account", Group: "You"},
+	{ID: "system", Name: "System", Group: "You"},
 }
 
 // settingsPage shows one tab of Settings, loading only what that tab needs.

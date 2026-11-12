@@ -2,13 +2,25 @@
 
 The web UI is a set of server-rendered pages that update themselves live: when
 the WAN state changes or a container starts or stops, open pages refresh the
-affected part within a second, without reloading. It works on phones (the
-navigation bar and the Settings tabs scroll sideways) and follows your system's light or dark mode,
-in the colour theme you choose (see [Appearance](#appearance)).
+affected part within a second, without reloading. It follows your system's
+light or dark mode, in the colour theme you choose (see [Appearance](#appearance)).
 
-Your picture and username sit at the top right. Click them for a menu with
-**Your account** (Settings → Your account) and **Sign out**; a click elsewhere
-or Escape closes it. On a phone only the picture is shown.
+The pages are listed in a sidebar on the left. Your picture and username sit at
+its foot: click them for a menu with **Your account** (Settings → Your account)
+and **Sign out**; a click elsewhere or Escape closes it.
+
+On a phone (a screen narrower than 48rem) the name and your picture sit in a bar
+along the top, and the pages are a tab bar along the bottom: **Dashboard**,
+**Stacks**, **Containers**, **ISPs** and **More**, which opens **Events**,
+**Reports** and **Settings**. The tab bar keeps clear of the notch and the home
+indicator.
+
+![The dashboard on a phone](../images/phone-dashboard.jpg)
+
+A phone can add Drawbridge to its home screen (Safari: Share, then **Add to
+Home Screen**; Chrome: **Install app** or **Add to Home screen**). It then opens
+full screen with its own icon, named "Drawbridge", without the browser's
+address bar.
 
 There are two roles:
 
@@ -32,17 +44,19 @@ browser's address bar.
 
 ### Status card
 
-The coloured dot and label show the state:
+The large card at the top shows the state as a coloured badge and a heading:
 
-| Label | Colour | Meaning |
+| Heading | Badge | Meaning |
 | --- | --- | --- |
-| Learning | grey | No primary ISP is known yet. Nothing is stopped. |
-| On primary | green | Traffic leaves through the primary ISP. |
-| Failover pending | amber | Traffic is on a backup ISP; Drawbridge is confirming it. Shows "failing over in 32s unless the primary returns". |
-| Failover | red | Confirmed on a backup. Selected containers are stopped. |
-| Failback pending | amber | The primary is back; Drawbridge is making sure it stays. Shows "failing back in 4m 56s if the primary stays stable". |
+| Learning | Learning (grey) | No primary ISP is known yet. Nothing is stopped. |
+| On primary | Running normally (green) | Traffic leaves through the primary ISP. |
+| Failover pending: *ISP* | Change pending (amber) | Traffic is on a backup ISP; Drawbridge is confirming it. Shows "Failing over in 32s unless the primary returns." |
+| On backup: *ISP* | Failover: containers stopped (amber, with an amber edge on the card) | Confirmed on a backup. Selected containers are stopped. |
+| Failback pending | Change pending (amber) | The primary is back; Drawbridge is making sure it stays. Shows "Failing back in 4m 56s if the primary stays stable." |
 
-Badges next to the label:
+While automation is paused the badge reads **Paused**.
+
+Badges next to it:
 
 - **Paused**: automation is paused; states still change but no container is
   touched.
@@ -52,14 +66,14 @@ Badges next to the label:
 If the primary ISP has been flapping, a banner explains how long failback now
 waits (see [flapping](during-an-outage.md#flapping)).
 
-The facts below the label:
+The tiles below the heading:
 
-| Fact | Meaning |
+| Tile | Meaning |
 | --- | --- |
 | Current ISP | The ISP of the last conclusive check, with the ASN that announced the IP. |
 | Primary ISP | The primary, or "Not known yet" with a link to the ISPs page. |
 | Public IP | The IPv4 address the providers agreed on. |
-| Last check | How long ago; "· inconclusive" if the last check could not determine the IP. |
+| Last check | How long ago, counting up every second; "· inconclusive" if the last check could not determine the IP. Below it, "next in 34s", and a bar along the tile's foot fills towards the next check: one check interval after the last, or `min(15s, interval)` while a change is pending. |
 | In this state | How long the current state has lasted. |
 
 ### Buttons (admins)
@@ -302,20 +316,22 @@ sizes are in decimal units (1 MB = 1,000,000 bytes).
 ![Settings, WAN detection tab](../images/settings.jpg)
 
 Settings has one tab per section, each at its own address, so a tab can be
-bookmarked. `/settings` opens the first one.
+bookmarked. `/settings` opens the first one. The tabs are a menu down the left,
+grouped under **Failover**, **Alerts**, **Access**, **Data** and **You**; on a
+narrow screen they become one row that scrolls sideways.
 
-| Tab | Address | Who | Contents |
-| --- | --- | --- | --- |
-| WAN detection | `/settings/detection` | everyone | The detection settings described in the [setup wizard](setup-wizard.md#4-wan-detection), and the [scheduled failover test](during-an-outage.md#scheduled-tests). Viewers see them read-only. Changes apply from the next check. |
-| Notifications | `/settings/notifications` | admins | Channels that get events; see [Notifications](notifications.md). |
-| Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
-| Users | `/settings/users` | admins | Accounts; see [Users](#users). |
-| Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
-| API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
-| Container filters | `/settings/container-filters` | everyone | Patterns of containers the Containers page hides; see [Container filters](#container-filters). Viewers see them read-only. |
-| Hosts | `/settings/hosts` | everyone | The local host and the agent hosts, with their status, version and key (Swarm, Proxmox VE and Kubernetes hosts marked **experimental**, as they are [not yet tested on real equipment](hosts.md#tested-so-far)); admins add hosts, rotate keys, revoke, disable, rename and remove them. See [Hosts and agents](hosts.md). Viewers see the list read-only, without the manager key. |
-| Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); [two-factor sign-in](#two-factor-sign-in); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
-| System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
+| Group | Tab | Address | Who | Contents |
+| --- | --- | --- | --- | --- |
+| Failover | WAN detection | `/settings/detection` | everyone | The detection settings described in the [setup wizard](setup-wizard.md#4-wan-detection), and the [scheduled failover test](during-an-outage.md#scheduled-tests). Viewers see them read-only. Changes apply from the next check. |
+| Failover | Hosts | `/settings/hosts` | everyone | The local host and the agent hosts, with their status, version and key (Swarm, Proxmox VE and Kubernetes hosts marked **experimental**, as they are [not yet tested on real equipment](hosts.md#tested-so-far)); admins add hosts, rotate keys, revoke, disable, rename and remove them. See [Hosts and agents](hosts.md). Viewers see the list read-only, without the manager key. |
+| Failover | Container filters | `/settings/container-filters` | everyone | Patterns of containers the Containers page hides; see [Container filters](#container-filters). Viewers see them read-only. |
+| Alerts | Notifications | `/settings/notifications` | admins | Channels that get events; see [Notifications](notifications.md). |
+| Access | Users | `/settings/users` | admins | Accounts; see [Users](#users). |
+| Access | Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
+| Access | API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
+| Data | Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
+| You | Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); [two-factor sign-in](#two-factor-sign-in); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
+| You | System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
 
 Viewers do not see the admin tabs; opening one's address gives 403.
 
