@@ -461,10 +461,8 @@ code { font-size: 0.85em; background: var(--surface-2); padding: 0.1rem 0.35rem;
    cell of a row lines up, whatever else the cell holds below. */
 #isps-table input:not([type="checkbox"]), #isps-table select { height: 2.6rem; }
 #isps-table .line { display: flex; align-items: center; gap: 0.5rem; min-height: 2.6rem; }
-#isps-table form.inline { flex-wrap: nowrap; }
 /* An ASN's name stays whole; its Move to… menu wraps under it when narrow. */
 #isps-table .asn-list li.line { flex-wrap: wrap; row-gap: 0.3rem; }
-#isps-table .asn-list .sub { white-space: nowrap; }
 /* ISPs page: an ISP's data limits. */
 .limits { display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
 .limits label { font-weight: 400; white-space: nowrap; }
@@ -638,7 +636,7 @@ dialog.jump input { width: 100%; border: 0; border-bottom: 1px solid var(--borde
 .crows { list-style: none; margin: 0; padding: 0; }
 .crow { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 0.4rem 1rem; align-items: center; padding: 0.65rem 0; border-top: 1px solid var(--border); }
 .crow.review { background: linear-gradient(90deg, var(--warn-bg), transparent 70%); margin: 0 -0.6rem; padding: 0.65rem 0.6rem; border-radius: 8px; }
-.cname { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.5rem; min-width: 0; }
+.cname { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.5rem; min-width: 0; overflow-wrap: anywhere; }
 .cname .sub { flex-basis: 100%; padding-left: 1.2rem; }
 .cresult { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.5rem; }
 .crow select { min-width: 11rem; }
@@ -649,7 +647,7 @@ dialog.jump input { width: 100%; border: 0; border-bottom: 1px solid var(--borde
 .isp-cards > .card { margin: 0; display: flex; flex-direction: column; gap: 0.75rem; }
 .isp-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .isp-head h2 { margin: 0; }
-.isp-name input { font-weight: 650; font-size: 1.05rem; width: 11rem; }
+.isp-name input { font-weight: 650; font-size: 1.05rem; }
 .isp-card > .sub { margin: -0.4rem 0 0; }
 .role-badge { font-size: 0.78rem; font-weight: 600; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
 .role-primary { background: var(--ok-bg); color: var(--ok); }
@@ -665,7 +663,12 @@ dialog.jump input { width: 100%; border: 0; border-bottom: 1px solid var(--borde
 .isp-label { width: 6.5rem; color: var(--muted); font-size: 0.9rem; }
 .isp-limits { align-items: flex-start; }
 .isp-asns { display: flex; gap: 0.6rem; align-items: flex-start; border-top: 1px solid var(--border); padding-top: 0.75rem; }
-.isp-asns .asn-list { flex: 1; }
+.isp-asns .asn-list { flex: 1; min-width: 0; }
+/* Long names wrap inside the card rather than running past its edge. */
+.isp-card, .isp-card * { min-width: 0; }
+.isp-card .sub, .isp-card .asn-list li { overflow-wrap: anywhere; }
+.isp-name { flex: 1 1 12rem; }
+.isp-name input { flex: 1 1 8rem; width: auto; }
 .strips { display: grid; gap: 0.5rem; }
 .strip-row { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 0.75rem; align-items: center; }
 .strip-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
