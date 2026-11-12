@@ -104,9 +104,11 @@ Drawbridge's log.
 | `shellcheck` | test | `koalaman/shellcheck-alpine:v0.11.0` | ShellCheck on every tracked `*.sh` file; fails on any finding, style notes included | `codequality` (converted from ShellCheck's JSON with `jq`) |
 | `semgrep-sast` | test | GitLab template | SAST (Semgrep rules for Go), with no per-rule time limit (`SAST_SCANNER_ALLOWED_CLI_OPTS: "--timeout=0"`): the default 5 seconds per rule and file left the largest test files partly unscanned, which the report does not show. Not allowed to fail. | `sast` |
 | `secret_detection` | test | GitLab template | Secret scanning of the repository. Not allowed to fail. | `secret_detection` |
+| `leak-check` | test | `alpine:3` | `ci/leak-check.sh`: fails if the internal GitLab server (`CI_SERVER_HOST`, case-insensitive) is named in the files; in a merge request also in its commits (author, committer, message and added lines, `range` from `CI_MERGE_REQUEST_DIFF_BASE_SHA`), its title and its description. | |
+| `dependency-scan` | test | `golang:1.26` | `ci/osv-report.sh`: osv-scanner (`OSV_SCANNER_VERSION`, built from source through the Go module proxy) checks `go.mod` against OSV.dev and writes the findings in GitLab's dependency scanning format, one per vulnerability. Fails if the scan cannot run; findings themselves fail `security-gate`. | `gl-dependency-scanning-report.json` (artifact, 30 days) |
 | `build-image` | test | `docker:28` + dind | Builds the image and saves it as `drawbridge.tar` (artifact, 1 day) | |
 | `container_scanning` | smoke | GitLab template | Scans `archive://drawbridge.tar`, including Go modules in the binary (`CS_DISABLE_LANGUAGE_VULNERABILITY_SCAN: "false"`). Not allowed to fail: findings do not fail it, a broken scan does. | `container_scanning`, `cyclonedx` SBOM |
-| `security-gate` | smoke | `alpine:3` | `ci/security-gate.sh` on the three scan reports: prints every finding and fails on any of any severity not accepted in `ci/security-allowlist.txt`, or on a missing or unreadable report. See [Security findings](#security-findings). | `codequality: gl-code-quality-security.json` (also when it fails) |
+| `security-gate` | smoke | `alpine:3` | `ci/security-gate.sh` on the four scan reports (SAST, secret detection, dependency scanning, container scanning): prints every finding and fails on any of any severity not accepted in `ci/security-allowlist.txt`, or on a missing or unreadable report. See [Security findings](#security-findings). | `codequality: gl-code-quality-security.json` (also when it fails) |
 | `smoke` | smoke | `docker:28` + dind | `test/smoke/smoke.sh` | `junit: smoke-report.xml` |
 | `release-label` | test | `alpine:3` | Merge request pipelines only: fails unless the MR has exactly one of the labels `major`, `minor`, `patch`. | |
 | `release` | release | `alpine:3` | Pushes to the default branch only: `ci/release.sh` creates the next version's tag and GitLab release. | `dotenv: release.env` |
@@ -212,7 +214,8 @@ Every job in a merge request pipeline must pass. Together they enforce:
 | Tests | `test` | Any test fails (with the race detector) |
 | Coverage | `test` | Any package is below 80% |
 | Code quality | `code-quality`, `shellcheck` | `golangci-lint` or ShellCheck reports any issue |
-| Security | `semgrep-sast`, `secret_detection`, `container_scanning`, `security-gate` | A scanner fails, or reports any finding that is not accepted |
+| Security | `semgrep-sast`, `secret_detection`, `dependency-scan`, `container_scanning`, `security-gate` | A scanner fails, or reports any finding that is not accepted |
+| Leaks | `leak-check` | The internal GitLab server is named in the files, or in the merge request's commits, title or description |
 | Image and real Docker | `build-image`, `smoke` | The image does not build or the smoke test fails |
 | Version | `release-label` | The MR lacks exactly one of `major`, `minor`, `patch` |
 
@@ -268,15 +271,17 @@ git ls-files -z '*.sh' | xargs -0 shellcheck
 | Coverage percentage | Pipeline list and job; can be used for a badge |
 | Line coverage | Merge request diff gutter (Cobertura) |
 | Lint issues | Merge request **Code Quality** widget (new and fixed issues compared with the target branch) |
-| SAST, secret detection, container scanning | The `security-gate` log and the merge request **Code Quality** widget (see [Security findings](#security-findings)); the raw reports as job artifacts (JSON); the Security tab and MR widgets on Ultimate only |
+| SAST, secret detection, dependency scanning, container scanning | The `security-gate` log and the merge request **Code Quality** widget (see [Security findings](#security-findings)); the raw reports as job artifacts (JSON); the Security tab and MR widgets on Ultimate only |
 
 ### Security findings
 
 GitLab Free runs SAST, secret detection and container scanning, but its
 merge request widget only says that they ran: listing the findings, and
-blocking a merge on them, are Ultimate features. `security-gate` does both:
+blocking a merge on them, are Ultimate features. Its own dependency scanning
+needs Ultimate too, so `dependency-scan` runs osv-scanner instead.
+`security-gate` does both:
 
-- It prints every finding of the three reports, of any severity, with its
+- It prints every finding of the four reports, of any severity, with its
   identifier and file and line (or package and version), and fails the job on
   any that is not accepted. So does a missing or unreadable report.
 - The findings that are not accepted also go into
