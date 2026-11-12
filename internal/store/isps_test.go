@@ -57,6 +57,10 @@ func TestASNsGroupIntoOneISP(t *testing.T) {
 	if got[a] != 150 || got[c] != 30 {
 		t.Fatalf("shares = %v", got)
 	}
+	daily, err := s.DailySeconds(ctx, now)
+	if d := now.UTC().Format(time.DateOnly); err != nil || daily[a][d] != 150 || daily[c][d] != 30 {
+		t.Fatalf("daily = %v, %v", daily, err)
+	}
 }
 
 func TestMetered(t *testing.T) {

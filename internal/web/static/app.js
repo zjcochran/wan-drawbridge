@@ -126,6 +126,58 @@
   document.addEventListener("DOMContentLoaded", tick);
   document.addEventListener("htmx:afterSwap", tick);
 
+  // The jump box: ⌘K or Ctrl+K (or the sidebar button) opens it; arrow keys
+  // move between the results and Enter opens the chosen one.
+  function openJump() {
+    const dlg = document.getElementById("jump");
+    if (!dlg || dlg.open) return;
+    const input = dlg.querySelector("input");
+    input.value = "";
+    dlg.showModal();
+    input.focus();
+    htmx.trigger(input, "jump-open");
+  }
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      openJump();
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-jump]")) openJump();
+    if (e.target.id === "jump") e.target.close(); // a click on the backdrop
+  });
+  document.addEventListener("keydown", (e) => {
+    const dlg = e.target.closest && e.target.closest("#jump");
+    if (!dlg || !["ArrowDown", "ArrowUp", "Enter"].includes(e.key)) return;
+    const links = [...dlg.querySelectorAll("#jump-results a")];
+    const at = links.findIndex((a) => a.classList.contains("active"));
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (links[at]) links[at].click();
+      return;
+    }
+    e.preventDefault();
+    const next = links[(at + (e.key === "ArrowDown" ? 1 : -1) + links.length) % links.length];
+    links.forEach((a) => a.classList.toggle("active", a === next));
+    if (next) next.scrollIntoView({ block: "nearest" });
+  });
+
+  // An open stack card stays open when the list refreshes.
+  let openStacks = [];
+  document.addEventListener("htmx:beforeSwap", (e) => {
+    if (e.detail.target.id === "stacks-table") {
+      openStacks = [...e.detail.target.querySelectorAll("details.stack-card[open]")].map((d) => d.id);
+    }
+  });
+  document.addEventListener("htmx:afterSwap", (e) => {
+    if (e.detail.target.id !== "stacks-table" && !document.getElementById("stacks-table")) return;
+    openStacks.forEach((id) => {
+      const d = document.getElementById(id);
+      if (d) d.open = true;
+    });
+  });
+
   // Forms marked data-reset-on-success clear after a successful HTMX post.
   document.addEventListener("htmx:afterRequest", (e) => {
     const form = e.detail.elt.closest && e.detail.elt.closest("form[data-reset-on-success]");

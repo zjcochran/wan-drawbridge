@@ -12,44 +12,60 @@
 {{end}}
 
 {{define "stacks-table"}}
-<div id="stacks-table" hx-get="/stacks?partial=1" hx-include="#stack-filters" hx-trigger="sse:inventory" hx-swap="outerHTML">
-<div class="table-wrap">
-<table>
-  <thead><tr><th>Stack</th>{{if .MultiHost}}<th>Host</th>{{end}}<th>Containers</th><th>On failover</th><th>Stop whole stack</th><th></th></tr></thead>
-  <tbody>
-  {{range $i, $s := .Stacks}}
-  <tr{{if .Down}} class="dim"{{end}}>
-    <td><strong>{{.Project}}</strong></td>
-    {{if $.MultiHost}}<td><a href="/stacks?host={{.HostID}}">{{.Host}}</a></td>{{end}}
-    <td>{{if .Down}}<span class="muted">host offline</span>{{else}}{{.Running}} running of {{.Containers}}{{end}}</td>
-    <td>
-      {{if eq .Status "disabled"}}<span class="badge bad">Stops (stack rule)</span>
-      {{else if eq .Status "partial"}}<span class="badge warn">Partial · {{.Disabling}} of {{.Containers}}</span>
-      {{else}}<span class="badge muted">Not affected</span>{{end}}
-    </td>
-    <td>
-      {{if $.IsAdmin}}
-      <label class="switch" title="Changing this resets every container in the stack to follow it">
-        <input type="checkbox" name="disable" {{if .Disabled}}checked{{end}}
-               hx-post="/stacks/{{.HostID}}/{{.Project}}/policy" hx-include="#stack-filters" hx-target="#stacks-table" hx-swap="outerHTML">
-        <span class="slider"></span>
-        <span class="visually-hidden">Stop {{.Project}} on failover</span>
-      </label>
-      {{else}}{{if .Disabled}}Yes{{else}}No{{end}}{{end}}
-    </td>
-    <td class="right">
-      <button class="link" hx-get="/stacks/{{.HostID}}/{{.Project}}/containers" hx-target="#stack-{{$i}}" hx-swap="innerHTML"
-              data-collapse="Hide containers" aria-expanded="false" aria-controls="stack-{{$i}}">Show containers</button>
-    </td>
-  </tr>
-  <tr class="detail"><td colspan="6" id="stack-{{$i}}"></td></tr>
-  {{else}}
-  <tr><td colspan="6" class="empty">No Compose stacks found. Stacks appear here once Drawbridge can read Docker.</td></tr>
+<div id="stacks-table" hx-get="/stacks?partial=1" hx-include="#stack-filters, #stacks-table input[name=show]" hx-trigger="sse:inventory" hx-swap="outerHTML">
+<input type="hidden" name="show" value="{{.Filter.Show}}">
+<nav class="chips" aria-label="Show">
+  {{$q := .Filter}}
+  {{range $c := (list "" "stop" "keep" "review")}}
+  <a class="chip" href="/stacks?show={{$c}}{{with $q.Host}}&amp;host={{.}}{{end}}{{with $q.Q}}&amp;q={{query .}}{{end}}" {{if eq $c $q.Show}}aria-current="page"{{end}}
+     hx-get="/stacks?partial=1&amp;show={{$c}}" hx-include="#stack-filters" hx-target="#stacks-table" hx-swap="outerHTML" hx-push-url="/stacks?show={{$c}}">
+    {{if eq $c ""}}All <span>{{$.Counts.All}}</span>{{else if eq $c "stop"}}Stop <span>{{$.Counts.Stop}}</span>{{else if eq $c "keep"}}Keep running <span>{{$.Counts.Keep}}</span>{{else}}Needs review <span>{{$.Counts.Review}}</span>{{end}}</a>
   {{end}}
-  </tbody>
-</table>
-</div>
-<p class="hint">Turning a stack on or off resets every container in it to follow the stack. To make exceptions, use the <a href="/containers">Containers</a> page.</p>
+</nav>
+{{range $i, $s := .Stacks}}{{if or .Rows (not $.Filtering)}}
+<details class="stack-card{{if .Down}} dim{{end}}" id="stack-{{.HostID}}-{{if .Standalone}}-{{else}}{{.Project}}{{end}}" {{if or $.Filtering .Split .Disabled}}open{{end}}>
+  <summary>
+    <span class="stack-name">{{if .Standalone}}Standalone{{else}}{{.Project}}{{end}}</span>
+    {{if $.MultiHost}}<span class="badge muted">{{.Host}}</span>{{end}}
+    <span class="sub">{{.Containers}} {{if eq .Containers 1}}container{{else}}containers{{end}} · {{if not .Down}}{{.Running}} running · {{end}}{{if .Down}}host offline{{else if .Split}}split: {{.Stop}} stop, {{.Keep}} keep running{{else if .Stop}}stop on failover{{else}}keep running{{end}}</span>
+    {{if not .Standalone}}{{if $.IsAdmin}}    <div class="seg" role="group" aria-label="On failover, {{.Project}}">
+      <button type="button" class="{{if and (not .Disabled) (not .Split)}}on keep{{end}}" aria-pressed="{{and (not .Disabled) (not .Split)}}"
+        hx-post="/stacks/{{.HostID}}/{{.Project}}/policy" hx-vals='{"disable": ""}' hx-include="#stack-filters, #stacks-table input[name=show]"
+        hx-target="#stacks-table" hx-swap="outerHTML"{{if .Split}} hx-confirm="Every container in {{.Project}} will follow the stack again and keep running."{{end}}>Keep running</button>
+      {{if .Split}}<span class="on split">Split</span>{{end}}
+      <button type="button" class="{{if and .Disabled (not .Split)}}on stop{{end}}" aria-pressed="{{and .Disabled (not .Split)}}"
+        hx-post="/stacks/{{.HostID}}/{{.Project}}/policy" hx-vals='{"disable": "on"}' hx-include="#stack-filters, #stacks-table input[name=show]"
+        hx-target="#stacks-table" hx-swap="outerHTML"{{if .Split}} hx-confirm="Every container in {{.Project}} will follow the stack again and stop on failover."{{end}}>Stop</button>
+    </div>
+    {{else if .Split}}<span class="badge warn">Split</span>{{else if .Stop}}<span class="badge bad">Stops</span>{{end}}{{end}}
+  </summary>
+  <div class="stack-body">
+    <ul class="crows">
+    {{range .Rows}}
+      <li class="crow{{if .NeedsReview}} review{{end}}">
+        <input type="hidden" name="view" value="stacks"><input type="hidden" name="container_host" value="{{.HostID}}"><input type="hidden" name="key" value="{{.Key}}">
+        <span class="cname"><span class="dot {{.State}}" title="{{.State}}"></span><strong>{{.Name}}</strong>{{if .NeedsReview}} <span class="badge new">New</span>{{end}}
+          {{if ne .Name .Key}}<span class="sub">{{.Key}}</span>{{end}}</span>
+        <span class="cresult">{{if eq .Effective "disable"}}<span class="badge bad">Stops</span>{{else}}<span class="badge ok">Keeps running</span>{{end}}
+          <span class="sub{{if .NeedsReview}} warn-text{{end}}">{{if .NeedsReview}}until reviewed{{else}}{{.Source}}{{end}}</span></span>
+        {{if $.IsAdmin}}
+        <select name="policy" aria-label="Setting for {{.Name}}" hx-post="/containers/policy" hx-include="closest li, #stack-filters, #stacks-table input[name=show]"
+                hx-target="#stacks-table" hx-swap="outerHTML"
+                {{if and .StackDisabled (eq .Policy "inherit") (not .Label)}}hx-confirm="This removes the stack-wide setting from {{.Project}}: its other containers stay set to stop, one by one."{{end}}>
+          <option value="inherit" {{if eq .Policy "inherit"}}selected{{end}}>{{if eq .Label "disable"}}Follow label (stop){{else if eq .Label "keep"}}Follow label (keep running){{else if .Project}}Follow stack{{else}}Default (keep running){{end}}</option>
+          <option value="disable" {{if eq .Policy "disable"}}selected{{end}}>Stop on failover</option>
+          <option value="keep" {{if eq .Policy "keep"}}selected{{end}}>Keep running</option>
+        </select>
+        {{end}}
+      </li>
+    {{else}}<li class="muted">No containers match.</li>{{end}}
+    </ul>
+  </div>
+</details>
+{{end}}{{else}}
+<p class="empty card">No containers found. They appear here once Drawbridge can read Docker.</p>
+{{end}}
+<p class="hint">Changing a stack's switch resets every container in it to follow the stack. <a href="/containers">Containers</a> lists every container in one table, to change several at once. <a href="/preview">Preview what a failover would stop →</a></p>
 </div>
 {{end}}
 

@@ -25,6 +25,7 @@
 <div class="shell">
 <aside class="sidebar"><div class="sidebar-in">
   <a class="brand" href="/"><img src="{{static "icon.png"}}" alt="" width="30" height="30"> WAN Drawbridge</a>
+  <button type="button" class="jump-open" data-jump aria-haspopup="dialog">{{template "icon" "search"}}<span>Search…</span><kbd>⌘K</kbd></button>
   <nav class="mainnav" aria-label="Main">
     {{template "navlink" (dict "Href" "/" "Label" "Dashboard" "Icon" "dashboard" "On" (eq .Nav "dashboard"))}}
     {{template "navlink" (dict "Href" "/stacks" "Label" "Stacks" "Icon" "stacks" "On" (eq .Nav "stacks"))}}
@@ -64,6 +65,13 @@
 {{template "main" .}}
 {{template "footer" .}}
 {{end}}
+{{if .Session}}
+<dialog id="jump" class="jump" aria-label="Search or jump to">
+  <input type="search" name="q" placeholder="Pages, settings, stacks, containers" autocomplete="off" aria-label="Search or jump to"
+    hx-get="/jump" hx-trigger="input changed delay:120ms, jump-open" hx-target="#jump-results" hx-swap="outerHTML">
+  {{template "jump-results"}}
+</dialog>
+{{end}}
 <div id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>
@@ -96,5 +104,11 @@
 {{- else if eq . "events"}}<path d="M3 12h4l3-8 4 16 3-8h4"/>
 {{- else if eq . "reports"}}<path d="M5 20V11M11 20V4M17 20v-6M3 20h18"/>
 {{- else if eq . "settings"}}<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>
+{{- else if eq . "search"}}<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
 {{- else if eq . "more"}}<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>
 {{- end}}</svg>{{end}}
+
+{{/* jump-results are the links in the jump box; the first is chosen with Enter. */}}
+{{define "jump-results"}}<ul id="jump-results" class="jump-results">
+{{range $i, $l := .}}<li><a href="{{.Href}}"{{if eq $i 0}} class="active"{{end}}><span>{{.Label}}</span><span class="sub">{{.Kind}}</span></a></li>
+{{else}}<li class="muted">Nothing matches.</li>{{end}}</ul>{{end}}

@@ -175,6 +175,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /{$}", s.auth(s.dashboard))
 	mux.Handle("GET /partials/status", s.auth(s.statusPartial))
 	mux.Handle("GET /partials/timeline", s.auth(s.timelinePartial))
+	mux.Handle("GET /jump", s.auth(s.jump))
 	mux.Handle("GET /sse", s.auth(s.Hub.ServeHTTP))
 	mux.Handle("POST /actions/{action}", s.admin(s.action))
 

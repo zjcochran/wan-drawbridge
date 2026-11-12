@@ -121,7 +121,7 @@ type setupData struct {
 	Detection    detectionForm
 	ISPName      string // current ISP
 	ISP          int
-	Stacks       []stackRow
+	Stacks       stacksData
 }
 
 var setupSteps = []string{"Admin account", "Single sign-on", "Docker", "WAN detection", "Primary ISP", "What to stop", "Review"}
@@ -190,12 +190,12 @@ func (s *Server) setupPage(w http.ResponseWriter, r *http.Request) {
 			data.ISPName = names[st.ISP]
 		}
 	case 6:
-		sd, err := s.stacksData(r, "")
+		sd, err := s.stacksData(r, stackFilter{})
 		if err != nil {
 			s.fail(w, r, err)
 			return
 		}
-		data.Stacks = sd.Stacks
+		data.Stacks = sd
 	}
 	s.page(w, r, "setup", "Set up Drawbridge", data)
 }

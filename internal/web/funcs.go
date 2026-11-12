@@ -14,10 +14,14 @@ import (
 )
 
 var funcs = template.FuncMap{
-	"ago":        ago,
-	"datetime":   func(t time.Time) string { return zeroOr(t, t.Local().Format("2006-01-02 15:04:05")) },
-	"isodate":    func(t time.Time) string { return zeroOr(t, t.UTC().Format(time.RFC3339)) },
-	"duration":   shortDuration,
+	"ago":      ago,
+	"datetime": func(t time.Time) string { return zeroOr(t, t.Local().Format("2006-01-02 15:04:05")) },
+	"isodate":  func(t time.Time) string { return zeroOr(t, t.UTC().Format(time.RFC3339)) },
+	"duration": shortDuration,
+	"since":    func(t time.Time) time.Duration { return time.Since(t).Truncate(time.Minute) },
+	"today": func(t time.Time) bool {
+		return t.Local().Format(time.DateOnly) == time.Now().Local().Format(time.DateOnly)
+	},
 	"until":      until,
 	"clock":      clock,
 	"hours":      func(sec int64) string { return fmt.Sprintf("%.1f h", float64(sec)/3600) },

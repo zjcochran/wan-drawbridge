@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/zjcochran/wan-drawbridge/internal/config"
 	"github.com/zjcochran/wan-drawbridge/internal/monitor"
 	"github.com/zjcochran/wan-drawbridge/internal/store"
 )
@@ -121,8 +122,9 @@ func (s *Server) containerRows(ctx context.Context) ([]containerRow, error) {
 
 type dashboardData struct {
 	Status      statusData
+	Overview    overview
 	Timeline    timeline
-	Events      []store.Event
+	Events      []eventLine
 	NeedsReview int
 }
 
@@ -137,6 +139,9 @@ type statusData struct {
 	IsAdmin   bool
 	NoPrimary bool
 	MultiHost bool
+	Plan      failoverPlan     // what a failover would stop now
+	Rules     config.Detection // the timings, for the rules card
+	Last      *store.Outage    // the newest outage, nil if none
 }
 
 func (s *Server) statusData(r *http.Request) (statusData, error) {
@@ -176,6 +181,21 @@ func (s *Server) statusData(r *http.Request) (statusData, error) {
 			}
 		}
 	}
+	rows, err := s.Store.Containers(ctx)
+	if err != nil {
+		return d, err
+	}
+	d.Plan = plan(rows)
+	if d.Rules, err = s.Mon.Detection(ctx); err != nil {
+		return d, err
+	}
+	last, err := s.Store.Outages(ctx, store.OutageFilter{Limit: 1})
+	if err != nil {
+		return d, err
+	}
+	if len(last) > 0 {
+		d.Last = &last[0]
+	}
 	return d, nil
 }
 
@@ -191,14 +211,25 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	if d.Timeline, err = s.timeline(ctx); err != nil {
+	if d.Overview, err = s.overview(ctx, sessionFrom(r).User.Username, d.Status); err != nil {
 		s.fail(w, r, err)
 		return
 	}
-	if d.Events, err = s.Store.Events(ctx, store.EventFilter{Limit: 8}); err != nil {
+	if d.Timeline, err = s.timeline(ctx, rangeOf("")); err != nil {
 		s.fail(w, r, err)
 		return
 	}
+	events, err := s.Store.Events(ctx, store.EventFilter{Limit: 8})
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	names, err := s.Store.ISPNames(ctx)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	d.Events = eventLines(events, names)
 	rows, err := s.Store.Containers(ctx)
 	if err != nil {
 		s.fail(w, r, err)
@@ -222,7 +253,7 @@ func (s *Server) statusPartial(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) timelinePartial(w http.ResponseWriter, r *http.Request) {
-	t, err := s.timeline(r.Context())
+	t, err := s.timeline(r.Context(), rangeOf(r.URL.Query().Get("range")))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -230,8 +261,10 @@ func (s *Server) timelinePartial(w http.ResponseWriter, r *http.Request) {
 	s.partial(w, r, "dashboard", "timeline", t)
 }
 
-// timeline is the last 24 hours of checks as coloured segments.
+// timeline is the checks of a recent window as coloured segments.
 type timeline struct {
+	Range    timelineRange
+	Ranges   []timelineRange
 	Segments []segment
 	Legend   []legendItem
 	Ticks    []tick
@@ -250,9 +283,9 @@ type tick struct {
 	Label string
 }
 
-func (s *Server) timeline(ctx context.Context) (timeline, error) {
+func (s *Server) timeline(ctx context.Context, rng timelineRange) (timeline, error) {
 	end := s.now()
-	start := end.Add(-24 * time.Hour)
+	start := end.Add(-rng.Window)
 	pts, err := s.Store.ChecksSince(ctx, start)
 	if err != nil {
 		return timeline{}, err
@@ -268,7 +301,7 @@ func (s *Server) timeline(ctx context.Context) (timeline, error) {
 	}
 	gap := 3 * d.CheckInterval // longer than this between checks = no data
 
-	x := func(t time.Time) float64 { return 1000 * t.Sub(start).Seconds() / (24 * time.Hour).Seconds() }
+	x := func(t time.Time) float64 { return 1000 * t.Sub(start).Seconds() / rng.Window.Seconds() }
 	class := func(p store.CheckPoint) string {
 		switch {
 		case !p.Conclusive || p.ISP == 0:
@@ -285,7 +318,7 @@ func (s *Server) timeline(ctx context.Context) (timeline, error) {
 		return names[p.ISP]
 	}
 
-	var t timeline
+	t := timeline{Range: rng, Ranges: timelineRanges}
 	for i := 0; i < len(pts); {
 		j := i
 		for j+1 < len(pts) && class(pts[j+1]) == class(pts[i]) && pts[j+1].ISP == pts[i].ISP &&
@@ -307,10 +340,10 @@ func (s *Server) timeline(ctx context.Context) (timeline, error) {
 		t.Legend = append(t.Legend, legendItem{"primary", "Primary: " + names[primary]})
 	}
 	t.Legend = append(t.Legend, legendItem{"backup", "Backup"}, legendItem{"inconclusive", "Inconclusive"})
-	for h := 0; h <= 24; h += 6 {
-		at := start.Add(time.Duration(h) * time.Hour)
-		lbl := at.Local().Format("15:04")
-		if h == 24 {
+	for i := 0; i <= rng.Ticks; i++ {
+		at := start.Add(rng.Window * time.Duration(i) / time.Duration(rng.Ticks))
+		lbl := at.Local().Format(rng.Format)
+		if i == rng.Ticks {
 			lbl = "now"
 		}
 		t.Ticks = append(t.Ticks, tick{X: x(at) / 10, Label: lbl}) // percent
@@ -393,13 +426,73 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 
 type stackRow struct {
 	store.StackRow
-	Running int
-	Down    bool // its host cannot be reached
+	Running    int
+	Down       bool           // its host cannot be reached
+	Rows       []containerRow // its containers that match the filter
+	Stop, Keep int            // its containers by what they do on failover
+	Standalone bool           // the containers of one host that are in no stack
 }
 
-func (s *Server) stacksData(r *http.Request, host string) (stacksData, error) {
+// Split reports whether some of its containers stop and others keep running.
+func (r stackRow) Split() bool { return r.Stop > 0 && r.Keep > 0 }
+
+// stackFilter narrows the Stacks page: a host, a search, and which containers.
+type stackFilter struct {
+	Host, Q string
+	Show    string // "", "stop", "keep" or "review"
+}
+
+func (f stackFilter) match(c containerRow) bool {
+	switch {
+	case f.Show == "stop" && c.Effective != store.Disable,
+		f.Show == "keep" && c.Effective == store.Disable,
+		f.Show == "review" && !c.NeedsReview,
+		f.Q != "" && !strings.Contains(strings.ToLower(c.Key+" "+c.Name), strings.ToLower(f.Q)):
+		return false
+	}
+	return true
+}
+
+func stackFilterFrom(get func(string) string) stackFilter {
+	return stackFilter{Host: get("host"), Q: strings.TrimSpace(get("q")), Show: get("show")}
+}
+
+// stackCounts are the containers in view by what they do, for the filter chips.
+type stackCounts struct{ All, Stop, Keep, Review int }
+
+func (n *stackCounts) add(c containerRow) {
+	n.All++
+	if c.Effective == store.Disable {
+		n.Stop++
+	} else {
+		n.Keep++
+	}
+	if c.NeedsReview {
+		n.Review++
+	}
+}
+
+// add counts c in the stack and lists it when it matches f.
+func (r *stackRow) add(c containerRow, f stackFilter) {
+	switch c.State {
+	case "running":
+		r.Running++
+	case "unknown":
+		r.Down = true
+	}
+	if c.Effective == store.Disable {
+		r.Stop++
+	} else {
+		r.Keep++
+	}
+	if f.match(c) {
+		r.Rows = append(r.Rows, c)
+	}
+}
+
+func (s *Server) stacksData(r *http.Request, f stackFilter) (stacksData, error) {
 	ctx := r.Context()
-	d := stacksData{Host: host, IsAdmin: sessionFrom(r).User.IsAdmin()}
+	d := stacksData{Filter: f, Host: f.Host, IsAdmin: sessionFrom(r).User.IsAdmin()}
 	var err error
 	if d.MultiHost, d.Hosts, err = s.multiHost(ctx); err != nil {
 		return d, err
@@ -412,22 +505,38 @@ func (s *Server) stacksData(r *http.Request, host string) (stacksData, error) {
 	if err != nil {
 		return d, err
 	}
+	inHost := func(id int64) bool { return f.Host == "" || strconv.FormatInt(id, 10) == f.Host }
 	for _, st := range stacks {
-		if host != "" && strconv.FormatInt(st.HostID, 10) != host {
+		if !inHost(st.HostID) {
 			continue
 		}
 		row := stackRow{StackRow: st}
 		for _, c := range cs {
 			if c.HostID == st.HostID && c.Project == st.Project {
-				switch c.State {
-				case "running":
-					row.Running++
-				case "unknown":
-					row.Down = true
-				}
+				row.add(c, f)
 			}
 		}
 		d.Stacks = append(d.Stacks, row)
+	}
+	alone := map[int64]*stackRow{}
+	var order []int64
+	for _, c := range cs {
+		if !inHost(c.HostID) {
+			continue
+		}
+		d.Counts.add(c)
+		if c.Project != "" {
+			continue
+		}
+		if alone[c.HostID] == nil {
+			alone[c.HostID] = &stackRow{StackRow: store.StackRow{HostID: c.HostID, Host: c.Host}, Standalone: true}
+			order = append(order, c.HostID)
+		}
+		alone[c.HostID].Containers++
+		alone[c.HostID].add(c, f)
+	}
+	for _, id := range order {
+		d.Stacks = append(d.Stacks, *alone[id])
 	}
 	return d, nil
 }
@@ -436,12 +545,17 @@ type stacksData struct {
 	Stacks    []stackRow
 	Hosts     []store.HostRow
 	Host      string // the host filter: "" for all, else a host ID
+	Filter    stackFilter
+	Counts    stackCounts
 	MultiHost bool
 	IsAdmin   bool
 }
 
+// Filtering reports whether a search or a chip narrows the list.
+func (d stacksData) Filtering() bool { return d.Filter.Q != "" || d.Filter.Show != "" }
+
 func (s *Server) stacksPage(w http.ResponseWriter, r *http.Request) {
-	d, err := s.stacksData(r, r.URL.Query().Get("host"))
+	d, err := s.stacksData(r, stackFilterFrom(r.URL.Query().Get))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -501,7 +615,7 @@ func (s *Server) setStackPolicy(w http.ResponseWriter, r *http.Request) {
 	s.event(ctx, "stack_policy", map[string]any{"host": names[host], "stack": project, "disable": on, "by": actorName(r)})
 	s.Mon.PoliciesChanged()
 	s.Hub.Publish(TopicInventory)
-	d, err := s.stacksData(r, r.PostFormValue("host"))
+	d, err := s.stacksData(r, stackFilterFrom(r.PostFormValue))
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -660,6 +774,15 @@ func (s *Server) applyPolicies(w http.ResponseWriter, r *http.Request, keys []li
 	}
 	s.Mon.PoliciesChanged()
 	s.Hub.Publish(TopicInventory)
+	if r.PostFormValue("view") == "stacks" { // changed on the Stacks page
+		d, err := s.stacksData(r, stackFilterFrom(r.PostFormValue))
+		if err != nil {
+			s.fail(w, r, err)
+			return
+		}
+		s.partial(w, r, "stacks", "stacks-table", d)
+		return
+	}
 	d, err := s.containersData(r, filterFrom(r.PostFormValue))
 	if err != nil {
 		s.fail(w, r, err)
@@ -675,17 +798,60 @@ type ispsData struct {
 	WeekTotal int64
 	IsAdmin   bool
 	CurrentID int
+	Strips    map[int][]dayCell // per ISP, the last 30 days, oldest first
+	Month     map[int]int64     // per ISP, seconds seen in the last 30 days
+	MonthAll  int64
+	First     string // the first day of the strips, "Oct 14"
 }
 
+// dayCell is one day of an ISP's strip: seen all day, part of it, or not.
+type dayCell struct {
+	Class string // "all", "part" or "none"
+	Title string
+}
+
+const stripDays = 30
+
 func (s *Server) ispsData(r *http.Request) (ispsData, error) {
-	rows, err := s.Store.ISPs(r.Context(), s.now())
+	ctx, now := r.Context(), s.now()
+	rows, err := s.Store.ISPs(ctx, now)
 	if err != nil {
 		return ispsData{}, err
 	}
-	d := ispsData{ISPs: rows, IsAdmin: sessionFrom(r).User.IsAdmin(), CurrentID: s.Mon.Status().ISP}
+	d := ispsData{ISPs: rows, IsAdmin: sessionFrom(r).User.IsAdmin(), CurrentID: s.Mon.Status().ISP,
+		Strips: map[int][]dayCell{}, Month: map[int]int64{}}
 	for _, i := range rows {
 		if i.Role != store.RoleIgnored {
 			d.WeekTotal += i.WeekSeconds
+		}
+	}
+	today := now.UTC().Truncate(24 * time.Hour)
+	first := today.AddDate(0, 0, 1-stripDays)
+	d.First = first.Format("Jan 2")
+	daily, err := s.Store.DailySeconds(ctx, first)
+	if err != nil {
+		return d, err
+	}
+	for _, i := range rows {
+		for n := range stripDays {
+			day := first.AddDate(0, 0, n)
+			sec := daily[i.ID][day.Format(time.DateOnly)]
+			full := 24 * time.Hour
+			if day.Equal(today) {
+				full = now.Sub(today)
+			}
+			c := dayCell{Class: "none", Title: day.Format("Jan 2") + ": not seen"}
+			if sec > 0 {
+				c = dayCell{Class: "part", Title: fmt.Sprintf("%s: %s", day.Format("Jan 2"), shortDuration(time.Duration(sec)*time.Second))}
+				if float64(sec) >= 0.95*full.Seconds() {
+					c.Class = "all"
+				}
+			}
+			d.Strips[i.ID] = append(d.Strips[i.ID], c)
+			d.Month[i.ID] += sec
+		}
+		if i.Role != store.RoleIgnored {
+			d.MonthAll += d.Month[i.ID]
 		}
 	}
 	return d, nil

@@ -5,7 +5,10 @@ the WAN state changes or a container starts or stops, open pages refresh the
 affected part within a second, without reloading. It follows your system's
 light or dark mode, in the colour theme you choose (see [Appearance](#appearance)).
 
-The pages are listed in a sidebar on the left. Your picture and username sit at
+The pages are listed in a sidebar on the left. Above them, **Search or jump
+to…** (or ⌘K, Ctrl+K elsewhere) opens a box that finds pages, Settings tabs,
+stacks and containers as you type; arrow keys choose and Enter opens. A stack
+or container opens the Stacks page searched for it. Your picture and username sit at
 its foot: click them for a menu with **Your account** (Settings → Your account)
 and **Sign out**; a click elsewhere or Escape closes it.
 
@@ -14,8 +17,6 @@ along the top, and the pages are a tab bar along the bottom: **Dashboard**,
 **Stacks**, **Containers**, **ISPs** and **More**, which opens **Events**,
 **Reports** and **Settings**. The tab bar keeps clear of the notch and the home
 indicator.
-
-![The dashboard on a phone](../images/phone-dashboard.jpg)
 
 A phone can add Drawbridge to its home screen (Safari: Share, then **Add to
 Home Screen**; Chrome: **Install app** or **Add to Home screen**). It then opens
@@ -42,9 +43,33 @@ browser's address bar.
 
 ![Dashboard on the primary ISP](../images/dashboard.jpg)
 
+The page opens with the date, a greeting by the server's time of day, and one
+sentence on where things stand ("All quiet on EXAMPLENET.", "On SKYLINK since
+14:02.").
+
+Under the status card, four tiles cover the last 30 days and now:
+
+| Tile | Meaning |
+| --- | --- |
+| On primary, 30 days | The share of the last 30 days not in a failover, and the time on a backup. |
+| Failovers, 30 days | Outages that started in the last 30 days, and how long ago the newest started. |
+| Hosts | Hosts up out of those not disabled (the local host always counts as up), and their names. |
+| Stopped by Drawbridge | Containers Drawbridge has stopped now. |
+
+Beside the status card:
+
+- **If the WAN fails over**: how many containers would stop and how many keep
+  running, by their settings now, with the stacks they are in; and a link to the
+  [failover preview](#failover-preview). While a failover run is open, or starts
+  are owed to an unreachable host, **Stopped by Drawbridge** (below) takes its
+  place.
+- **The rules**: the failover delay, the failback delay and the check
+  interval, with a link to change them (admins).
+
 ### Status card
 
-The large card at the top shows the state as a coloured badge and a heading:
+The large card at the top shows the state as a coloured badge and a heading,
+with the time in this state at the right:
 
 | Heading | Badge | Meaning |
 | --- | --- | --- |
@@ -54,7 +79,10 @@ The large card at the top shows the state as a coloured badge and a heading:
 | On backup: *ISP* | Failover: containers stopped (amber, with an amber edge on the card) | Confirmed on a backup. Selected containers are stopped. |
 | Failback pending | Change pending (amber) | The primary is back; Drawbridge is making sure it stays. Shows "Failing back in 4m 56s if the primary stays stable." |
 
-While automation is paused the badge reads **Paused**.
+While automation is paused the badge reads **Paused**. Under the heading, on
+the primary after an outage: "Back on EXAMPLENET since 14:27, after 25m on
+SKYLINK." (with the date when it was not today); in a failover, when the
+containers start again.
 
 Badges next to it:
 
@@ -142,16 +170,22 @@ A banner says when a failover is already in effect (the containers it stopped
 then show as already stopped), and how many new containers are not configured
 yet and would keep running, with a link to review them.
 
-### Last 24 hours
+### Timeline
 
 A timeline of every check: green for the primary, amber for a backup, grey for
 inconclusive checks and light grey for no data (Drawbridge not running, or a
 gap longer than three check intervals). Hover a segment for the ISP and times.
-A short failover is a thin sliver at this scale.
+**24 h**, **7 d** and **30 d** choose the window (24 hours by default; checks
+are kept for the retention set in WAN detection, 30 days by default). A short
+failover is a thin sliver at the longer scales.
 
-### Recent events
+### Latest changes
 
-The last few audit events. **All events** opens the Events page.
+The last eight audit events, each as a sentence: the wording of its
+[notification](notifications.md) where it has one ("Failed over to a backup
+ISP"), else a short line such as "admin set the stack media to stop on
+failover". A coloured dot marks failovers (amber), failbacks (green) and
+failures (red). **All events** opens the Events page.
 
 ### New containers banner
 
@@ -164,23 +198,31 @@ them. See [new containers](stacks-and-containers.md#new-containers).
 
 ![Stacks page](../images/stacks.jpg)
 
-One row per Docker Compose project on each host:
+One card per Docker Compose project on each host, then one per host for its
+**Standalone** containers. A card's line shows how many containers it has, how
+many run, and what they do on failover: "keep running", "stop on failover", or
+"split: 5 stop, 2 keep running", with a **Stops** or **Split** badge. "host
+offline" (the card dimmed) means its host cannot be reached. With more than one
+host, each card names its host.
 
-| Column | Meaning |
-| --- | --- |
-| Stack | The Compose project name. |
-| Host | The host it is on. Shown only when Drawbridge has more than one host; click it to show that host's stacks only. |
-| Containers | "3 running of 5", or "host offline" (the row dimmed) when its host cannot be reached. |
-| On failover | **Stops (stack rule)**: the stack switch is on. **Partial · 4 of 5**: some containers stop through their own settings. **Not affected**: nothing in it stops. |
-| Stop whole stack | The switch (admins). |
-| Show containers | Expands the stack's containers with their state and whether each stops; it then reads Hide containers, which collapses them again. |
+A stack's line also holds its switch (admins): **Keep running** or **Stop**,
+with **Split** between them while its containers differ. Choosing either
+**resets every container in the stack** to follow it; from Split this asks for
+confirmation.
 
-Flipping the switch **resets every container in the stack** to follow it, on or
-off. Exceptions are made on the Containers page.
+Cards that stop or are split start open; click a card's line to open or close
+it. An open card lists each container: its state dot, name and key, a **New**
+badge while it [needs review](stacks-and-containers.md#new-containers), what it
+does on failover and why ("from stack", "own setting", "default", "from label", or "until
+reviewed"), and its setting (admins): *Follow stack* (*Default (keep
+running)* when standalone), *Stop on failover* or *Keep running*. Choosing
+*Keep running* in a stack that is switched to Stop asks for confirmation,
+because it converts the stack rule into per-container settings.
 
-With more than one host, a **host filter** above the table shows all hosts or
-one; the URL keeps it (`/stacks?host=<id>`). The same project on two hosts is
-two rows with their own switches.
+**Filters** (the URL keeps them): a search by container name or key, the host
+(with more than one host), and chips with counts: **All**, **Stop**, **Keep
+running** and **Needs review**. While searching or filtering, only cards with a
+matching container are shown, open, with only those containers.
 
 ![Stacks on two hosts](../images/stacks-hosts.jpg)
 
@@ -234,17 +276,24 @@ a setting next to "Apply to selected", and apply.
 
 ![ISPs page](../images/isps.jpg)
 
-One row per ISP:
+One card per ISP, the primary first:
 
-| Column | Meaning |
+| Part | Meaning |
 | --- | --- |
-| ISP | Name (editable by admins; empty resets it), "current" badge, group key and when last seen. |
-| Role | Primary (pinned or "learned"), Backup or Ignored. |
-| Metered | For the primary and backups: a switch (admins). On a backup it is on for new ISPs, and off means traffic on it counts like the primary. On the primary it is a separate switch, off by default; on means its traffic counts towards its monthly data limit. See [Metered and unmetered ISPs](isps.md#metered-and-unmetered-isps). Viewers see yes or no; ignored ISPs show –. |
-| Data limits | For a metered backup, GB per outage and GB per month; for a metered primary, GB per month; with **Save** (admins). See [Data limits](isps.md#data-limits). Viewers see the limits, or "none"; other ISPs show –. |
-| Last 7 days | Share of observed time, excluding ignored ISPs. |
+| Name | Editable by admins (empty resets it), with its role badge (Primary, Backup or Ignored) and "current" while traffic is on it. Below: the group key, when it was last seen, and for the primary whether it is pinned or learned. |
+| Seen, 30 days | Its share of the time observed in the last 30 days, excluding ignored ISPs. |
+| Last 7 days | The same over the last 7 days. |
 | All time | Hours observed. |
-| Networks (ASNs) | Each ASN with its name, "grouped by hand" if moved, and a **Move to…** menu. |
+| Role | Primary (pinned when set by hand), Backup or Ignored (admins). |
+| Metered | For the primary and backups: a switch (admins) with what it means. On a backup it is on for new ISPs, and off means traffic on it counts like the primary. On the primary it is a separate switch, off by default; on means its traffic counts towards its monthly data limit. See [Metered and unmetered ISPs](isps.md#metered-and-unmetered-isps). Viewers see yes or no; ignored ISPs show –. |
+| Data limits | Only for a metered primary or backup: GB per outage (backups) and GB per month, with **Save** (admins). See [Data limits](isps.md#data-limits). Viewers see the limits, or "none". |
+| Networks | Each ASN with its name, "grouped by hand" if moved, and a **Move to…** menu (admins). |
+
+**Every ISP, every day** shows the last 30 days (UTC), one square per day and
+ISP: solid when it was seen at least 95% of the day (of the day so far, for
+today), lighter when seen for part of it, empty when not seen. Green for the
+primary, amber for backups, grey for ignored ISPs. Hover a square for the time
+seen that day.
 
 **Re-learn primary ISP** forgets the primary and starts a new learning period.
 See [ISPs and the primary ISP](isps.md).
