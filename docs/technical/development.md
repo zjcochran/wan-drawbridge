@@ -131,8 +131,12 @@ against a running Drawbridge, all with fictional data:
 - a year of outages and a day of checks written into the database for Reports
   and the timeline.
 
-Desktop shots are 1280 px wide (ISPs 1600 px, for its wide table); phone shots
-are 390 × 844 at 2×. Retake them when the UI changes visibly.
+The ASN names are as long as real ones, so long text shows up in the shots.
+Before each shot the script fails if any element sticks out of its card or the
+page scrolls sideways (tables, which scroll on purpose, excepted).
+
+Desktop shots are 1280 px wide (ISPs 1600 px); phone shots are 390 × 844 at
+2×. Retake them when the UI changes visibly.
 
 ## Workflow and releasing
 
