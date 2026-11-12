@@ -18,9 +18,13 @@ There are two roles:
   own password, single sign-on link and appearance. Controls they cannot use
   are not shown.
 
-Every page footer shows the version and links to the source code, as the AGPL
-requires, and credits the app icon (Drawbridge icons created by Magnific -
-Flaticon).
+Every page footer shows the version, the licence (AGPL-3.0-or-later) and a
+link to the source code, as the AGPL requires.
+
+On a phone, Drawbridge can be added to the home screen (Safari: Share, then
+**Add to Home Screen**; Chrome: **Install app** or **Add to Home screen**). It
+then opens full screen with its own icon, named "Drawbridge", without the
+browser's address bar.
 
 ## Dashboard
 

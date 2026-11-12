@@ -52,7 +52,7 @@ internal/
   secrets/             AES-GCM sealing
   web/                 HTTP, templates, OIDC, metrics, SSE
     templates/         html/template pages and partials
-    static/            htmx, sse extension, app.js, app.css, icon
+    static/            htmx, sse extension, app.js, app.css, icons, web app manifest
   e2e/                 end-to-end test
 test/
   coverage.sh          per-package coverage gate

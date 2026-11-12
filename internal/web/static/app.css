@@ -239,8 +239,7 @@ main.wide { max-width: 1520px; } /* the ISPs table has many columns */
 .nowrap { white-space: nowrap; }
 .narrow-form { max-width: 360px; }
 
-.footer { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 0 1rem 2rem; }
-.footer a { color: inherit; }
+.footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 2rem 1rem; }
 
 /* Banners and toasts */
 .banner { padding: 0.65rem 1.25rem; border-bottom: 1px solid var(--border); }

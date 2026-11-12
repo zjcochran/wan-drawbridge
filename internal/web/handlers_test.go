@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -399,6 +400,32 @@ func TestStaticFilesAreCached(t *testing.T) {
 	resp, _ := e.client().do("GET", "/static/app.css", nil)
 	if resp.StatusCode != http.StatusOK || !strings.Contains(resp.Header.Get("Cache-Control"), "max-age") {
 		t.Fatalf("static: %d %q", resp.StatusCode, resp.Header.Get("Cache-Control"))
+	}
+}
+
+func TestHomeScreenManifest(t *testing.T) {
+	e := newEnv(t)
+	e.admin()
+	c := e.client()
+	_, page := c.get("/login")
+	for _, link := range []string{`rel="manifest" href="/static/manifest.json?v=`, `rel="apple-touch-icon" href="/static/apple-touch-icon.png?v=`} {
+		if !strings.Contains(page, link) {
+			t.Errorf("the page does not link %s", link)
+		}
+	}
+	// Browsers fetch the manifest and its icons without the session cookie.
+	resp, body := c.get("/static/manifest.json")
+	var m struct {
+		StartURL string `json:"start_url"`
+		Icons    []struct{ Src, Purpose string }
+	}
+	if resp.StatusCode != http.StatusOK || json.Unmarshal([]byte(body), &m) != nil || m.StartURL != "/" || len(m.Icons) == 0 {
+		t.Fatalf("manifest: %d %q", resp.StatusCode, body)
+	}
+	for _, icon := range append(m.Icons, struct{ Src, Purpose string }{Src: "apple-touch-icon.png"}) {
+		if resp, _ := c.get("/static/" + icon.Src); resp.StatusCode != http.StatusOK {
+			t.Errorf("icon %s: %d", icon.Src, resp.StatusCode)
+		}
 	}
 }
 

@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+  <!-- The app icon: a bascule bridge with both leaves raised between two towers. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#1e3a8a"/>
+      <stop offset="1" stop-color="#3b8fc4"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#g)"/>
+  <g transform="translate(0 -5)">
+  <g fill="none" stroke="#fff" stroke-width="4">
+    <path d="M18 44 29 34.5M46 44 35 34.5"/>
+  </g>
+  <g fill="#fff">
+    <path d="M8 45V21h3v3h1.5v-3h3v3h1.5v-3h3v24z"/>
+    <path d="M44 45V21h3v3h1.5v-3h3v3h1.5v-3h3v24z"/>
+    <rect x="2" y="42" width="7" height="3"/>
+    <rect x="55" y="42" width="7" height="3"/>
+  </g>
+  <g fill="#1e4a96">
+    <path d="M12 45v-6a2 2 0 0 1 4 0v6zM48 45v-6a2 2 0 0 1 4 0v6z"/>
+  </g>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-width="2.5">
+    <path stroke-opacity=".75" d="M4 51c3-2.5 5-2.5 8 0s5 2.5 8 0 5-2.5 8 0 5 2.5 8 0 5-2.5 8 0 5 2.5 8 0 5-2.5 8 0"/>
+    <path stroke-opacity=".4" d="M8 57c3-2.5 5-2.5 8 0s5 2.5 8 0 5-2.5 8 0 5 2.5 8 0 5-2.5 8 0 5 2.5 8 0"/>
+  </g>
+  </g>
+</svg>
