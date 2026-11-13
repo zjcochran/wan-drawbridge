@@ -198,7 +198,7 @@ time { white-space: nowrap; }
 .more summary::-webkit-details-marker { display: none; }
 .page { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 main { width: 100%; max-width: 1180px; margin: 0 auto; padding: 1.75rem 2rem 1rem; flex: 1; }
-main.narrow { max-width: 420px; padding-top: 12vh; }
+main.narrow { max-width: 420px; padding-top: 10vh; }
 main.wide { max-width: 1520px; } /* the ISPs table has many columns */
 
 .usermenu { position: relative; margin-top: auto; padding-top: 0.75rem; border-top: 1px solid var(--border); }
@@ -444,9 +444,38 @@ code { font-size: 0.85em; background: var(--surface-2); padding: 0.1rem 0.35rem;
 .or::before, .or::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
 
 /* Wizard and sign-in */
-.auth-card { padding: 1.75rem; }
-.auth-card h1 { display: flex; align-items: center; gap: 0.6rem; font-size: 1.35rem; }
-.auth-card h1 img { border-radius: 8px; }
+/* Signed out, the page sits over a soft glow in the accent colour. */
+main.narrow { position: relative; isolation: isolate; }
+main.narrow::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(40rem 26rem at 50% 0%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 70%),
+    radial-gradient(36rem 28rem at 85% 100%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%);
+}
+.auth { width: 100%; }
+.auth-brand {
+  display: flex; align-items: center; justify-content: center; gap: 0.65rem; margin-bottom: 1.75rem;
+  font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em;
+}
+.auth-brand img { border-radius: 12px; }
+.auth h1 { margin: 0; text-align: center; font-size: 1.6rem; letter-spacing: -0.02em; }
+.auth .lead { margin: 0.35rem 0 1.5rem; text-align: center; color: var(--muted); }
+.auth-card {
+  padding: 1.75rem; border-radius: calc(var(--radius) * 1.5);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent) inset, 0 24px 48px -28px rgb(0 0 0 / 0.35);
+  backdrop-filter: blur(12px);
+}
+.auth-card .stack { gap: 1rem; }
+.auth-card input:not([type="checkbox"]) { min-height: 2.75rem; }
+.auth-card .wide { display: flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; min-height: 2.75rem; font-weight: 600; }
+.auth-card .wide .icon { width: 18px; height: 18px; }
+.auth-card .stack .wide { margin-top: 0.25rem; }
+.auth-card .or { margin: 1.25rem 0; }
+.auth-card .code { text-align: center; font-family: "Geist Mono", ui-monospace, monospace; font-size: 1.25rem; letter-spacing: 0.3em; }
+.auth-card .quiet { justify-self: center; color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+.auth-card .quiet:hover { color: var(--text); }
+@media (max-width: 30rem) { .auth-card { padding: 1.25rem; } main.narrow { padding-top: 6vh; } }
 .wizard { max-width: 860px; margin: 0 auto; }
 .wizard .divided { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
 .steps { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; gap: 0.4rem; flex-wrap: wrap; counter-reset: step; }

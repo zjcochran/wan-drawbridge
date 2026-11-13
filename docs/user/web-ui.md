@@ -447,8 +447,8 @@ To turn it on, in **Settings → Your account → Two-factor sign-in**:
 3. Save the 10 **recovery codes** shown, somewhere other than your phone.
    They are shown once. Each works once instead of an app code.
 
-From then on, signing in with your password opens a second step, **Code from
-your authenticator app**:
+From then on, signing in with your password opens a second step, **Two-factor
+sign-in**, which asks for a code:
 
 - The code has 6 digits and changes every 30 seconds. The code before and the
   code after the current one are also accepted, for a clock that is slightly
