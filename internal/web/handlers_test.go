@@ -403,6 +403,17 @@ func TestStaticFilesAreCached(t *testing.T) {
 	}
 }
 
+func TestFavicon(t *testing.T) {
+	c := newEnv(t).client()
+	resp, body := c.get("/favicon.ico")
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "image/png" || !strings.HasPrefix(body, "\x89PNG") {
+		t.Fatalf("favicon: %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	if _, page := newEnv(t).admin().get("/settings/account"); !strings.Contains(page, `rel="icon" href="/static/icon.svg?v=`) {
+		t.Error("no SVG icon link")
+	}
+}
+
 func TestHomeScreenManifest(t *testing.T) {
 	e := newEnv(t)
 	e.admin()

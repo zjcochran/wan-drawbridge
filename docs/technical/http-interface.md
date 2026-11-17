@@ -14,7 +14,7 @@ From the outside in:
 1. `securityHeaders`: sets the headers listed in [Security](security.md#response-headers).
 2. `http.CrossOriginProtection`: rejects cross-origin unsafe requests.
 3. `requireSetup`: until a user exists, redirects everything except
-   `/healthz`, `/metrics`, `/api/…`, `/static/…` and `/setup…` to `/setup`.
+   `/healthz`, `/metrics`, `/favicon.ico`, `/api/…`, `/static/…` and `/setup…` to `/setup`.
 4. The router, with per-route `auth` (signed in; POSTs need the CSRF token)
    or `admin` (auth plus admin role).
 
@@ -29,6 +29,7 @@ Non-admins get 403 "admins only" on admin routes.
 | Method | Path | Notes |
 | --- | --- | --- |
 | GET | `/healthz` | `200 ok`. No auth. |
+| GET | `/favicon.ico` | The app icon (192 px PNG), `Cache-Control: public, max-age=86400`. No auth. |
 | GET | `/metrics` | Prometheus text. 404 unless `DRAWBRIDGE_METRICS_TOKEN` is set; then `Authorization: Bearer` required (401). |
 | GET | `/api/status` | JSON status; see [Monitoring → JSON status API](../user/monitoring.md#json-status-api). `Authorization: Bearer <API token>` required (401 with `WWW-Authenticate` otherwise); each use sets the token's `last_used`. `Cache-Control: no-store`. |
 | GET | `/api/health` | 200 when healthy, 503 with the problems otherwise; see [Monitoring → Health status API](../user/monitoring.md#health-status-api). Query `ignore` (comma-separated: `failover`, `checks`, `inconclusive`, `hosts`, `paused`; 400 for another name). Same token rules as `/api/status`. |

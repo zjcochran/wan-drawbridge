@@ -148,6 +148,13 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", cacheStatic(http.FileServerFS(static))))
+	// Browsers ask for /favicon.ico whatever the page links, and Safari keeps
+	// what it got there for a long time: serve the app icon, revalidated daily.
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		w.Header().Set("Content-Type", "image/png")
+		http.ServeFileFS(w, r, static, "icon-192.png")
+	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /metrics", s.metrics)
 	mux.HandleFunc("GET /api/status", s.apiStatus)
@@ -312,7 +319,7 @@ func securityHeaders(h http.Handler) http.Handler {
 func (s *Server) requireSetup(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if p == "/healthz" || p == "/metrics" || strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/setup") {
+		if p == "/healthz" || p == "/metrics" || p == "/favicon.ico" || strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/static/") || strings.HasPrefix(p, "/setup") {
 			h.ServeHTTP(w, r)
 			return
 		}
