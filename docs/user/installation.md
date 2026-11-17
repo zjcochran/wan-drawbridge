@@ -171,7 +171,7 @@ Open `http://<host>:8080`. Every page redirects to the
   image's `HEALTHCHECK` runs `/drawbridge healthcheck`, which requests
   `/healthz`.
 - **Version:** `docker compose exec drawbridge /drawbridge version`.
-- **Docker access:** Settings → System shows "connected, version …".
+- **Docker access:** Settings → About shows "connected, version …".
 - **WAN:** the dashboard shows your public IP and ISP after the first check
   (one minute at most).
 

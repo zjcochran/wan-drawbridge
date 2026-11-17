@@ -132,8 +132,11 @@ against a running Drawbridge, all with fictional data:
   and the timeline.
 
 The ASN names are as long as real ones, so long text shows up in the shots.
-Before each shot the script fails if any element sticks out of its card or the
-page scrolls sideways (tables, which scroll on purpose, excepted).
+Before each shot the script fails if any element sticks out of its card, the
+page scrolls sideways, a box cuts off what is in it (a table may scroll
+sideways only below 1024 px; ellipses are on purpose), or the Public IP
+wraps. The same check also runs over every page and Settings tab at widths
+from 360 to 1440 px, with the widest IPv4 address in the Public IP tile.
 
 Desktop shots are 1280 px wide (ISPs 1600 px); phone shots are 390 × 844 at
 2×. Retake them when the UI changes visibly.

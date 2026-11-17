@@ -43,7 +43,7 @@ key with default settings.
 
 | Setting | Shown as | Effect |
 | --- | --- | --- |
-| `inherit` | Follow label / Follow stack / Default (keep running) | Do what the container's label says, if it has one (see [Labels](#labels-in-your-compose-files)); otherwise what the stack says. A standalone container without a label keeps running. |
+| `inherit` | Follow label / Follow stack / Default | Do what the container's label says, if it has one (see [Labels](#labels-in-your-compose-files)); otherwise what the stack says. A standalone container without a label keeps running. |
 | `disable` | Stop on failover | Always stop, whatever the stack says. |
 | `keep` | Keep running | Never stop, whatever the stack says. |
 

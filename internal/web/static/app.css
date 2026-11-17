@@ -172,6 +172,7 @@ h2 { font-size: 1.05rem; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 
 h3 { font-size: 0.95rem; margin: 1rem 0 0.5rem; }
 p { margin: 0 0 0.75rem; }
 pre { background: var(--surface-2); padding: 0.75rem; border-radius: 10px; overflow-x: auto; }
+pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
 time { white-space: nowrap; }
 .mono, code, pre, textarea { font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
 .icon { width: 18px; height: 18px; flex: none; }
@@ -225,6 +226,7 @@ main.wide { max-width: 1520px; } /* the ISPs table has many columns */
 }
 .avatar-large .avatar { width: 72px; height: 72px; font-size: 1.8rem; }
 .user-cell { display: inline-flex; align-items: center; gap: 0.6rem; }
+.sub.block { display: block; }
 .picture-row { display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap; }
 .qr { image-rendering: pixelated; background: #fff; padding: 8px; border-radius: 8px; }
 .picture-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
@@ -295,6 +297,11 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
 [hidden] { display: none !important; }
 .form-actions { display: flex; align-items: end; }
 form.inline { display: inline-flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
+/* A row's actions in a table: the links wrap, and a form with a box
+   (reset a password, rename a host) goes under them. */
+.row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.25rem 0.5rem; max-width: 15rem; margin-left: auto; }
+.row-actions form.inline { flex-basis: 100%; justify-content: flex-end; }
+.row-actions input { width: 9rem; }
 .filters { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; margin-bottom: 1rem; }
 .filters input[type="search"] { flex: 1 1 220px; }
 
@@ -405,6 +412,10 @@ tr.dim > td { opacity: 0.6; } /* containers on a host that cannot be reached */
 .tile dt { font-size: 0.8rem; color: var(--muted); }
 .tile dd { margin: 0.2rem 0 0; font-weight: 600; font-size: 1.05rem; overflow-wrap: anywhere; }
 .tile dd .sub { font-size: 0.8rem; }
+/* An address stays on one line: its size follows the tile's width, and only
+   an IPv6 address too long even at the smallest size wraps. */
+.tile { container-type: inline-size; }
+.tile dd.ip { font-size: clamp(0.8rem, 10.5cqi, 1.05rem); }
 .next-check { display: block; margin-top: 0.1rem; }
 .next-check:empty { display: none; }
 .check-progress { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--accent); }
@@ -523,14 +534,16 @@ main.narrow::before {
 .theme-choice:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .theme-choice input { position: absolute; opacity: 0; pointer-events: none; }
 .theme-choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
-.swatches { display: grid; grid-template-columns: 1fr 1fr; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
-.theme-swatch { display: flex; gap: 4px; align-items: center; padding: 8px; background: var(--bg); }
-.theme-swatch i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
+.swatches { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.theme-swatch { display: flex; gap: 4px; align-items: center; min-width: 0; padding: 8px 7px; background: var(--bg); }
+.theme-swatch i { flex: 0 1 14px; min-width: 8px; aspect-ratio: 1; border-radius: 50%; background: var(--accent); }
 .theme-swatch i + i { background: var(--seg-primary); }
 .theme-swatch i + i + i { background: var(--seg-backup); }
-.theme-swatch b { flex: 1; min-width: 10px; height: 6px; border-radius: 3px; background: var(--text); opacity: 0.8; }
-.segmented { display: flex; gap: 1.25rem; flex-wrap: wrap; align-items: baseline; }
+.theme-swatch b { flex: 1 1 6px; min-width: 4px; height: 6px; border-radius: 3px; background: var(--text); opacity: 0.8; }
+.segmented { display: flex; gap: 0.5rem 1.25rem; flex-wrap: wrap; align-items: center; }
 .segmented legend { font-weight: 600; float: left; margin-right: 0.25rem; }
+/* On a phone the mode's name sits above its three choices. */
+@media (max-width: 30rem) { .segmented legend { float: none; width: 100%; margin: 0 0 0.25rem; } }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* Notification channels */
 /* Examples for a new agent: radio buttons as tabs, so no script. */
@@ -556,7 +569,9 @@ details.channel[open] > summary::before { content: "▾"; }
 @media (max-width: 64rem) {
   .status-grid { grid-template-columns: minmax(0, 1fr); }
 }
-@media (max-width: 56rem) {
+/* The settings menu goes above its page while a page beside it would be
+   too narrow for the Hosts and Users tables. */
+@media (max-width: 68rem) {
   .settings { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
   .tabs {
     position: relative; /* offsetLeft for app.js */ top: auto; flex-direction: row; gap: 0.25rem;

@@ -9,8 +9,8 @@ The pages are listed in a sidebar on the left. Above them, **Search or jump
 to…** (or ⌘K, Ctrl+K elsewhere) opens a box that finds pages, Settings tabs,
 stacks and containers as you type; arrow keys choose and Enter opens. A stack
 or container opens the Stacks page searched for it. Your picture and username sit at
-its foot: click them for a menu with **Your account** (Settings → Your account)
-and **Sign out**; a click elsewhere or Escape closes it.
+its foot: click them for a menu with **Your account** and **Appearance** (those
+Settings tabs) and **Sign out**; a click elsewhere or Escape closes it.
 
 On a phone (a screen narrower than 48rem) the name and your picture sit in a bar
 along the top, and the pages are a tab bar along the bottom: **Dashboard**,
@@ -26,8 +26,9 @@ address bar.
 There are two roles:
 
 - **Admins** can change everything.
-- **Viewers** see every page, but in Settings only the **WAN detection**
-  (read-only), **Your account** and **System** tabs. They can change only their
+- **Viewers** see every page, but in Settings only the **Your account**,
+  **Appearance**, **WAN detection**, **Hosts**, **Container filters** and
+  **About** tabs, the Failover ones read-only. They can change only their
   own password, single sign-on link and appearance. Controls they cannot use
   are not shown.
 
@@ -253,17 +254,18 @@ Every container on every host, except Drawbridge itself.
 **Columns:** container name (with a "Swarm service" badge for a [service of a
 swarm](hosts.md#adding-a-docker-swarm), "LXC" for a [Proxmox
 container](hosts.md#adding-proxmox-ve-lxc-containers), the kind of a
-[Kubernetes workload](hosts.md#adding-kubernetes), and its key,
-`project/service`, when different),
-host (only with more than one host; click it to filter by it), stack, state,
+[Kubernetes workload](hosts.md#adding-kubernetes), and under it its key,
+`project/service`, when different, and its state, with a coloured dot before the name),
+host (only with more than one host; click it to filter by it), stack,
 what happens on failover (with where that comes from: "from stack", "own
 setting", "default", or "new, not configured", and in amber any warning its
 host reports, such as an autoscaler that scales it back up), and the setting
 (admins).
 
 **Setting** for a container in a stack: *Follow stack*, *Stop on failover* or
-*Keep running*. For a standalone container, *Default (keep running)* replaces
-*Follow stack*.
+*Keep running*. For a standalone container, *Default* (keep running) replaces
+*Follow stack*, and for a container with a [label](stacks-and-containers.md#labels-in-your-compose-files),
+*Follow label* does; the On failover column says what that means for it.
 
 Choosing *Keep running* for a container whose stack is switched on asks for
 confirmation, because it converts the stack rule into per-container settings.
@@ -366,21 +368,22 @@ sizes are in decimal units (1 MB = 1,000,000 bytes).
 
 Settings has one tab per section, each at its own address, so a tab can be
 bookmarked. `/settings` opens the first one. The tabs are a menu down the left,
-grouped under **Failover**, **Alerts**, **Access**, **Data** and **You**; on a
+grouped under **You**, **Access**, **Failover**, **Alerts** and **System**, in that order; on a
 narrow screen they become one row that scrolls sideways.
 
 | Group | Tab | Address | Who | Contents |
 | --- | --- | --- | --- | --- |
+| You | Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); [two-factor sign-in](#two-factor-sign-in); your profile picture (see [Profile pictures](#profile-pictures)). |
+| You | Appearance | `/settings/appearance` | everyone | Your colour theme and mode; see [Appearance](#appearance). |
+| Access | Users | `/settings/users` | admins | Accounts; see [Users](#users). |
+| Access | Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
+| Access | API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
 | Failover | WAN detection | `/settings/detection` | everyone | The detection settings described in the [setup wizard](setup-wizard.md#4-wan-detection), and the [scheduled failover test](during-an-outage.md#scheduled-tests). Viewers see them read-only. Changes apply from the next check. |
 | Failover | Hosts | `/settings/hosts` | everyone | The local host and the agent hosts, with their status, version and key (Swarm, Proxmox VE and Kubernetes hosts marked **experimental**, as they are [not yet tested on real equipment](hosts.md#tested-so-far)); admins add hosts, rotate keys, revoke, disable, rename and remove them. See [Hosts and agents](hosts.md). Viewers see the list read-only, without the manager key. |
 | Failover | Container filters | `/settings/container-filters` | everyone | Patterns of containers the Containers page hides; see [Container filters](#container-filters). Viewers see them read-only. |
 | Alerts | Notifications | `/settings/notifications` | admins | Channels that get events; see [Notifications](notifications.md). |
-| Access | Users | `/settings/users` | admins | Accounts; see [Users](#users). |
-| Access | Single sign-on | `/settings/sso` | admins | See [Single sign-on](single-sign-on.md). |
-| Access | API tokens | `/settings/api` | admins | Make and revoke tokens for the JSON status API; see [Monitoring → JSON status API](monitoring.md#json-status-api). |
-| Data | Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
-| You | Your account | `/settings/account` | everyone | Link or unlink your single sign-on account; change your password (this signs you out everywhere, including this browser); [two-factor sign-in](#two-factor-sign-in); your profile picture (see [Profile pictures](#profile-pictures)); your colour theme and mode (see [Appearance](#appearance)). |
-| You | System | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
+| System | Backup and restore | `/settings/backup` | admins | Download an encrypted backup file, with history of the last 30, 60 or 90 days, all time, or none; schedule daily backups into a folder; restore one. See [Backup and restore](backup-and-restore.md#backup-files). |
+| System | About | `/settings/system` | everyone | Drawbridge version, Docker connection and version, database path and size. |
 
 Viewers do not see the admin tabs; opening one's address gives 403.
 
@@ -489,7 +492,7 @@ picture, the first letter of the username is shown instead.
 Pictures are not in backup files; see
 [Backup and restore](backup-and-restore.md#backup-files).
 
-**Settings → Your account → Appearance** sets the colours for your account only. It applies
+**Settings → Appearance** sets the colours for your account only. It applies
 on every device you sign in on, and changes show at once.
 
 - **Theme**: Drawbridge (the default), Nord, Solarized, Gruvbox, Catppuccin or

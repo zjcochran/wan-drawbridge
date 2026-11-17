@@ -332,13 +332,14 @@ func TestEveryPageRenders(t *testing.T) {
 		"/containers?policy=review":  "No containers match",
 		"/isps":                      "EXAMPLENET",
 		"/events":                    "state_changed",
-		"/settings":                  "Check interval",
+		"/settings":                  "Change password",
 		"/settings/detection":        "Check interval",
 		"/settings/notifications":    "Add a channel",
 		"/settings/backup":           "Scheduled backups",
 		"/settings/users":            "Add a user",
 		"/settings/sso":              "Issuer URL",
 		"/settings/account":          "Change password",
+		"/settings/appearance":       "Tokyo Night",
 		"/settings/system":           "Database",
 	}
 	// Users moved into Settings; bookmarks of /users still work.
@@ -432,7 +433,7 @@ func TestViewerIsReadOnly(t *testing.T) {
 	}
 	// Viewers see only their tabs, and can open them.
 	_, page := v.get("/settings")
-	for _, tab := range []string{"/settings/detection", "/settings/account", "/settings/system"} {
+	for _, tab := range []string{"/settings/detection", "/settings/account", "/settings/appearance", "/settings/system"} {
 		if !strings.Contains(page, `href="`+tab+`"`) {
 			t.Errorf("viewer tabs lack %s", tab)
 		}

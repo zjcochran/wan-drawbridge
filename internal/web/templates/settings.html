@@ -137,6 +137,7 @@
     </div>
   </div>
 </section>
+{{else if eq $d.Tab "appearance"}}
 <section class="card" id="appearance">
   <h2>Appearance</h2>
   <form id="appearance-form" hx-post="/settings/appearance" hx-trigger="change" hx-swap="none">
@@ -319,11 +320,13 @@
 {{define "users-table"}}
 <div id="users-table" class="table-wrap">
 <table>
-  <thead><tr><th>User</th><th>Role</th><th>Signs in with</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead>
+  <thead><tr><th>User</th><th>Role</th><th>Status</th><th></th></tr></thead>
   <tbody>
   {{range .Users}}
   <tr>
-    <td><span class="user-cell">{{template "avatar" .}}<span><strong>{{.Username}}</strong>{{if eq .ID $.Me}} <span class="sub">(you)</span>{{end}}</span></span></td>
+    <td><span class="user-cell">{{template "avatar" .}}<span><strong>{{.Username}}</strong>{{if eq .ID $.Me}} <span class="sub">(you)</span>{{end}}
+      <span class="sub block">{{if .HasLocal}}password{{if .TwoFactor}} + code{{end}}{{end}}{{if and .HasLocal .HasSSO}} and {{end}}{{if .HasSSO}}single sign-on{{end}} ·
+        {{if .LastLogin.IsZero}}never signed in{{else}}signed in <time title="{{datetime .LastLogin}}">{{ago .LastLogin}}</time>{{end}}</span></span></span></td>
     <td>
       {{if eq .ID $.Me}}{{.Role}}
       {{else if and $.GroupRoles (not .HasLocal)}}{{.Role}} <div class="sub">from the SSO admin group</div>
@@ -333,11 +336,9 @@
         <option value="admin" {{if eq .Role "admin"}}selected{{end}}>admin</option>
       </select>{{end}}
     </td>
-    <td>{{if .HasLocal}}password{{if .TwoFactor}} + code{{end}}{{end}}{{if and .HasLocal .HasSSO}} and {{end}}{{if .HasSSO}}single sign-on{{end}}</td>
-    <td>{{if .LastLogin.IsZero}}never{{else}}<time title="{{datetime .LastLogin}}">{{ago .LastLogin}}</time>{{end}}</td>
     <td>{{if .Disabled}}<span class="badge muted">Disabled</span>{{else}}<span class="badge ok">Active</span>{{end}}</td>
-    <td class="right">
-      {{if ne .ID $.Me}}
+    <td>
+      {{if ne .ID $.Me}}<div class="row-actions">
         {{if .Disabled}}<button class="link" hx-post="/settings/users/{{.ID}}/enable" hx-target="#users-table" hx-swap="outerHTML">Enable</button>
         {{else}}<button class="link" hx-post="/settings/users/{{.ID}}/disable" hx-target="#users-table" hx-swap="outerHTML"
           hx-confirm="Disable {{.Username}}? They are signed out everywhere.">Disable</button>{{end}}
@@ -351,7 +352,7 @@
           <button class="link">Reset password</button>
         </form>
         {{end}}
-      {{end}}
+      </div>{{end}}
     </td>
   </tr>
   {{end}}
@@ -421,7 +422,7 @@
         {{else}}<span class="muted">–</span>{{end}}
       </td>
       {{if $.IsAdmin}}
-      <td class="right">
+      <td><div class="row-actions">
         {{if .Agent}}
           {{if or (eq .Status "online") (eq .Status "offline")}}
           <button class="link" hx-post="/settings/hosts/{{.ID}}/rotate" hx-target="#hosts" hx-swap="outerHTML">Rotate key now</button>
@@ -442,7 +443,7 @@
           <input name="name" value="{{.Name}}" maxlength="32" aria-label="New name for {{.Name}}" required>
           <button class="link">Rename</button>
         </form>
-      </td>
+      </div></td>
       {{end}}
     </tr>
     {{end}}
@@ -495,7 +496,7 @@
     <button>Create token</button>
   </form>
   <h3>Example</h3>
-  <pre><code>curl -H "Authorization: Bearer &lt;token&gt;" {{.Base}}/api/status</code></pre>
+  <pre class="wrap"><code>curl -H "Authorization: Bearer &lt;token&gt;" {{.Base}}/api/status</code></pre>
 </div>
 {{end}}
 

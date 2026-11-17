@@ -403,6 +403,17 @@ func TestStaticFilesAreCached(t *testing.T) {
 	}
 }
 
+func TestFavicon(t *testing.T) {
+	c := newEnv(t).client()
+	resp, body := c.get("/favicon.ico")
+	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "image/png" || !strings.HasPrefix(body, "\x89PNG") {
+		t.Fatalf("favicon: %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
+	}
+	if _, page := newEnv(t).admin().get("/settings/account"); !strings.Contains(page, `rel="icon" href="/static/icon.svg?v=`) {
+		t.Error("no SVG icon link")
+	}
+}
+
 func TestHomeScreenManifest(t *testing.T) {
 	e := newEnv(t)
 	e.admin()
@@ -437,10 +448,14 @@ func TestFontsAndSettingsMenu(t *testing.T) {
 		t.Fatalf("font: %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
 	_, page := c.get("/settings")
-	for _, g := range []string{"Failover", "Alerts", "Access", "Data", "You"} {
-		if !strings.Contains(page, "<h2>"+g+"</h2>") {
-			t.Errorf("the settings menu lacks the %s group", g)
+	// The groups in Eyrie's order.
+	last := -1
+	for _, g := range []string{"You", "Access", "Failover", "Alerts", "System"} {
+		i := strings.Index(page, "<h2>"+g+"</h2>")
+		if i < 0 || i < last {
+			t.Errorf("the settings menu lacks the %s group, or has it out of order", g)
 		}
+		last = i
 	}
 }
 
@@ -623,7 +638,7 @@ func TestLoginPageWhenSignedIn(t *testing.T) {
 func TestAppearance(t *testing.T) {
 	e := newEnv(t)
 	c := e.admin()
-	if _, page := c.get("/settings/account"); !strings.Contains(page, `data-theme="default" data-mode="auto"`) || !strings.Contains(page, "Tokyo Night") {
+	if _, page := c.get("/settings/appearance"); !strings.Contains(page, `data-theme="default" data-mode="auto"`) || !strings.Contains(page, "Tokyo Night") {
 		t.Fatal("settings page lacks the default appearance or the theme list")
 	}
 	if resp, _ := c.htmx("/settings/appearance", url.Values{"theme": {"gruvbox"}, "mode": {"dark"}}); resp.StatusCode != http.StatusNoContent {
@@ -661,7 +676,7 @@ func TestContainersShowLabels(t *testing.T) {
 		{Key: "media/player", Project: "media", Service: "player", Name: "media-player-1", Label: store.Disable},
 	}, time.Now())
 	_, page := e.admin().get("/containers")
-	if !strings.Contains(page, "from label") || !strings.Contains(page, "Follow label (stop)") {
+	if !strings.Contains(page, "from label") || !strings.Contains(page, "Follow label") {
 		t.Fatal("the containers page does not show the label")
 	}
 }

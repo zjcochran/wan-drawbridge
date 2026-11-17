@@ -1059,16 +1059,17 @@ type settingsTab struct {
 // settingsTabs are the Settings tabs in menu order, grouped. The first is
 // also /settings.
 var settingsTabs = []settingsTab{
+	{ID: "account", Name: "Your account", Group: "You"},
+	{ID: "appearance", Name: "Appearance", Group: "You"},
+	{ID: "users", Name: "Users", Group: "Access", Admin: true},
+	{ID: "sso", Name: "Single sign-on", Group: "Access", Admin: true},
+	{ID: "api", Name: "API tokens", Group: "Access", Admin: true},
 	{ID: "detection", Name: "WAN detection", Group: "Failover"},
 	{ID: "hosts", Name: "Hosts", Group: "Failover"},
 	{ID: "container-filters", Name: "Container filters", Group: "Failover"},
 	{ID: "notifications", Name: "Notifications", Group: "Alerts", Admin: true},
-	{ID: "users", Name: "Users", Group: "Access", Admin: true},
-	{ID: "sso", Name: "Single sign-on", Group: "Access", Admin: true},
-	{ID: "api", Name: "API tokens", Group: "Access", Admin: true},
-	{ID: "backup", Name: "Backup and restore", Group: "Data", Admin: true},
-	{ID: "account", Name: "Your account", Group: "You"},
-	{ID: "system", Name: "System", Group: "You"},
+	{ID: "backup", Name: "Backup and restore", Group: "System", Admin: true},
+	{ID: "system", Name: "About", Group: "System"},
 }
 
 // settingsPage shows one tab of Settings, loading only what that tab needs.
@@ -1115,8 +1116,9 @@ func (s *Server) loadSettingsTab(r *http.Request, d *settingsData) error {
 		var h hideRules
 		h, err = s.hideRules(ctx)
 		d.Filters = strings.Join(h, "\n")
-	case "account":
+	case "appearance":
 		d.Themes, d.Modes = Themes, Modes
+	case "account":
 		if err = s.loadSSO(r, d); err == nil {
 			d.Linked, err = s.Store.Identities(ctx, sessionFrom(r).User.ID)
 		}

@@ -49,7 +49,7 @@
     <dl class="tiles">
       <div class="tile"><dt>Current ISP</dt>
         <dd>{{if .ISPName}}{{.ISPName}} <span class="sub mono">AS{{.S.ASN}}</span>{{if and .S.Unmetered (ne .S.ISP .S.PrimaryISP)}} <span class="badge muted" title="Counts like the primary: no failover">unmetered</span>{{end}}{{else}}–{{end}}</dd></div>
-      <div class="tile"><dt>Public IP</dt><dd class="mono">{{or .S.LastIP "–"}}</dd></div>
+      <div class="tile"><dt>Public IP</dt><dd class="mono ip">{{or .S.LastIP "–"}}</dd></div>
       <div class="tile"><dt>Last check</dt>
         <dd><time class="mono" title="{{datetime .S.LastCheck}}"{{if not .S.LastCheck.IsZero}} data-live="{{isodate .S.LastCheck}}"{{end}}{{if .S.Interval}} data-every="{{printf "%.0f" .S.Interval.Seconds}}"{{end}}>{{ago .S.LastCheck}}</time>{{if and (not .S.LastCheck.IsZero) (not .S.Conclusive)}} · inconclusive{{end}}
           <span class="sub next-check" aria-hidden="true"></span></dd>
