@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{.Title}} · WAN Drawbridge</title>
-<link rel="icon" href="{{static "icon.svg"}}" type="image/svg+xml">
+{{/* Not icon.svg: Safari keeps the first icon served there, whatever the ?v=. */}}
+<link rel="icon" href="{{static "favicon.svg"}}" type="image/svg+xml">
 <link rel="icon" href="{{static "icon-192.png"}}" type="image/png" sizes="192x192">
 <!-- Added to a phone's home screen, Drawbridge opens as an app of its own:
      full screen, with its icon. -->

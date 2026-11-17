@@ -409,7 +409,7 @@ func TestFavicon(t *testing.T) {
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Type") != "image/png" || !strings.HasPrefix(body, "\x89PNG") {
 		t.Fatalf("favicon: %d %q", resp.StatusCode, resp.Header.Get("Content-Type"))
 	}
-	if _, page := newEnv(t).admin().get("/settings/account"); !strings.Contains(page, `rel="icon" href="/static/icon.svg?v=`) {
+	if _, page := newEnv(t).admin().get("/settings/account"); !strings.Contains(page, `rel="icon" href="/static/favicon.svg?v=`) {
 		t.Error("no SVG icon link")
 	}
 }
