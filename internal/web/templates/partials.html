@@ -52,7 +52,7 @@
         <select name="policy" aria-label="Setting for {{.Name}}" hx-post="/containers/policy" hx-include="closest li, #stack-filters, #stacks-table input[name=show]"
                 hx-target="#stacks-table" hx-swap="outerHTML"
                 {{if and .StackDisabled (eq .Policy "inherit") (not .Label)}}hx-confirm="This removes the stack-wide setting from {{.Project}}: its other containers stay set to stop, one by one."{{end}}>
-          <option value="inherit" {{if eq .Policy "inherit"}}selected{{end}}>{{if eq .Label "disable"}}Follow label (stop){{else if eq .Label "keep"}}Follow label (keep running){{else if .Project}}Follow stack{{else}}Default (keep running){{end}}</option>
+          <option value="inherit" {{if eq .Policy "inherit"}}selected{{end}}>{{if .Label}}Follow label{{else if .Project}}Follow stack{{else}}Default{{end}}</option>
           <option value="disable" {{if eq .Policy "disable"}}selected{{end}}>Stop on failover</option>
           <option value="keep" {{if eq .Policy "keep"}}selected{{end}}>Keep running</option>
         </select>

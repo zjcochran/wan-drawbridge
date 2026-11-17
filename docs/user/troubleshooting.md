@@ -8,7 +8,7 @@ every check).
 
 **Symptoms:** the log says `cannot reach Docker; is /var/run/docker.sock
 mounted?`; the wizard's Docker step shows an error; container states show
-"unknown"; Settings → System shows the error.
+"unknown"; Settings → About shows the error.
 
 **Causes and fixes:**
 

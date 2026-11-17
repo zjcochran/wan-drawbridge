@@ -71,8 +71,8 @@ Non-admins get 403 "admins only" on admin routes.
 | GET | `/reports` | auth | Query `before` (outage ID cursor). 50 outages per page. |
 | GET | `/preview` | auth | Failover preview: what a failover would stop now (`executor.Plan`). Lists every host first, like a sync, and changes nothing else. |
 | GET | `/reports/outages/{id}` | auth | One outage and its data used per container; 404 if there is no such outage. |
-| GET | `/settings` | auth | The first Settings tab, WAN detection. Query `flash` shows a message. |
-| GET | `/settings/detection`, `/settings/container-filters`, `/settings/hosts`, `/settings/account`, `/settings/system` | auth | Settings tabs. Hosts shows its buttons and the manager key to admins only. |
+| GET | `/settings` | auth | The first Settings tab, Your account. Query `flash` shows a message. |
+| GET | `/settings/detection`, `/settings/container-filters`, `/settings/hosts`, `/settings/account`, `/settings/appearance`, `/settings/system` | auth | Settings tabs. Hosts shows its buttons and the manager key to admins only. |
 | GET | `/settings/notifications`, `/settings/backup`, `/settings/users`, `/settings/sso`, `/settings/api` | admin | Settings tabs for admins. |
 | GET | `/settings/backups/{name}` | admin | Downloads a file from the backup folder. Only names matching `drawbridge-backup-YYYYMMDD-HHMMSS.json` are served; anything else is 404. |
 | GET | `/users` | admin | 301 to `/settings/users`, where Users moved. |

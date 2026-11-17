@@ -47,6 +47,7 @@
     <summary aria-label="Account menu for {{.Session.User.Username}}">{{template "avatar" .Session.User}}<span class="usermenu-name">{{.Session.User.Username}}</span></summary>
     <div class="usermenu-list">
       <a href="/settings/account">Your account</a>
+      <a href="/settings/appearance">Appearance</a>
       <form method="post" action="/logout">
         <input type="hidden" name="_csrf" value="{{.Session.CSRF}}">
         <button type="submit">Sign out</button>
